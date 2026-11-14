@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- 디버그 빌드 전용: 위치 권한·조회 흐름 실기기 점검(#10). 실제 화면은 #11에서 붙인다. -->
+        <activity
+            android:name=".location.LocationDebugActivity"
+            android:exported="true"
+            android:theme="@style/Theme.SunSeat" />
+    </application>
+</manifest>
