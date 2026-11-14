@@ -34,6 +34,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.sunseat.app.ui.theme.Motion
 import com.sunseat.app.ui.theme.Sizes
 import com.sunseat.app.ui.theme.Spacing
 import com.sunseat.app.ui.theme.SunSeatTheme
@@ -57,23 +58,28 @@ fun SideTimeline(
     modifier: Modifier = Modifier,
     selectedRight: Float = 0f,
     animateIn: Boolean = true,
+    /** 추천할 쪽이 없으면(구간마다 다름·차이 없음) 선택 테두리를 그리지 않는다 */
+    showSelection: Boolean = true,
+    /** 추천 대상이 아닌 구간(도보). 회색으로 칠하고 범례에 "도보"를 더한다 */
+    gaps: List<SunSpan> = emptyList(),
 ) {
     val reduce = SunSeatTheme.reduceMotion
     val fill = remember { Animatable(if (animateIn && !reduce) 0f else 1f) }
     LaunchedEffect(Unit) {
-        if (fill.value < 1f) fill.animateTo(1f, tween(durationMillis = 700, delayMillis = 150))
+        if (fill.value < 1f) fill.animateTo(1f, tween(durationMillis = Motion.TIMELINE_FILL_MS, delayMillis = Motion.TIMELINE_DELAY_MS))
     }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
-        Legend()
-        TimelineRow("왼쪽", leftSun, fill.value, selected = 1f - selectedRight)
-        TimelineRow("오른쪽", rightSun, fill.value, selected = selectedRight)
+        Legend(showGap = gaps.isNotEmpty())
+        TimelineRow("왼쪽", leftSun, gaps, fill.value, selected = if (showSelection) 1f - selectedRight else 0f)
+        TimelineRow("오른쪽", rightSun, gaps, fill.value, selected = if (showSelection) selectedRight else 0f)
         TickRow(ticks, Modifier.fillMaxWidth().padding(start = Sizes.timelineLabel))
     }
 }
 
 @Composable
-private fun Legend() {
+private fun Legend(showGap: Boolean) {
     val c = SunSeatTheme.colors
+    val gap = SunSeatTheme.scheme.outline
     Row(
         horizontalArrangement = Arrangement.spacedBy(Spacing.l),
         verticalAlignment = Alignment.CenterVertically,
@@ -81,6 +87,7 @@ private fun Legend() {
     ) {
         LegendItem("햇빛") { drawSwatch(c.sun, hatch = c.onSun) }
         LegendItem("그늘") { drawSwatch(c.shade, hatch = null) }
+        if (showGap) LegendItem("도보") { drawSwatch(gap, hatch = null) }
     }
 }
 
@@ -111,8 +118,9 @@ private fun DrawScope.drawHatch(x0: Float, x1: Float, color: Color) {
 }
 
 @Composable
-private fun TimelineRow(label: String, sun: List<SunSpan>, progress: Float, selected: Float) {
+private fun TimelineRow(label: String, sun: List<SunSpan>, gaps: List<SunSpan>, progress: Float, selected: Float) {
     val c = SunSeatTheme.colors
+    val gapColor = SunSeatTheme.scheme.outline
     val ring = SunSeatTheme.scheme.onSurface
     val sunPct = (sun.sumOf { (it.end - it.start).toDouble() } * 100).toInt()
     Row(
@@ -145,6 +153,10 @@ private fun TimelineRow(label: String, sun: List<SunSpan>, progress: Float, sele
             val clip = Path().apply { addRoundRect(RoundRect(inset, inset, inset + w, inset + inner.height, r)) }
             clipPath(clip) {
                 drawRect(c.shade, Offset(inset, inset), inner)
+                gaps.forEach { g ->
+                    val x0 = inset + g.start * inner.width
+                    drawRect(gapColor, Offset(x0, inset), Size(inset + g.end * inner.width - x0, inner.height))
+                }
                 sun.forEach { s ->
                     val x0 = inset + s.start * inner.width
                     val x1 = inset + s.end * inner.width

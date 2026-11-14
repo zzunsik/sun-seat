@@ -66,6 +66,19 @@ object Sizes {
     /** 해·좌석 그림 */
     val diagramHeight = 148.dp
     val vehicleWidth = 96.dp
+    val diagramArrowArea = 20.dp
+    val diagramSunArea = 34.dp
+    val diagramBodyInset = 10.dp
+    val diagramBodyRadius = 18.dp
+    val diagramSeat = 22.dp
+    val diagramCarSeatHeight = 28.dp
+    val diagramSeatGap = 12.dp
+    val diagramCarSeatGap = 18.dp
+    val diagramSeatRadius = 5.dp
+    val diagramStroke = 1.5.dp
+    val diagramRing = 2.5.dp
+    val diagramRingOffset = 3.dp
+    val diagramRay = 10.dp
 }
 
 internal val SunSeatShapes = Shapes(
