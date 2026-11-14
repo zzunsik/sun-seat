@@ -62,4 +62,6 @@ dependencies {
     implementation(libs.commons.suncalc)
 
     testImplementation(libs.junit)
+
+    lintChecks(libs.compose.lint.checks)
 }

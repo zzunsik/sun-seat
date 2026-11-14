@@ -20,3 +20,12 @@
    ./gradlew assembleDebug test
    ```
    APK는 `app/build/outputs/apk/debug/app-debug.apk`에 생깁니다.
+
+## 작업 흐름
+
+자세한 규칙은 [AGENTS.md](AGENTS.md)에 있습니다.
+
+1. GitHub 이슈를 만들거나 기존 이슈를 고른다
+2. `feat/<이슈번호>-<요약>` 브랜치에서 작업한다
+3. `./gradlew assembleDebug lint test`가 통과하면 `Closes #번호`를 넣어 PR을 연다
+4. CI(빌드·lint·단위 테스트)가 통과하면 squash 병합한다
