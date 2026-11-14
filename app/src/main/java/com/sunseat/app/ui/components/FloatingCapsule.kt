@@ -10,8 +10,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.unit.dp
 import com.sunseat.app.ui.theme.CapsuleShape
+import com.sunseat.app.ui.theme.Sizes
 import com.sunseat.app.ui.theme.SunSeatTheme
 
 /**
@@ -27,10 +27,10 @@ fun FloatingCapsule(
     CompositionLocalProvider(LocalContentColor provides scheme.onSurface) {
         Box(
             modifier
-                .shadow(8.dp, CapsuleShape, clip = false)
+                .shadow(Sizes.capsuleElevation, CapsuleShape, clip = false)
                 .clip(CapsuleShape)
                 .background(scheme.surface)
-                .border(1.dp, scheme.outlineVariant, CapsuleShape),
+                .border(Sizes.hairline, scheme.outlineVariant, CapsuleShape),
             content = content,
         )
     }
