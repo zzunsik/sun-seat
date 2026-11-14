@@ -40,6 +40,14 @@ object Sizes {
     val timelineBar = 28.dp
     val timelineBarRadius = 6.dp
 
+    /** 떠 있는 캡슐 그림자와 얇은 테두리 */
+    val capsuleElevation = 8.dp
+    val hairline = 1.dp
+
+    /** 알약 안쪽 세로 여백과 아이콘-글자 간격 */
+    val pillVertical = 6.dp
+    val pillGap = 6.dp
+
     /** 해·좌석 그림 */
     val diagramHeight = 148.dp
     val vehicleWidth = 96.dp

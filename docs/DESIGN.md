@@ -75,7 +75,7 @@
 - 모서리: `extraSmall 6` · `small 8` · `medium 12` · `large 16`(카드) · `extraLarge 24`(시트) · 캡슐(완전 둥글게, 떠 있는 컨트롤과 알약).
 - 간격 단위 4dp: `xs 4` · `s 8` · `m 12` · `l 16` · `xl 24` · `xxl 32`. 화면 좌우 여백 16dp, 카드 안 여백 16dp, 카드 사이 12dp.
 - 부품 크기(캡슐 여백, 아이콘, 타임라인, 그림)는 `Sizes` 토큰을 쓴다.
-- 터치 영역 최소 **48×48dp**, 터치 대상 사이 8dp 이상.
+- 터치 영역 최소 **48×48dp**, 터치 대상 사이 8dp 이상. 예외: M3 연결형 버튼 묶음(`ChoiceGroup`)은 한 덩어리 컨트롤로 보고 버튼 사이 간격을 M3 기본값(`ButtonGroupDefaults.ConnectedSpaceBetween`)으로 둔다. 각 버튼은 48dp 이상이다.
 - 그림자 대신 면 색 차이(`background` 위 `surface`)로 층을 나눈다. 떠 있는 캡슐만 그림자를 쓴다.
 
 ## 5. 떠 있는 캡슐

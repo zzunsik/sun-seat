@@ -11,7 +11,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import com.sunseat.app.ui.icons.SunSeatIcons
 import com.sunseat.app.ui.theme.CapsuleShape
 import com.sunseat.app.ui.theme.Sizes
@@ -35,8 +34,8 @@ fun ExposurePill(
     Row(
         modifier = modifier
             .background(bg, CapsuleShape)
-            .padding(horizontal = Spacing.m, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+            .padding(horizontal = Spacing.m, vertical = Sizes.pillVertical),
+        horizontalArrangement = Arrangement.spacedBy(Sizes.pillGap),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
