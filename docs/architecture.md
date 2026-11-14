@@ -69,7 +69,14 @@ com.sunseat.app
   - 첫 단계는 승차 정류장에서 시작하고 마지막 단계는 하차 정류장에서 끝난다. 출발지→승차, 하차→도착지 도보는 응답에 없다
   - `Route.duration`(단계 합)은 이동 시간만이고 대기·접근 시간이 빠진다. 전체 소요시간은 `TransitRouteOption.totalDuration`(`totalTime`)
   - 구간별 노선·정류장·안내 문구는 `TransitRouteOption.legDetails`(`legs`와 같은 순서)
-- 자가용: 도로 구간별 `vertexes`와 소요시간을 CAR 구간 1개인 `Route`로 변환
+- 자가용(#9): `GET https://apis-navi.kakaomobility.com/v1/directions` → `CarRouteApi.search(origin, destination)` → `ApiResult<CarRouteResult>`
+  - 요청: `origin`·`destination`(`경도,위도`, 필수). 선택 `waypoints`(최대 5개, `|` 구분), `priority`(RECOMMEND 기본/TIME/DISTANCE/MAIN_ROAD/NO_TRAFFIC_INFO), `avoid`(ferries·toll·motorway·schoolzone·uturn), `alternatives`, `road_details`, `car_type`·`car_fuel`·`car_hipass`, `summary`. 앱은 origin·destination만 쓴다. 출발 시각은 이 API로 지정할 수 없다(호출 시점 교통 기준)
+  - 응답: `trans_id`, `routes[]`(`result_code`, `result_msg`, `summary`, `sections[]`)
+    - `summary`: `origin`·`destination`(`name`은 좌표 입력 시 빈 문자열, `x`, `y`), `priority`, `bound`, `fare`(`taxi`, `toll`, 원), `distance`(m), `duration`(초)
+    - `sections[]`(경유지 수 + 1): `distance`, `duration`, `bound`, `roads[]`(`name`, `distance`, `duration`, `traffic_speed`, `traffic_state`, `vertexes`), `guides[]`
+    - `vertexes`: `[x0, y0, x1, y1, ...]` 평면 배열(경도, 위도 순). 이어지는 도로의 끝·시작 좌표가 겹친다
+  - `result_code`: 0 성공. 실패도 HTTP 200으로 온다. 확인한 값 102(출발지 주변 도로 없음), 103(도착지 주변 도로 없음), 104(출발·도착 5m 이내) → `CarNoRouteReason`. 좌표 형식 오류는 HTTP 400 `{"code":-2,...}` → `ApiError.UNKNOWN`
+  - 변환: 모든 `roads[].vertexes`를 이어 CAR 구간 1개(연속 중복 좌표 제거), 소요시간은 `summary.duration`. 거리·통행료·택시 요금은 `CarRouteOption`
 - 요청 파라미터·응답 구조는 첫 호출과 공식 문서로 확인해 이 절에 기록한다
 
 ### 4.3 장소 검색(#7)

@@ -4,6 +4,8 @@ import com.sunseat.app.BuildConfig
 import com.sunseat.app.data.network.KakaoHttp
 import com.sunseat.app.data.place.KakaoPlaceSearchApi
 import com.sunseat.app.data.place.PlaceSearchApi
+import com.sunseat.app.data.route.CarRouteApi
+import com.sunseat.app.data.route.KakaoCarRouteApi
 import com.sunseat.app.data.route.KakaoTransitRouteApi
 import com.sunseat.app.data.route.TransitRouteApi
 import okhttp3.OkHttpClient
@@ -16,10 +18,14 @@ class KakaoApis(
     apiKey: String = BuildConfig.KAKAO_REST_API_KEY,
     client: OkHttpClient = KakaoHttp.okHttpClient(apiKey),
     dapiBaseUrl: String = KakaoHttp.DAPI_BASE_URL,
+    naviBaseUrl: String = KakaoHttp.NAVI_BASE_URL,
 ) {
     private val dapi by lazy { KakaoHttp.retrofit(dapiBaseUrl, client) }
+    private val navi by lazy { KakaoHttp.retrofit(naviBaseUrl, client) }
 
     val placeSearch: PlaceSearchApi by lazy { KakaoPlaceSearchApi(dapi) }
 
     val transitRoutes: TransitRouteApi by lazy { KakaoTransitRouteApi(dapi) }
+
+    val carRoutes: CarRouteApi by lazy { KakaoCarRouteApi(navi) }
 }
