@@ -1,0 +1,56 @@
+{
+  "trans_id": "example-trans-id",
+  "routes": [
+    {
+      "result_code": 0,
+      "result_msg": "길찾기 성공",
+      "summary": {
+        "origin": { "name": "", "x": 127.0, "y": 37.5 },
+        "destination": { "name": "", "x": 127.03, "y": 37.52 },
+        "waypoints": [],
+        "priority": "RECOMMEND",
+        "bound": { "min_x": 127.0, "min_y": 37.5, "max_x": 127.03, "max_y": 37.52 },
+        "fare": { "taxi": 9800, "toll": 0 },
+        "distance": 4321,
+        "duration": 905
+      },
+      "sections": [
+        {
+          "distance": 4321,
+          "duration": 900,
+          "bound": { "min_x": 127.0, "min_y": 37.5, "max_x": 127.03, "max_y": 37.52 },
+          "roads": [
+            {
+              "name": "가상대로",
+              "distance": 2000,
+              "duration": 400,
+              "traffic_speed": 30.0,
+              "traffic_state": 2,
+              "vertexes": [127.0, 37.5, 127.01, 37.505, 127.02, 37.51]
+            },
+            {
+              "name": "예시로",
+              "distance": 2321,
+              "duration": 500,
+              "traffic_speed": 25.0,
+              "traffic_state": 3,
+              "vertexes": [127.02, 37.51, 127.03, 37.52]
+            }
+          ],
+          "guides": [
+            {
+              "name": "출발지",
+              "x": 127.0,
+              "y": 37.5,
+              "distance": 0,
+              "duration": 0,
+              "type": 100,
+              "guidance": "출발지",
+              "road_index": 0
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
