@@ -13,7 +13,7 @@ import com.sunseat.app.domain.TripRequest
 import com.sunseat.app.domain.TravelMode
 import com.sunseat.app.ui.candidates.CandidatesRoute
 import com.sunseat.app.ui.candidates.ChosenRoute
-import com.sunseat.app.ui.result.ResultPlaceholder
+import com.sunseat.app.ui.result.ResultRoute
 import com.sunseat.app.ui.input.InputRoute
 
 /** 화면 키. 입력 → 경로 후보 → 결과. */
@@ -51,10 +51,12 @@ fun SunSeatNavHost(graph: AppGraph, modifier: Modifier = Modifier) {
                 )
             }
             entry<Screen.Result> { key ->
-                ResultPlaceholder(
+                ResultRoute(
                     request = key.request,
                     chosen = key.chosen,
                     onBack = { backStack.removeAt(backStack.lastIndex) },
+                    // 다시 찾기: 입력 화면으로 돌아간다(입력 내용은 입력 화면 상태에 남아 있다)
+                    onRestart = { while (backStack.size > 1) backStack.removeAt(backStack.lastIndex) },
                 )
             }
         },
