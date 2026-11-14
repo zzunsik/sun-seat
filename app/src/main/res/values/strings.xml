@@ -50,4 +50,31 @@
     <string name="search_error_quota">오늘 검색 한도를 넘었어요. 내일 다시 시도해 주세요.</string>
     <string name="search_error_network">인터넷 연결을 확인해 주세요.</string>
     <string name="search_error_unknown">검색하지 못했어요. 잠시 뒤 다시 시도해 주세요.</string>
+
+    <!-- 경로 후보 화면 (#12) -->
+    <string name="common_back">뒤로</string>
+    <string name="candidates_subtitle_transit">대중교통 경로 후보</string>
+    <string name="candidates_subtitle_car">자가용 경로</string>
+    <string name="candidates_loading">경로를 찾는 중…</string>
+    <string name="candidates_title">탈 경로를 고르세요</string>
+    <string name="candidates_note_now">경로 %1$d개 · 누르면 좌석을 추천해 드려요.</string>
+    <string name="candidates_note_now_with_time">경로 %1$d개 · 경로는 지금 기준이고, 햇빛은 정한 출발 시각으로 계산해요.</string>
+    <string name="candidates_no_transfer">환승 없음</string>
+    <string name="candidates_transfers">환승 %1$d회</string>
+    <string name="candidates_board_alight">%1$s 승차 → %2$s 하차</string>
+    <string name="candidates_choose">이 경로로 좌석 추천</string>
+    <string name="candidates_search_by_car">자가용 기준으로 좌석 보기</string>
+    <string name="candidates_walk">도보 %1$d분</string>
+    <string name="candidates_arrival">%1$s 도착</string>
+    <string name="candidates_fastest">가장 빠름</string>
+    <string name="candidates_no_transit_detail">KTX·고속버스 같은 도시 간 이동은 아직 찾을 수 없어요. 자가용 기준으로는 좌석을 볼 수 있어요.</string>
+    <string name="candidates_try_car_detail">자가용 기준으로는 좌석을 볼 수 있어요.</string>
+    <string name="candidates_edit_input">출발·도착 다시 정하기</string>
+    <string name="candidates_no_transit">대중교통 경로가 없어요</string>
+    <string name="candidates_no_start_stop">출발지 근처에 정류장이나 역이 없어요.</string>
+    <string name="candidates_no_end_stop">도착지 근처에 정류장이나 역이 없어요.</string>
+    <string name="candidates_same_points">출발지와 도착지가 너무 가까워요.</string>
+    <string name="candidates_car_no_start_road">출발지 근처에 차가 다닐 도로가 없어요.</string>
+    <string name="candidates_car_no_end_road">도착지 근처에 차가 다닐 도로가 없어요.</string>
+    <string name="candidates_car_no_route">자가용 경로를 찾지 못했어요.</string>
 </resources>

@@ -10,13 +10,17 @@ import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import com.sunseat.app.AppGraph
 import com.sunseat.app.domain.TripRequest
-import com.sunseat.app.ui.candidates.RouteCandidatesPlaceholder
+import com.sunseat.app.domain.TravelMode
+import com.sunseat.app.ui.candidates.CandidatesRoute
+import com.sunseat.app.ui.candidates.ChosenRoute
+import com.sunseat.app.ui.result.ResultPlaceholder
 import com.sunseat.app.ui.input.InputRoute
 
 /** 화면 키. 입력 → 경로 후보 → 결과. */
 sealed interface Screen {
     data object Input : Screen
     data class Candidates(val request: TripRequest) : Screen
+    data class Result(val request: TripRequest, val chosen: ChosenRoute) : Screen
 }
 
 /** Navigation 3 화면 흐름. 시스템 뒤로 가기는 NavDisplay가 처리한다. */
@@ -36,8 +40,20 @@ fun SunSeatNavHost(graph: AppGraph, modifier: Modifier = Modifier) {
                 InputRoute(graph = graph, onSubmit = { backStack.add(Screen.Candidates(it)) })
             }
             entry<Screen.Candidates> { key ->
-                RouteCandidatesPlaceholder(
+                CandidatesRoute(
+                    graph = graph,
                     request = key.request,
+                    onBack = { backStack.removeAt(backStack.lastIndex) },
+                    onSelect = { backStack.add(Screen.Result(key.request, it)) },
+                    // 자가용: 후보 화면을 결과 화면으로 바꿔 끼워 뒤로 가면 입력 화면으로 간다
+                    onAutoSelect = { backStack[backStack.lastIndex] = Screen.Result(key.request, it) },
+                    onSearchByCar = { backStack[backStack.lastIndex] = Screen.Candidates(key.request.copy(mode = TravelMode.CAR)) },
+                )
+            }
+            entry<Screen.Result> { key ->
+                ResultPlaceholder(
+                    request = key.request,
+                    chosen = key.chosen,
                     onBack = { backStack.removeAt(backStack.lastIndex) },
                 )
             }
