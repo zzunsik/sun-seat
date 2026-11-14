@@ -15,8 +15,8 @@ import androidx.compose.ui.unit.dp
 import com.sunseat.app.R
 
 @Composable
-fun HomeScreen() {
-    Scaffold { inner ->
+fun HomeScreen(modifier: Modifier = Modifier) {
+    Scaffold(modifier = modifier) { inner ->
         Column(
             modifier = Modifier.fillMaxSize().padding(inner).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
