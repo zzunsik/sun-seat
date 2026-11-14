@@ -1,0 +1,52 @@
+{
+  "documents": [
+    {
+      "address_name": "서울 가상구 예시동 1-1",
+      "category_group_code": "SW8",
+      "category_group_name": "지하철역",
+      "category_name": "교통,수송 > 지하철,전철 > 예시선",
+      "distance": "",
+      "id": "1000001",
+      "phone": "02-000-0000",
+      "place_name": "예시역 1호선",
+      "place_url": "http://place.map.kakao.com/1000001",
+      "road_address_name": "서울 가상구 예시로 100",
+      "x": "127.0100000",
+      "y": "37.5000000"
+    },
+    {
+      "address_name": "서울 가상구 견본동 2-3",
+      "category_group_code": "",
+      "category_group_name": "",
+      "category_name": "음식점 > 카페",
+      "distance": "",
+      "id": "1000002",
+      "phone": "",
+      "place_name": "견본 카페",
+      "place_url": "http://place.map.kakao.com/1000002",
+      "road_address_name": "",
+      "x": "127.0200000",
+      "y": "37.5100000"
+    },
+    {
+      "address_name": "좌표 없는 장소",
+      "category_group_code": "",
+      "category_group_name": "",
+      "category_name": "",
+      "distance": "",
+      "id": "1000003",
+      "phone": "",
+      "place_name": "깨진 좌표",
+      "place_url": "",
+      "road_address_name": "",
+      "x": "",
+      "y": "abc"
+    }
+  ],
+  "meta": {
+    "is_end": true,
+    "pageable_count": 3,
+    "same_name": { "keyword": "예시", "region": [], "selected_region": "" },
+    "total_count": 3
+  }
+}
