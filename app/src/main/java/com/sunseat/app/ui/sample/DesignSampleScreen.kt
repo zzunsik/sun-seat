@@ -115,7 +115,6 @@ fun DesignSampleScreen(
         if (!reduce) {
             delay(150)
             shown = true
-            haptics.resultArrived()
             launch { shadeMin.animateTo(138f, tween(900)) }
             launch { sunMin.animateTo(22f, tween(900)) }
         }

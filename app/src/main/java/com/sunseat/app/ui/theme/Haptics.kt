@@ -6,13 +6,10 @@ import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 
-/** 햅틱 3종. docs/DESIGN.md 7 */
+/** 햅틱. 사용자가 직접 조작한 순간에만 쓴다. docs/DESIGN.md 7 */
 class SunSeatHaptics internal constructor(private val haptic: HapticFeedback) {
     /** 주 행동 버튼 누름 */
     fun press() = haptic.performHapticFeedback(HapticFeedbackType.Confirm)
-
-    /** 추천 결과가 처음 표시될 때 */
-    fun resultArrived() = haptic.performHapticFeedback(HapticFeedbackType.Confirm)
 
     /** 좌·우, 수단, 모드 전환 */
     fun selectionChanged() = haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
