@@ -82,17 +82,21 @@ internal suspend fun <T : Any, R> kakaoCall(
     return transform(body)
 }
 
+/** 카카오 공통 오류 코드 -10(호출 한도), -11(유료 사용 한도) 또는 한도를 뜻하는 문구. */
 private val quotaPattern = Regex(
-    """limit|throttl|quota|"code"\s*:\s*-10\b""",
+    """limit|throttl|quota|"code"\s*:\s*-1[01]\b""",
     RegexOption.IGNORE_CASE,
 )
 
+/** 카카오 공통 오류 코드 -401(잘못된 앱 키), -903(등록되지 않은 개발자의 앱 키). */
+private val authPattern = Regex(""""code"\s*:\s*-(401|903)\b""")
+
 /** HTTP 오류 응답을 공통 오류로 분류한다. */
 internal fun classifyHttpError(code: Int, body: String?): ApiError {
-    val quotaBody = body != null && quotaPattern.containsMatchIn(body)
+    val text = body.orEmpty()
     return when {
-        code == 429 || quotaBody -> ApiError.QUOTA_EXCEEDED
-        code == 401 || code == 403 -> ApiError.UNAUTHORIZED
+        code == 429 || quotaPattern.containsMatchIn(text) -> ApiError.QUOTA_EXCEEDED
+        code == 401 || code == 403 || authPattern.containsMatchIn(text) -> ApiError.UNAUTHORIZED
         else -> ApiError.UNKNOWN
     }
 }

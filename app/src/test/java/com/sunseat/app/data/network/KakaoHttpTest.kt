@@ -89,6 +89,9 @@ class KakaoHttpTest {
         assertEquals(ApiError.UNAUTHORIZED, classifyHttpError(401, null))
         assertEquals(ApiError.QUOTA_EXCEEDED, classifyHttpError(429, ""))
         assertEquals(ApiError.QUOTA_EXCEEDED, classifyHttpError(403, """{"message":"quota exceeded"}"""))
+        assertEquals(ApiError.QUOTA_EXCEEDED, classifyHttpError(400, """{"code":-11,"msg":"x"}"""))
+        assertEquals(ApiError.UNAUTHORIZED, classifyHttpError(400, """{"code":-903,"msg":"x"}"""))
         assertEquals(ApiError.UNKNOWN, classifyHttpError(400, """{"code":-2,"msg":"bad param"}"""))
+        assertEquals(ApiError.UNKNOWN, classifyHttpError(400, """{"code":-100,"msg":"x"}"""))
     }
 }

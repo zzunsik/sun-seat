@@ -50,8 +50,8 @@ com.sunseat.app
 - `KakaoAuthInterceptor`가 `Authorization: KakaoAK {키}` 헤더를 붙인다. 키(`BuildConfig.KAKAO_REST_API_KEY`)가 비어 있으면 요청을 보내지 않고 바로 실패한다
 - 결과는 `ApiResult`(`Success` / `Failure(ApiError, httpCode)`)로 돌려준다. `ApiError`
   - `MISSING_KEY`: 키 없음(네트워크 호출 없음)
-  - `UNAUTHORIZED`: 401·403(잘못된 키, 앱에 해당 API 권한 없음)
-  - `QUOTA_EXCEEDED`: 429 또는 오류 본문이 한도 초과(`limit`/`throttl`/`quota`, `"code":-10`)
+  - `UNAUTHORIZED`: 401·403(잘못된 키, 앱에 해당 API 권한 없음) 또는 공통 오류 코드 -401·-903
+  - `QUOTA_EXCEEDED`: 429 또는 공통 오류 코드 -10(호출 한도)·-11(유료 사용 한도, 둘 다 HTTP 400), 본문의 `limit`/`throttl`/`quota` 문구
   - `NETWORK`: 연결 실패·시간 초과
   - `UNKNOWN`: 그 밖의 서버 오류, 해석할 수 없는 응답
 - 오류 본문 예: `{"errorType":"AccessDeniedError","message":"..."}`
