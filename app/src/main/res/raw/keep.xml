@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 화면 이슈(#11~#13)에서 쓸 Material Symbols 아이콘을 미리 넣어 둔다. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_ms_*" />

@@ -3,7 +3,8 @@
 버스·지하철·자가용으로 이동할 때 햇빛을 피하거나 받을 수 있는 좌석을 구간별로 알려 주는 Android 앱입니다.
 
 - 요구사항: [docs/requirements.md](docs/requirements.md)
-- 설계: [docs/design.md](docs/design.md)
+- 설계(구조·계산·연동): [docs/architecture.md](docs/architecture.md)
+- 디자인 계약: [docs/DESIGN.md](docs/DESIGN.md)
 
 ## 빌드
 
