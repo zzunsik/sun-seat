@@ -58,7 +58,17 @@ com.sunseat.app
 - `KakaoApis`가 구현을 만들고, 화면은 인터페이스(`PlaceSearchApi` 등)만 받는다
 
 ### 4.2 경로 API(#8, #9)
-- 대중교통 `/v2/routing/publictraffic`: `routes[].steps[]`(type BUS/SUBWAY/WALKING, `time`, `path.points`)를 `Route`/`Leg`로 변환. 좌표 순서는 [경도, 위도]
+- 대중교통(#8): `GET https://dapi.kakao.com/v2/routing/publictraffic` → `TransitRouteApi.search(origin, destination)` → `ApiResult<TransitRoutes>`
+  - 요청: `start_x`·`start_y`·`end_x`·`end_y`(경도·위도, 필수). 선택 `s_name`·`e_name`(지점 이름), `input_coord`·`output_coord`(기본 WGS84). 출발 시각 파라미터는 없다
+  - 응답: `status`, `properties`(`total`, `bus`, `subway`, `busAndSubway`, `landingURL`), `routes[]`(status가 OK일 때)
+    - `routes[].properties`: `type`(BUS/SUBWAY/BUS_AND_SUBWAY), `totalDistance`(m), `totalTime`(초), `transfers`, `fare.value`(원, 없을 수 있음)
+    - `routes[].steps[].properties`: `type`(BUS/SUBWAY/WALKING), `time`(초), `distance`(m), `guidance`, `stops[].name`, `vehicles[]`(`name`, `type`: 간선·지선·직행·시외·일반·급행 등, 도보는 없음)
+    - `routes[].steps[].path.points`: `[경도, 위도]` 배열. 버스·지하철·도보 단계 모두 있다
+  - `status`: OK, NO_RESULTS, STARTNODES_NULL, ENDNODES_NULL, EQUAL_POINTS → 빈 후보 + `NoRouteReason`. INVALID_REQUEST → `ApiError.UNKNOWN`
+  - 변환: 단계마다 `Leg` 1개(BUS→BUS, SUBWAY→SUBWAY, WALKING→WALK). 이름은 `stops` 첫·끝. 문서에 없는 단계 종류가 섞인 경로는 건너뛴다
+  - 첫 단계는 승차 정류장에서 시작하고 마지막 단계는 하차 정류장에서 끝난다. 출발지→승차, 하차→도착지 도보는 응답에 없다
+  - `Route.duration`(단계 합)은 이동 시간만이고 대기·접근 시간이 빠진다. 전체 소요시간은 `TransitRouteOption.totalDuration`(`totalTime`)
+  - 구간별 노선·정류장·안내 문구는 `TransitRouteOption.legDetails`(`legs`와 같은 순서)
 - 자가용: 도로 구간별 `vertexes`와 소요시간을 CAR 구간 1개인 `Route`로 변환
 - 요청 파라미터·응답 구조는 첫 호출과 공식 문서로 확인해 이 절에 기록한다
 
