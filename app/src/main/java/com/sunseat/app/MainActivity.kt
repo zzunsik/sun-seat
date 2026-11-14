@@ -23,18 +23,16 @@ class MainActivity : ComponentActivity() {
         setContent {
             // 1차 점검용: 디자인 샘플 화면. 실제 화면 흐름은 #11~#13에서 Navigation 3로 바꾼다.
             var theme by rememberSaveable { mutableStateOf(ThemeMode.System) }
-            var glass by rememberSaveable { mutableStateOf(true) }
             val dark = when (theme) {
                 ThemeMode.System -> isSystemInDarkTheme()
                 ThemeMode.Light -> false
                 ThemeMode.Dark -> true
             }
-            SunSeatTheme(darkTheme = dark, glassEnabled = glass) {
+            SunSeatTheme(darkTheme = dark) {
                 DesignSampleScreen(
-                    settings = SampleSettings(theme, glass),
+                    settings = SampleSettings(theme),
                     onSettingsChange = {
                         theme = it.theme
-                        glass = it.glass
                     },
                 )
             }

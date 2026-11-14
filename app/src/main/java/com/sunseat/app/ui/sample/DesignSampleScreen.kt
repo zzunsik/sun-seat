@@ -48,19 +48,16 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import com.kyant.backdrop.backdrops.layerBackdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.sunseat.app.R
 import com.sunseat.app.ui.components.Exposure
 import com.sunseat.app.ui.components.ExposurePill
-import com.sunseat.app.ui.components.GlassCapsule
+import com.sunseat.app.ui.components.FloatingCapsule
 import com.sunseat.app.ui.components.PrimaryButton
 import com.sunseat.app.ui.components.QuietButton
 import com.sunseat.app.ui.components.SeatSunDiagram
 import com.sunseat.app.ui.components.SideTimeline
 import com.sunseat.app.ui.components.SunSpan
 import com.sunseat.app.ui.components.Tick
-import com.sunseat.app.ui.components.isGlassSupported
 import com.sunseat.app.ui.theme.Sizes
 import com.sunseat.app.ui.theme.Spacing
 import com.sunseat.app.ui.theme.SunSeatTheme
@@ -71,7 +68,7 @@ import kotlinx.coroutines.launch
 enum class ThemeMode(val label: String) { System("시스템"), Light("밝게"), Dark("어둡게") }
 
 /** 1차 점검용 화면 설정. 실제 화면이 생기면(#11~#13) 이 샘플은 지운다. */
-data class SampleSettings(val theme: ThemeMode = ThemeMode.System, val glass: Boolean = true)
+data class SampleSettings(val theme: ThemeMode = ThemeMode.System)
 
 private enum class Side(val label: String) { Left("왼쪽"), Right("오른쪽") }
 
@@ -93,7 +90,7 @@ private val TICKS = listOf(
 )
 
 /**
- * 디자인 샘플: 가짜 데이터로 그린 결과 화면. 토큰·부품·움직임·햅틱·유리 캡슐을 한 화면에서 확인한다.
+ * 디자인 샘플: 가짜 데이터로 그린 결과 화면. 토큰·부품·움직임·햅틱을 한 화면에서 확인한다.
  * 순서: 결론 → 근거(해 위치, 타임라인과 좌·우 비교) → 구간별.
  */
 @Composable
@@ -121,14 +118,12 @@ fun DesignSampleScreen(
     }
     val selectedRight by animateFloatAsState(if (compare == Side.Right) 1f else 0f, label = "compare")
 
-    val backdrop = rememberLayerBackdrop()
     val insets = WindowInsets.safeDrawing.asPaddingValues()
 
     Box(modifier.fillMaxSize()) {
         Box(
             Modifier
                 .fillMaxSize()
-                .layerBackdrop(backdrop)
                 .background(scheme.background),
         ) {
             Column(
@@ -193,8 +188,7 @@ fun DesignSampleScreen(
             }
         }
 
-        GlassCapsule(
-            backdrop = backdrop,
+        FloatingCapsule(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .windowInsetsPadding(WindowInsets.safeDrawing)
@@ -212,8 +206,7 @@ fun DesignSampleScreen(
             }
         }
 
-        GlassCapsule(
-            backdrop = backdrop,
+        FloatingCapsule(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .windowInsetsPadding(WindowInsets.safeDrawing)
@@ -297,24 +290,13 @@ private fun SampleSettingsCard(settings: SampleSettings, onChange: (SampleSettin
     val haptics = rememberSunSeatHaptics()
     Card(title = "1차 점검용 설정") {
         Text(
-            "실제 앱에는 없는 항목입니다. 밖에서 밝기·유리 효과를 바꿔 가며 확인해 주세요.",
+            "실제 앱에는 없는 항목입니다. 밖에서 밝은·어두운 화면을 바꿔 가며 확인해 주세요.",
             style = MaterialTheme.typography.bodySmall,
             color = SunSeatTheme.scheme.onSurfaceVariant,
         )
         Choice("화면", ThemeMode.entries.map { it.label }, settings.theme.ordinal) {
             haptics.selectionChanged()
             onChange(settings.copy(theme = ThemeMode.entries[it]))
-        }
-        Choice("유리 효과", listOf("켜기", "끄기"), if (settings.glass) 0 else 1) {
-            haptics.selectionChanged()
-            onChange(settings.copy(glass = it == 0))
-        }
-        if (!isGlassSupported) {
-            Text(
-                "이 기기(Android 13 미만)는 유리 효과를 지원하지 않아 불투명 캡슐로 보입니다.",
-                style = MaterialTheme.typography.bodySmall,
-                color = SunSeatTheme.scheme.onSurfaceVariant,
-            )
         }
     }
 }

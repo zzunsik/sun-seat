@@ -20,8 +20,6 @@ data class SunSeatColors(
     val skyBottom: Color,
     val ground: Color,
     val groundFar: Color,
-    /** 유리 캡슐 면에 까는 반투명 층 */
-    val glassSurface: Color,
 )
 
 internal val LightSunSeatColors = SunSeatColors(
@@ -37,7 +35,6 @@ internal val LightSunSeatColors = SunSeatColors(
     skyBottom = Color(0xFFFFE3A3),
     ground = Color(0xFF4E8C55),
     groundFar = Color(0xFF7FB36A),
-    glassSurface = Color(0xCCFFFFFF),
 )
 
 internal val DarkSunSeatColors = SunSeatColors(
@@ -53,7 +50,6 @@ internal val DarkSunSeatColors = SunSeatColors(
     skyBottom = Color(0xFF6B5A3A),
     ground = Color(0xFF253B2C),
     groundFar = Color(0xFF34503A),
-    glassSurface = Color(0xCC18202A),
 )
 
 internal val LightScheme = lightColorScheme(

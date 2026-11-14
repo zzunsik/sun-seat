@@ -20,7 +20,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * 디자인 샘플 화면의 스크린샷(밝은·어두운, 유리 켜기·끄기)과 접근성 검사.
+ * 디자인 샘플 화면의 스크린샷(밝은·어두운, 비교 전환)과 접근성 검사.
  * 기준 이미지: ./gradlew recordRoborazziDebug, 비교: ./gradlew verifyRoborazziDebug
  */
 @RunWith(RobolectricTestRunner::class)
@@ -31,11 +31,11 @@ class DesignSampleScreenshotTest {
     @get:Rule
     val compose = createComposeRule()
 
-    private fun render(dark: Boolean, glass: Boolean) {
+    private fun render(dark: Boolean) {
         compose.setContent {
-            SunSeatTheme(darkTheme = dark, glassEnabled = glass) {
+            SunSeatTheme(darkTheme = dark) {
                 DesignSampleScreen(
-                    settings = SampleSettings(glass = glass),
+                    settings = SampleSettings(),
                     onSettingsChange = {},
                     animateIn = false,
                 )
@@ -45,25 +45,19 @@ class DesignSampleScreenshotTest {
 
     @Test
     fun light() {
-        render(dark = false, glass = false)
+        render(dark = false)
         compose.onRoot().captureRoboImage("src/test/screenshots/design_sample_light.png")
     }
 
     @Test
     fun dark() {
-        render(dark = true, glass = false)
+        render(dark = true)
         compose.onRoot().captureRoboImage("src/test/screenshots/design_sample_dark.png")
     }
 
     @Test
-    fun lightGlass() {
-        render(dark = false, glass = true)
-        compose.onRoot().captureRoboImage("src/test/screenshots/design_sample_light_glass.png")
-    }
-
-    @Test
     fun darkCompareRight() {
-        render(dark = true, glass = false)
+        render(dark = true)
         compose.onNode(hasText("오른쪽") and hasClickAction()).performScrollTo().performClick()
         compose.waitForIdle()
         compose.onRoot().captureRoboImage("src/test/screenshots/design_sample_dark_compare_right.png")
@@ -72,14 +66,14 @@ class DesignSampleScreenshotTest {
     @Test
     fun accessibilityLight() {
         compose.enableAccessibilityChecks()
-        render(dark = false, glass = false)
+        render(dark = false)
         compose.onRoot().tryPerformAccessibilityChecks()
     }
 
     @Test
     fun accessibilityDark() {
         compose.enableAccessibilityChecks()
-        render(dark = true, glass = false)
+        render(dark = true)
         compose.onRoot().tryPerformAccessibilityChecks()
     }
 }
