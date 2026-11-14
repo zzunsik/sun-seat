@@ -48,6 +48,21 @@ object Sizes {
     val pillVertical = 6.dp
     val pillGap = 6.dp
 
+    /** 로딩 해 애니메이션 크기 */
+    val loader = 48.dp
+
+    /** 뼈대 로딩 줄 */
+    val skeletonLine = 14.dp
+    val skeletonWide = 220.dp
+    val skeletonMedium = 160.dp
+    val skeletonNarrow = 96.dp
+    val skeletonTitle = 28.dp
+    val skeletonChip = 72.dp
+    val skeletonChipHeight = 30.dp
+
+    /** 지하철 노선 색 점 */
+    val lineDot = 8.dp
+
     /** 해·좌석 그림 */
     val diagramHeight = 148.dp
     val vehicleWidth = 96.dp
