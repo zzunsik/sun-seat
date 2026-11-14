@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.SunSeat" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.SunSeat.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash</item>
+        <item name="postSplashScreenTheme">@style/Theme.SunSeat</item>
+    </style>
+</resources>

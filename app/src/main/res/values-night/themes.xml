@@ -1,0 +1,3 @@
+<resources>
+    <style name="Theme.SunSeat" parent="android:Theme.Material.NoActionBar" />
+</resources>
