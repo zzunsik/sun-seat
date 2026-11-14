@@ -16,26 +16,20 @@ import androidx.compose.ui.platform.LocalContext
 @Suppress("ComposeCompositionLocalUsage") // 테마 토큰 전달용
 private val LocalSunSeatColors = staticCompositionLocalOf { LightSunSeatColors }
 @Suppress("ComposeCompositionLocalUsage")
-private val LocalGlassEnabled = staticCompositionLocalOf { true }
-@Suppress("ComposeCompositionLocalUsage")
 private val LocalReduceMotion = staticCompositionLocalOf { false }
 
 /**
  * 햇빛 좌석 테마. Material 3 Expressive 위에 자체 토큰(docs/DESIGN.md)을 입힌다.
- *
- * @param glassEnabled false면 유리 캡슐 대신 불투명 캡슐을 쓴다.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SunSeatTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    glassEnabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val reduceMotion = rememberReduceMotion()
     CompositionLocalProvider(
         LocalSunSeatColors provides if (darkTheme) DarkSunSeatColors else LightSunSeatColors,
-        LocalGlassEnabled provides glassEnabled,
         LocalReduceMotion provides reduceMotion,
     ) {
         MaterialExpressiveTheme(
@@ -52,9 +46,6 @@ fun SunSeatTheme(
 object SunSeatTheme {
     val colors: SunSeatColors
         @Composable @ReadOnlyComposable get() = LocalSunSeatColors.current
-
-    val glassEnabled: Boolean
-        @Composable @ReadOnlyComposable get() = LocalGlassEnabled.current
 
     /** 시스템 "애니메이션 삭제"가 켜져 있으면 true */
     val reduceMotion: Boolean

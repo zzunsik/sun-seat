@@ -10,7 +10,6 @@ junit = "4.13.2"
 commonsSuncalc = "3.11"
 composeLints = "1.6.1"
 material3 = "1.5.0-rc01"
-backdrop = "2.0.1"
 roborazzi = "1.79.0"
 robolectric = "4.18"
 
@@ -27,7 +26,6 @@ androidx-compose-material3 = { module = "androidx.compose.material3:material3", 
 androidx-compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
 androidx-compose-ui-test-junit4-accessibility = { module = "androidx.compose.ui:ui-test-junit4-accessibility" }
 androidx-compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
-backdrop = { module = "io.github.kyant0:backdrop", version.ref = "backdrop" }
 roborazzi = { module = "io.github.takahirom.roborazzi:roborazzi", version.ref = "roborazzi" }
 roborazzi-compose = { module = "io.github.takahirom.roborazzi:roborazzi-compose", version.ref = "roborazzi" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
