@@ -46,7 +46,16 @@ com.sunseat.app
 ## 4. 외부 연동
 
 ### 4.1 공통 HTTP(#7)
-Retrofit + OkHttp + kotlinx.serialization. `Authorization: KakaoAK {키}` 헤더. 오류 구분: 키 없음, 인증 실패, 한도 초과, 네트워크 오류
+- Retrofit 3 + OkHttp 5 + kotlinx.serialization. 코드는 `com.sunseat.app.data`(`network`, `place`)
+- `KakaoAuthInterceptor`가 `Authorization: KakaoAK {키}` 헤더를 붙인다. 키(`BuildConfig.KAKAO_REST_API_KEY`)가 비어 있으면 요청을 보내지 않고 바로 실패한다
+- 결과는 `ApiResult`(`Success` / `Failure(ApiError, httpCode)`)로 돌려준다. `ApiError`
+  - `MISSING_KEY`: 키 없음(네트워크 호출 없음)
+  - `UNAUTHORIZED`: 401·403(잘못된 키, 앱에 해당 API 권한 없음)
+  - `QUOTA_EXCEEDED`: 429 또는 오류 본문이 한도 초과(`limit`/`throttl`/`quota`, `"code":-10`)
+  - `NETWORK`: 연결 실패·시간 초과
+  - `UNKNOWN`: 그 밖의 서버 오류, 해석할 수 없는 응답
+- 오류 본문 예: `{"errorType":"AccessDeniedError","message":"..."}`
+- `KakaoApis`가 구현을 만들고, 화면은 인터페이스(`PlaceSearchApi` 등)만 받는다
 
 ### 4.2 경로 API(#8, #9)
 - 대중교통 `/v2/routing/publictraffic`: `routes[].steps[]`(type BUS/SUBWAY/WALKING, `time`, `path.points`)를 `Route`/`Leg`로 변환. 좌표 순서는 [경도, 위도]
@@ -54,7 +63,11 @@ Retrofit + OkHttp + kotlinx.serialization. `Authorization: KakaoAK {키}` 헤더
 - 요청 파라미터·응답 구조는 첫 호출과 공식 문서로 확인해 이 절에 기록한다
 
 ### 4.3 장소 검색(#7)
-카카오 로컬 키워드 검색 → 장소 이름·주소·좌표 목록. 요청 파라미터와 응답 필드는 #7에서 공식 문서로 확인해 기록한다
+`GET https://dapi.kakao.com/v2/local/search/keyword.json` → `PlaceSearchApi.search(query, near, size)` → `List<Place>`(id, 이름, 지번·도로명 주소, 좌표, 카테고리)
+
+- 요청: `query`(필수), `x`·`y`(중심 경도·위도, 선택), `radius`(m, 0~20000), `size`(1~15, 기본 15), `page`(1~45), `sort`(`accuracy` 기본 / `distance`), `category_group_code`. 앱은 query·x·y·size만 쓴다
+- 응답: `documents[]`(`id`, `place_name`, `address_name`, `road_address_name`, `category_name`, `category_group_code`, `phone`, `place_url`, `distance`, `x`=경도, `y`=위도, 좌표는 문자열), `meta`(`total_count`, `pageable_count`, `is_end`, `same_name`)
+- 결과가 없으면 `documents`가 빈 배열(200). 좌표를 해석할 수 없는 문서는 건너뛴다. 빈 검색어는 호출하지 않는다
 
 ## 5. 저장
 - 설정(#15): DataStore
