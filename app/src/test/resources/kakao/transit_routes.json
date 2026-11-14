@@ -1,0 +1,117 @@
+{
+  "status": "OK",
+  "properties": {
+    "total": 3,
+    "bus": 0,
+    "subway": 1,
+    "busAndSubway": 1,
+    "landingURL": "https://map.kakao.com/link/by/traffic/example"
+  },
+  "routes": [
+    {
+      "properties": {
+        "type": "SUBWAY",
+        "totalDistance": 9000,
+        "totalTime": 1800,
+        "transfers": 1,
+        "fare": { "value": 1500 }
+      },
+      "steps": [
+        {
+          "properties": {
+            "guidance": "가상1호선 갑역 승차 → 을역 하차",
+            "type": "SUBWAY",
+            "distance": 4000,
+            "time": 600,
+            "stops": [ { "name": "갑역" }, { "name": "중간역" }, { "name": "을역" } ],
+            "vehicles": [ { "name": "가상1호선", "type": "일반" } ]
+          },
+          "path": { "points": [ [127.00, 37.50], [127.01, 37.51], [127.02, 37.52] ] }
+        },
+        {
+          "properties": {
+            "guidance": "을역 환승 도보 120m",
+            "type": "WALKING",
+            "distance": 120,
+            "time": 90,
+            "stops": [ { "name": "을역" }, { "name": "을역" } ]
+          },
+          "path": { "points": [ [127.02, 37.52], [127.0205, 37.5202] ] }
+        },
+        {
+          "properties": {
+            "guidance": "가상2호선 을역 승차 → 병역 하차",
+            "type": "SUBWAY",
+            "distance": 4880,
+            "time": 720,
+            "stops": [ { "name": "을역" }, { "name": "병역" } ],
+            "vehicles": [ { "name": "가상2호선", "type": "일반" }, { "name": "가상2호선", "type": "급행" } ]
+          },
+          "path": { "points": [ [127.0205, 37.5202], [127.04, 37.53] ] }
+        }
+      ]
+    },
+    {
+      "properties": {
+        "type": "BUS_AND_SUBWAY",
+        "totalDistance": 10500.4,
+        "totalTime": 2400,
+        "transfers": 1
+      },
+      "steps": [
+        {
+          "properties": {
+            "guidance": "100번 버스 정류장A 승차 → 정류장B 하차",
+            "type": "BUS",
+            "distance": 6000,
+            "time": 1200,
+            "stops": [ { "name": "정류장A" }, { "name": "정류장B" } ],
+            "vehicles": [ { "name": "100", "type": "간선" }, { "name": "200", "type": "지선" } ]
+          },
+          "path": { "points": [ [126.98, 37.55], [126.99, 37.54], [127.00, 37.53, 0.0] ] }
+        },
+        {
+          "properties": {
+            "guidance": "도보",
+            "type": "WALKING",
+            "distance": 200,
+            "time": 150,
+            "stops": [ { "name": "정류장B" }, { "name": "을역" } ]
+          },
+          "path": { "points": [ [127.00, 37.53], [127.02, 37.52] ] }
+        },
+        {
+          "properties": {
+            "guidance": "가상2호선 을역 승차 → 병역 하차",
+            "type": "SUBWAY",
+            "distance": 4300,
+            "time": 650,
+            "stops": [ { "name": "을역" }, { "name": "병역" } ],
+            "vehicles": [ { "name": "가상2호선", "type": "일반" } ]
+          },
+          "path": { "points": [ [127.02, 37.52], [127.04, 37.53] ] }
+        }
+      ]
+    },
+    {
+      "properties": {
+        "type": "SUBWAY",
+        "totalDistance": 1000,
+        "totalTime": 600,
+        "transfers": 0
+      },
+      "steps": [
+        {
+          "properties": {
+            "guidance": "문서에 없는 단계 종류",
+            "type": "FERRY",
+            "distance": 1000,
+            "time": 500,
+            "stops": []
+          },
+          "path": { "points": [ [127.0, 37.5], [127.1, 37.6] ] }
+        }
+      ]
+    }
+  ]
+}

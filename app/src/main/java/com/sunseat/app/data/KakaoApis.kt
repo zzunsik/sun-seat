@@ -4,6 +4,8 @@ import com.sunseat.app.BuildConfig
 import com.sunseat.app.data.network.KakaoHttp
 import com.sunseat.app.data.place.KakaoPlaceSearchApi
 import com.sunseat.app.data.place.PlaceSearchApi
+import com.sunseat.app.data.route.KakaoTransitRouteApi
+import com.sunseat.app.data.route.TransitRouteApi
 import okhttp3.OkHttpClient
 
 /**
@@ -18,4 +20,6 @@ class KakaoApis(
     private val dapi by lazy { KakaoHttp.retrofit(dapiBaseUrl, client) }
 
     val placeSearch: PlaceSearchApi by lazy { KakaoPlaceSearchApi(dapi) }
+
+    val transitRoutes: TransitRouteApi by lazy { KakaoTransitRouteApi(dapi) }
 }
