@@ -34,6 +34,18 @@ class ResultViewModelTest {
         ResultViewModel(request, chosen(transitRoute), advisor(90.0, 30.0), now = { departure }, zone = zone, compute = dispatcher)
 
     @Test
+    fun preferenceChangesRecomputeTheExistingResult() = runTest(dispatcher) {
+        val settings = kotlinx.coroutines.flow.MutableStateFlow(com.sunseat.app.data.settings.Settings.DEFAULT)
+        val route = com.sunseat.app.domain.Route(listOf(transitRoute.legs.first()))
+        val vm = ResultViewModel(transitRequest, chosen(route), advisor(90.0, 20.0), now = { departure }, zone = zone, compute = dispatcher, settings = settings)
+        advanceUntilIdle()
+        assertEquals(Side.LEFT, (vm.state.value.result!!.advice as TripAdvice.Sit).side)
+        settings.value = settings.value.copy(benchPreference = com.sunseat.app.domain.BenchPreference.AVOID_FRONT)
+        advanceUntilIdle()
+        assertEquals(Side.RIGHT, (vm.state.value.result!!.advice as TripAdvice.Sit).side)
+    }
+
+    @Test
     fun computesWithNowAndPreselectsRecommendedSide() = runTest(dispatcher) {
         val vm = vm()
         assertNull(vm.state.value.result)

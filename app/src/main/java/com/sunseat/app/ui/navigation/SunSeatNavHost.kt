@@ -18,6 +18,8 @@ import com.sunseat.app.ui.input.InputRoute
 
 /** 화면 키. 입력 → 경로 후보 → 결과. */
 sealed interface Screen {
+    data object Settings : Screen
+    data object Licenses : Screen
     data object Input : Screen
     data class Candidates(val request: TripRequest) : Screen
     data class Result(val request: TripRequest, val chosen: ChosenRoute) : Screen
@@ -36,8 +38,14 @@ fun SunSeatNavHost(graph: AppGraph, modifier: Modifier = Modifier) {
             rememberViewModelStoreNavEntryDecorator(),
         ),
         entryProvider = entryProvider {
+            entry<Screen.Settings> {
+                com.sunseat.app.ui.settings.SettingsRoute(graph.settings, onBack = { backStack.removeAt(backStack.lastIndex) }, onLicenses = { backStack.add(Screen.Licenses) })
+            }
+            entry<Screen.Licenses> {
+                com.sunseat.app.ui.settings.LicensesScreen(onBack = { backStack.removeAt(backStack.lastIndex) })
+            }
             entry<Screen.Input> {
-                InputRoute(graph = graph, onSubmit = { backStack.add(Screen.Candidates(it)) })
+                InputRoute(graph = graph, onSubmit = { backStack.add(Screen.Candidates(it)) }, onSettings = { backStack.add(Screen.Settings) })
             }
             entry<Screen.Candidates> { key ->
                 CandidatesRoute(
@@ -52,6 +60,8 @@ fun SunSeatNavHost(graph: AppGraph, modifier: Modifier = Modifier) {
             }
             entry<Screen.Result> { key ->
                 ResultRoute(
+                    graph = graph,
+                    onSettings = { backStack.add(Screen.Settings) },
                     request = key.request,
                     chosen = key.chosen,
                     onBack = { backStack.removeAt(backStack.lastIndex) },

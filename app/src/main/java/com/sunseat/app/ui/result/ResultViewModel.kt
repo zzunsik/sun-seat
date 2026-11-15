@@ -36,6 +36,7 @@ class ResultViewModel(
     now: () -> Instant = { Instant.now() },
     zone: ZoneId = ZoneId.systemDefault(),
     private val compute: CoroutineDispatcher = Dispatchers.Default,
+    settings: kotlinx.coroutines.flow.Flow<com.sunseat.app.data.settings.Settings> = kotlinx.coroutines.flow.flowOf(com.sunseat.app.data.settings.Settings.DEFAULT),
 ) : ViewModel() {
 
     private val departure: Instant = request.departure?.atZone(zone)?.toInstant() ?: now()
@@ -43,7 +44,18 @@ class ResultViewModel(
     val state: StateFlow<ResultUiState> = _state.asStateFlow()
     private var job: Job? = null
 
-    init { recompute() }
+    private var benchPreference = com.sunseat.app.domain.BenchPreference.AVOID_BACK
+    init {
+        recompute()
+        viewModelScope.launch {
+            settings.collect { defaults ->
+                if (benchPreference != defaults.benchPreference) {
+                    benchPreference = defaults.benchPreference
+                    recompute()
+                }
+            }
+        }
+    }
 
     fun setGoal(goal: SunGoal) {
         if (goal == _state.value.goal) return
@@ -54,8 +66,9 @@ class ResultViewModel(
     private fun recompute() {
         job?.cancel()
         val goal = _state.value.goal
+        val preference = benchPreference
         job = viewModelScope.launch {
-            val result = withContext(compute) { advisor.advise(chosen.route, departure, goal) }
+            val result = withContext(compute) { advisor.advise(chosen.route, departure, goal, benchPreference = preference) }
             _state.update { it.copy(result = result) }
         }
     }

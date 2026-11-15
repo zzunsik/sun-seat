@@ -17,6 +17,8 @@ class SunSeatApp : Application() {
 }
 
 class AppGraph(app: Application) {
+    private val applicationScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+    val settings: com.sunseat.app.data.settings.SettingsRepository by lazy { com.sunseat.app.data.settings.DataStoreSettingsRepository(app, applicationScope) }
     val kakao: KakaoApis by lazy { KakaoApis() }
     val locationProvider: LocationProvider by lazy { LocationProvider(app) }
 }

@@ -95,7 +95,7 @@
     <string name="result_if_followed">추천대로 앉으면</string>
     <string name="result_shade">그늘 %1$s</string>
     <string name="result_sun">햇빛 %1$s</string>
-    <string name="result_subway_front_note">지하철은 좌석이 옆을 봐서 해가 낮으면 반대쪽 좌석도 해를 마주 봐요. 해를 등지면 등이 뜨겁고, 마주 보면 눈이 부셔요. 지금은 등 뒤 햇빛을 피했어요.</string>
+    <string name="result_subway_front_note">지하철은 해가 낮으면 반대쪽 자리도 해를 마주 봐요. 자리 선호는 설정에서 바꿀 수 있어요.</string>
     <string name="result_ahead_sun">앞유리로 해가 들어요 · %1$s</string>
     <string name="result_mixed_part">%1$s까지 %2$s</string>
     <string name="result_mixed_then">%1$s부터 %2$s</string>
@@ -169,4 +169,25 @@
     <string name="map_loading">지도를 불러오는 중…</string>
     <string name="map_description">출발 %1$s, 도착 %2$s 경로 지도</string>
     <string name="map_preview">경로 미리보기</string>
+    <string name="settings_title">설정</string>
+    <string name="settings_theme">화면 모드</string>
+    <string name="settings_system">시스템</string>
+    <string name="settings_light">밝게</string>
+    <string name="settings_dark">어둡게</string>
+    <string name="settings_defaults">기본 선택</string>
+    <string name="settings_default_goal">기본 햇빛 목적</string>
+    <string name="settings_default_mode">기본 이동 수단</string>
+    <string name="settings_bench">지하철 자리 선호</string>
+    <string name="settings_avoid_back">등 뒤 햇빛 피하기</string>
+    <string name="settings_avoid_front">정면 햇빛 피하기</string>
+    <string name="settings_min_total">전체 햇빛 최소</string>
+    <string name="settings_bench_change">자리 선호 바꾸기</string>
+    <string name="settings_info">앱 정보</string>
+    <string name="settings_version">버전 %1$s</string>
+    <string name="settings_source">지도·장소·경로: 카카오</string>
+    <string name="settings_licenses">오픈소스 라이선스</string>
+    <string name="settings_save_error">설정을 저장하지 못했어요. 다시 선택해 주세요.</string>
+    <string name="settings_pretendard">Pretendard · SIL Open Font License 1.1</string>
+    <string name="settings_androidx">AndroidX · Apache License 2.0</string>
+    <string name="settings_kakao">카카오 운영정책</string>
 </resources>

@@ -28,14 +28,16 @@ import java.time.format.DateTimeFormatter
 /** 결과 화면을 ViewModel과 연결한다. */
 @Composable
 fun ResultRoute(
+    graph: com.sunseat.app.AppGraph,
     request: TripRequest,
     chosen: ChosenRoute,
     onBack: () -> Unit,
     onRestart: () -> Unit,
     modifier: Modifier = Modifier,
+    onSettings: () -> Unit = {},
     viewModel: ResultViewModel = viewModel(
         key = request.toString() + chosen.hashCode(),
-        factory = viewModelFactory { initializer { ResultViewModel(request, chosen) } },
+        factory = viewModelFactory { initializer { ResultViewModel(request, chosen, settings = graph.settings.settings) } },
     ),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -45,6 +47,7 @@ fun ResultRoute(
         state = state,
         modifier = modifier,
         actions = ResultActions(
+            onSettings = onSettings,
             onBack = onBack,
             onRestart = onRestart,
             onShare = { state.result?.let { share(context, request, it) } },
