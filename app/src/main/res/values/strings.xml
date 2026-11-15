@@ -190,4 +190,26 @@
     <string name="settings_pretendard">Pretendard · SIL Open Font License 1.1</string>
     <string name="settings_androidx">AndroidX · Apache License 2.0</string>
     <string name="settings_kakao">카카오 운영정책</string>
+    <string name="favorites_title">즐겨찾기 관리</string>
+    <string name="favorites_edit">즐겨찾기 편집</string>
+    <string name="favorites_home">집</string>
+    <string name="favorites_work">회사</string>
+    <string name="favorites_set_home">집 설정</string>
+    <string name="favorites_set_work">회사 설정</string>
+    <string name="favorites_search_home">집으로 지정할 장소 검색</string>
+    <string name="favorites_search_work">회사로 지정할 장소 검색</string>
+    <string name="favorites_change">변경</string>
+    <string name="favorites_custom">저장한 장소</string>
+    <string name="favorites_empty">검색 결과의 별을 눌러 장소를 저장해 보세요.</string>
+    <string name="favorites_add">즐겨찾기에 추가</string>
+    <string name="favorites_remove">즐겨찾기에서 빼기</string>
+    <string name="favorites_delete">%1$s 즐겨찾기 삭제</string>
+    <string name="favorites_rename">이름 바꾸기</string>
+    <string name="favorites_name">이름</string>
+    <string name="favorites_deleted">즐겨찾기를 삭제했어요.</string>
+    <string name="favorites_undo">실행 취소</string>
+    <string name="favorites_limit">즐겨찾기는 50개까지 저장할 수 있어요.</string>
+    <string name="favorites_save_error">즐겨찾기를 저장하지 못했어요. 다시 시도해 주세요.</string>
+    <string name="favorites_undo_conflict">같은 장소나 집·회사가 새로 저장되어 있어요.</string>
+    <string name="favorites_not_set">아직 설정하지 않았어요.</string>
 </resources>

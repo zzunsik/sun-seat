@@ -18,6 +18,7 @@ import com.sunseat.app.ui.input.InputRoute
 
 /** 화면 키. 입력 → 경로 후보 → 결과. */
 sealed interface Screen {
+    data class Favorites(val setup: com.sunseat.app.data.favorites.FavoriteKind? = null) : Screen
     data object Settings : Screen
     data object Licenses : Screen
     data object Input : Screen
@@ -38,14 +39,17 @@ fun SunSeatNavHost(graph: AppGraph, modifier: Modifier = Modifier) {
             rememberViewModelStoreNavEntryDecorator(),
         ),
         entryProvider = entryProvider {
+            entry<Screen.Favorites> { key ->
+                com.sunseat.app.ui.favorites.FavoritesRoute(graph, key.setup, onBack = { backStack.removeAt(backStack.lastIndex) })
+            }
             entry<Screen.Settings> {
-                com.sunseat.app.ui.settings.SettingsRoute(graph.settings, onBack = { backStack.removeAt(backStack.lastIndex) }, onLicenses = { backStack.add(Screen.Licenses) })
+                com.sunseat.app.ui.settings.SettingsRoute(graph.settings, onBack = { backStack.removeAt(backStack.lastIndex) }, onLicenses = { backStack.add(Screen.Licenses) }, onFavorites = { backStack.add(Screen.Favorites()) })
             }
             entry<Screen.Licenses> {
                 com.sunseat.app.ui.settings.LicensesScreen(onBack = { backStack.removeAt(backStack.lastIndex) })
             }
             entry<Screen.Input> {
-                InputRoute(graph = graph, onSubmit = { backStack.add(Screen.Candidates(it)) }, onSettings = { backStack.add(Screen.Settings) })
+                InputRoute(graph = graph, onSubmit = { backStack.add(Screen.Candidates(it)) }, onSettings = { backStack.add(Screen.Settings) }, onFavorites = { backStack.add(Screen.Favorites(it)) })
             }
             entry<Screen.Candidates> { key ->
                 CandidatesRoute(

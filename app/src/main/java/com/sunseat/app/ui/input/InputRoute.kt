@@ -22,10 +22,11 @@ fun InputRoute(
     onSubmit: (TripRequest) -> Unit,
     modifier: Modifier = Modifier,
     onSettings: () -> Unit = {},
+    onFavorites: (com.sunseat.app.data.favorites.FavoriteKind?) -> Unit = {},
     currentLocationName: String = androidx.compose.ui.res.stringResource(com.sunseat.app.R.string.location_use_current),
     viewModel: InputViewModel = viewModel(
         factory = viewModelFactory {
-            initializer { InputViewModel(graph.kakao.placeSearch, graph.locationProvider, currentLocationName = currentLocationName, settings = graph.settings.settings) }
+            initializer { InputViewModel(graph.kakao.placeSearch, graph.locationProvider, currentLocationName = currentLocationName, settings = graph.settings.settings, favoriteRepository = graph.favorites) }
         },
     ),
 ) {
@@ -38,6 +39,9 @@ fun InputRoute(
         modifier = modifier,
         actions = InputActions(
             onSettings = onSettings,
+            manageFavorites = onFavorites,
+            chooseFavorite = viewModel::chooseFavorite,
+            toggleFavorite = viewModel::toggleFavorite,
             openSearch = viewModel::openSearch,
             closeSearch = viewModel::closeSearch,
             onQueryChange = viewModel::onQueryChange,
