@@ -3,6 +3,8 @@ package com.sunseat.app
 import android.os.Bundle
 import android.os.SystemClock
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.SideEffect
+import androidx.core.view.WindowCompat
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sunseat.app.data.settings.ThemeMode
@@ -27,6 +29,12 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK -> true
+            }
+            SideEffect {
+                WindowCompat.getInsetsController(window, window.decorView).apply {
+                    isAppearanceLightStatusBars = !dark
+                    isAppearanceLightNavigationBars = !dark
+                }
             }
             SunSeatTheme(darkTheme = dark) {
                 SunSeatNavHost(graph)
