@@ -82,11 +82,21 @@ class InputViewModel(
     private val locationProvider: LocationProvider,
     private val currentLocationName: String,
     private val now: () -> LocalDateTime = { LocalDateTime.now() },
+    settings: kotlinx.coroutines.flow.Flow<com.sunseat.app.data.settings.Settings> = kotlinx.coroutines.flow.flowOf(com.sunseat.app.data.settings.Settings.DEFAULT),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(InputUiState())
     val state: StateFlow<InputUiState> = _state.asStateFlow()
 
+    private var goalChosen = false
+    private var modeChosen = false
+    init {
+        viewModelScope.launch {
+            settings.collect { defaults ->
+                _state.update { it.copy(goal = if (goalChosen) it.goal else defaults.goal, mode = if (modeChosen) it.mode else defaults.mode) }
+            }
+        }
+    }
     private var searchJob: Job? = null
     private var locationJob: Job? = null
 
@@ -194,11 +204,11 @@ class InputViewModel(
         _state.update { it.copy(origin = it.destination, destination = it.origin) }
     }
 
-    fun setMode(mode: TravelMode) = _state.update { it.copy(mode = mode) }
+    fun setMode(mode: TravelMode) { modeChosen = true; _state.update { it.copy(mode = mode) } }
 
     fun setDeparture(departure: LocalDateTime?) = _state.update { it.copy(departure = departure) }
 
-    fun setGoal(goal: SunGoal) = _state.update { it.copy(goal = goal) }
+    fun setGoal(goal: SunGoal) { goalChosen = true; _state.update { it.copy(goal = goal) } }
 
     /** 좌석 찾기: 입력이 다 되면 요청을, 빈 칸이 있으면 그 칸의 검색을 연다. */
     fun submit(): TripRequest? {

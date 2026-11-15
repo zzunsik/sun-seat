@@ -81,6 +81,7 @@ import java.util.Locale
 
 /** 화면 동작 묶음. 상태를 가진 쪽(InputRoute)이 채운다. */
 data class InputActions(
+    val onSettings: () -> Unit = {},
     val openSearch: (EndpointField) -> Unit = {},
     val closeSearch: () -> Unit = {},
     val onQueryChange: (String) -> Unit = {},
@@ -119,12 +120,17 @@ fun InputScreen(
                 ),
             verticalArrangement = Arrangement.spacedBy(Spacing.m),
         ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 stringResource(R.string.input_title),
                 style = MaterialTheme.typography.headlineSmall,
                 color = scheme.onSurface,
-                modifier = Modifier.semantics { heading() }.padding(bottom = Spacing.s),
+                modifier = Modifier.weight(1f).semantics { heading() }.padding(bottom = Spacing.s),
             )
+            IconButton(onClick = actions.onSettings) {
+                Icon(painterResource(R.drawable.ic_ms_settings), contentDescription = stringResource(R.string.settings_title), tint = scheme.onSurface, modifier = Modifier.size(Sizes.iconMedium))
+            }
+            }
             EndpointsCard(state, actions)
             if (state.locationMessageRes != null) LocationNotice(state, actions)
             if (state.sameEndpoints) {

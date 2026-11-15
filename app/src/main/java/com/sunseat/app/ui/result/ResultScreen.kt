@@ -84,6 +84,7 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
 data class ResultActions(
+    val onSettings: () -> Unit = {},
     val onBack: () -> Unit = {},
     val onRestart: () -> Unit = {},
     val onShare: () -> Unit = {},
@@ -351,7 +352,7 @@ private fun ResultContent(
             SectionCard(title = stringResource(R.string.result_legs)) {
                 result.legs.forEachIndexed { i, leg ->
                     if (i > 0) HorizontalDivider(color = scheme.outlineVariant)
-                    LegRow(leg, request.mode)
+                    LegRow(leg, request.mode, actions.onSettings)
                 }
             }
         }
@@ -359,7 +360,7 @@ private fun ResultContent(
 }
 
 @Composable
-private fun LegRow(leg: LegResult, mode: TravelMode) {
+private fun LegRow(leg: LegResult, mode: TravelMode, onSettings: () -> Unit) {
     val scheme = SunSeatTheme.scheme
     val icon = when (leg.leg.mode) {
         Mode.SUBWAY -> R.drawable.ic_ms_directions_subway
@@ -402,6 +403,7 @@ private fun LegRow(leg: LegResult, mode: TravelMode) {
                 if (got.isZero) ExposurePill(Exposure.Shade, stringResource(R.string.result_leg_shade))
                 else ExposurePill(Exposure.Sun, stringResource(R.string.result_leg_sun, formatDuration(got)))
                 if (subway) {
+                    QuietButton(onClick = onSettings) { Text(stringResource(R.string.settings_bench_change)) }
                     listOf(Side.LEFT, Side.RIGHT).forEach { side ->
                         val b = leg.bench(side) ?: return@forEach
                         Text(

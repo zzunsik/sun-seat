@@ -57,6 +57,22 @@ class InputViewModelTest {
     @After fun tearDown() = Dispatchers.resetMain()
 
     @Test
+    fun defaultsArriveWithoutOverwritingUserChoices() = runTest(dispatcher) {
+        val settings = kotlinx.coroutines.flow.MutableStateFlow(com.sunseat.app.data.settings.Settings.DEFAULT)
+        val vm = InputViewModel(FakePlaces(), LocationProvider { LocationResult.Unavailable }, currentLocationName = "현재 위치", now = { fixedNow }, settings = settings)
+        settings.value = settings.value.copy(goal = SunGoal.SEEK, mode = TravelMode.CAR)
+        advanceUntilIdle()
+        assertEquals(SunGoal.SEEK, vm.state.value.goal)
+        assertEquals(TravelMode.CAR, vm.state.value.mode)
+        vm.setGoal(SunGoal.AVOID)
+        vm.setMode(TravelMode.TRANSIT)
+        settings.value = settings.value.copy(theme = com.sunseat.app.data.settings.ThemeMode.DARK)
+        advanceUntilIdle()
+        assertEquals(SunGoal.AVOID, vm.state.value.goal)
+        assertEquals(TravelMode.TRANSIT, vm.state.value.mode)
+    }
+
+    @Test
     fun searchIsDebouncedAndOnlyLatestQueryRuns() = runTest(dispatcher) {
         val places = FakePlaces(ApiResult.Success(listOf(seoul)))
         val vm = vm(places)
