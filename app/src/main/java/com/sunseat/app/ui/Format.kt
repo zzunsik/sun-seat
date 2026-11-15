@@ -1,21 +1,23 @@
 package com.sunseat.app.ui
 
+import android.content.Context
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
+import com.sunseat.app.R
 import java.text.NumberFormat
 import java.time.Duration
 import java.util.Locale
 
-/** "1시간 5분", "42분". 1분 미만은 "1분"([zeroOk]면 0은 "0분") */
-fun formatDuration(d: Duration, zeroOk: Boolean = false): String {
-    if (zeroOk && d.toMinutes() <= 0) return "0분"
-    val total = d.toMinutes().coerceAtLeast(1)
+fun formatDuration(context: Context, d: Duration, zeroOk: Boolean = false): String {
+    val total = if (zeroOk) d.toMinutes().coerceAtLeast(0) else d.toMinutes().coerceAtLeast(1)
     val h = total / 60
     val m = total % 60
     return when {
-        h == 0L -> "${m}분"
-        m == 0L -> "${h}시간"
-        else -> "${h}시간 ${m}분"
+        h == 0L -> context.getString(R.string.common_minutes, m)
+        m == 0L -> context.getString(R.string.common_hours, h)
+        else -> context.getString(R.string.common_hours_minutes, h, m)
     }
 }
-
-/** "1,550원" */
-fun formatWon(won: Int): String = NumberFormat.getNumberInstance(Locale.KOREA).format(won) + "원"
+@Composable fun formatDuration(d: Duration, zeroOk: Boolean = false): String = formatDuration(LocalContext.current, d, zeroOk)
+fun formatWon(context: Context, won: Int): String = context.getString(R.string.common_won, NumberFormat.getNumberInstance(Locale.KOREA).format(won))
+@Composable fun formatWon(won: Int): String = formatWon(LocalContext.current, won)

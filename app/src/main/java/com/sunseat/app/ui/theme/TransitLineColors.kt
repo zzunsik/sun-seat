@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.Color
  * 수도권 지하철 노선 공식 색. 노선 칩의 작은 점에만 쓴다(이름과 함께 표시, 색만으로 구분하지 않음).
  * 해·그늘 의미 색과는 별개다. docs/DESIGN.md 2.4
  */
+// 한글 문자열은 화면 문구가 아니라 API 노선 이름 매칭 키다.
 object TransitLineColors {
     private val byName = linkedMapOf(
         "신분당" to Color(0xFFD4003B),

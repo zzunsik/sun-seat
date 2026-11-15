@@ -8,16 +8,12 @@ import kotlin.math.abs
 enum class SunGoal { AVOID, SEEK }
 
 /** 자가용 동승자 좌석. 운전석은 왼쪽이며 고를 수 없다. */
-enum class CarSeat(val label: String) {
-    PASSENGER("조수석"),
-    REAR_LEFT("뒷좌석 왼쪽"),
-    REAR_RIGHT("뒷좌석 오른쪽"),
-}
+enum class CarSeat { PASSENGER, REAR_LEFT, REAR_RIGHT }
 
 /** 구간 하나에 대한 좌석 추천. */
 sealed interface SeatAdvice {
     /** [side] 쪽 좌석을 추천한다. [carSeats]는 자가용일 때만 채운다. */
-    data class Recommend(val side: Side, val label: String, val carSeats: List<CarSeat>) : SeatAdvice
+    data class Recommend(val side: Side, val carSeats: List<CarSeat>) : SeatAdvice
 
     /** 좌·우 차이가 기준 미만이다. */
     data object NoDifference : SeatAdvice
@@ -78,9 +74,9 @@ class SeatRecommender(
         return when (leg.leg.mode) {
             Mode.CAR -> {
                 val seats = carSeats(side)
-                SeatAdvice.Recommend(side, seats.joinToString("·") { it.label }, seats)
+                SeatAdvice.Recommend(side, seats)
             }
-            else -> SeatAdvice.Recommend(side, busLabel(side), emptyList())
+            else -> SeatAdvice.Recommend(side, emptyList())
         }
     }
 
@@ -120,7 +116,6 @@ class SeatRecommender(
         const val GLARE_MAX_ALTITUDE_DEG = 15.0
         internal const val EPSILON = 1e-9
 
-        fun busLabel(side: Side): String = if (side == Side.LEFT) "진행 방향 왼쪽" else "진행 방향 오른쪽"
 
         fun carSeats(side: Side): List<CarSeat> =
             if (side == Side.LEFT) listOf(CarSeat.REAR_LEFT) else listOf(CarSeat.PASSENGER, CarSeat.REAR_RIGHT)

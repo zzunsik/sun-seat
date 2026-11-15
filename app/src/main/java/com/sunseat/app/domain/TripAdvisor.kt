@@ -10,8 +10,8 @@ data class Span(val start: Float, val end: Float)
 
 /** 탑승 구간 하나의 결론. */
 sealed interface LegAdvice {
-    /** [side] 쪽에 앉는다. [label]은 "진행 방향 왼쪽", "조수석·뒷좌석 오른쪽" 등. */
-    data class Sit(val side: Side, val label: String) : LegAdvice
+    /** [side] 쪽에 앉으며 자가용이면 [carSeats]를 함께 전달한다. */
+    data class Sit(val side: Side, val carSeats: List<CarSeat> = emptyList()) : LegAdvice
     data object NoDifference : LegAdvice
     data object NoSun : LegAdvice
 
@@ -48,7 +48,7 @@ enum class SunPlacement { LEFT, RIGHT, AHEAD }
 
 /** 경로 전체 결론. */
 sealed interface TripAdvice {
-    data class Sit(val side: Side, val label: String) : TripAdvice
+    data class Sit(val side: Side, val carSeats: List<CarSeat> = emptyList()) : TripAdvice
     data object Mixed : TripAdvice
     data object NoDifference : TripAdvice
     data object NoSun : TripAdvice
@@ -137,7 +137,7 @@ class TripAdvisor(
                 Mode.SUBWAY -> {
                     val b = benchByLeg[le.legIndex]
                     val advice = when (val a = b?.advice) {
-                        is BenchAdvice.Recommend -> LegAdvice.Sit(a.side, a.label)
+                        is BenchAdvice.Recommend -> LegAdvice.Sit(a.side)
                         BenchAdvice.NoDifference -> LegAdvice.NoDifference
                         BenchAdvice.NoSun, null -> LegAdvice.NoSun
                     }
@@ -152,7 +152,7 @@ class TripAdvisor(
                     val advice = if (sideless) LegAdvice.NoDifference else when (val a = seatByLeg[le.legIndex]?.advice) {
                         is SeatAdvice.Recommend -> LegAdvice.Sit(
                             a.side,
-                            if (a.carSeats.isNotEmpty()) a.carSeats.joinToString("·") { it.label } else a.label,
+                            a.carSeats,
                         )
                         SeatAdvice.NoDifference -> LegAdvice.NoDifference
                         SeatAdvice.NoSun, null -> LegAdvice.NoSun
@@ -168,7 +168,7 @@ class TripAdvisor(
             rides.isEmpty() || rides.all { it.advice == LegAdvice.NoSun } -> TripAdvice.NoSun
             sits.isEmpty() -> TripAdvice.NoDifference
             sits.map { it.side }.distinct().size > 1 -> TripAdvice.Mixed
-            else -> sits.maxBy { s -> rides.first { it.advice == s }.leg.duration }.let { TripAdvice.Sit(it.side, it.label) }
+            else -> sits.maxBy { s -> rides.first { it.advice == s }.leg.duration }.let { TripAdvice.Sit(it.side, it.carSeats) }
         }
 
         var shade = Duration.ZERO

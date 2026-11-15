@@ -294,7 +294,12 @@ private fun LegChipView(chip: LegChip) {
         TransitLineColors.of(chip.lineName)?.let { color ->
             Box(Modifier.size(Sizes.lineDot).clip(CircleShape).background(color))
         }
-        Text(chip.label, style = MaterialTheme.typography.labelMedium, color = if (walk) scheme.onSurfaceVariant else scheme.onSurface)
+        Text(when (chip.mode) {
+            Mode.SUBWAY -> chip.lineName.ifBlank { stringResource(R.string.common_subway) }
+            Mode.BUS -> if (chip.lineName.isBlank()) stringResource(R.string.common_bus) else stringResource(R.string.candidates_bus_name, chip.lineName)
+            Mode.WALK -> stringResource(R.string.candidates_walk, chip.walkMinutes)
+            Mode.CAR -> stringResource(R.string.common_car)
+        }, style = MaterialTheme.typography.labelMedium, color = if (walk) scheme.onSurfaceVariant else scheme.onSurface)
     }
 }
 

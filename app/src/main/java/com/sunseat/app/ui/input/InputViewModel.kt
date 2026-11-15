@@ -80,6 +80,7 @@ internal fun ApiError.messageRes(): Int = when (this) {
 class InputViewModel(
     private val placeSearch: PlaceSearchApi,
     private val locationProvider: LocationProvider,
+    private val currentLocationName: String,
     private val now: () -> LocalDateTime = { LocalDateTime.now() },
 ) : ViewModel() {
 
@@ -174,7 +175,7 @@ class InputViewModel(
             _state.update {
                 when (result) {
                     is LocationResult.Success -> it.copy(
-                        origin = Endpoint(NamedPlace(CURRENT_LOCATION_NAME, com.sunseat.app.domain.LatLng(result.latitude, result.longitude)), isCurrentLocation = true),
+                        origin = Endpoint(NamedPlace(currentLocationName, com.sunseat.app.domain.LatLng(result.latitude, result.longitude)), isCurrentLocation = true),
                         locating = false,
                         locationMessageRes = if (result.isApproximate) R.string.location_approximate_only else null,
                         locationAction = null,
@@ -220,6 +221,5 @@ class InputViewModel(
 
     companion object {
         const val SEARCH_DEBOUNCE_MILLIS = 300L
-        const val CURRENT_LOCATION_NAME = "현재 위치"
     }
 }

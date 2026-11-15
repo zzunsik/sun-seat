@@ -51,7 +51,7 @@ class InputViewModelTest {
     private val fixedNow = LocalDateTime.of(2026, 11, 15, 8, 0)
 
     private fun vm(places: PlaceSearchApi = FakePlaces(), location: LocationProvider = LocationProvider { LocationResult.Unavailable }) =
-        InputViewModel(places, location, now = { fixedNow })
+        InputViewModel(places, location, currentLocationName = "현재 위치", now = { fixedNow })
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()

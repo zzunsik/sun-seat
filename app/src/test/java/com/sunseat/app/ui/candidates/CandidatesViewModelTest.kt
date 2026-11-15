@@ -61,12 +61,14 @@ class CandidatesViewModelTest {
         val items = (vm.state.value as CandidatesState.Options).items
         assertEquals(2, items.size)
         val first = items[0]
-        assertEquals(listOf("1호선", "도보 3분", "2호선"), first.chips.map { it.label })
+        assertEquals(listOf(Mode.SUBWAY, Mode.WALK, Mode.SUBWAY), first.chips.map { it.mode })
+        assertEquals(3L, first.chips[1].walkMinutes)
+        assertEquals("1호선", first.chips[0].lineName)
         assertEquals("서울역", first.boardAt)
         assertEquals("강남", first.alightAt)
         assertEquals(1, first.transfers)
         assertEquals(1550, first.fare)
-        assertEquals(listOf("버스 140"), items[1].chips.map { it.label })
+        assertEquals(listOf("140"), items[1].chips.map { it.lineName })
         assertEquals(3L, first.walkMinutes)
         assertTrue(first.fastest)
         assertFalse(items[1].fastest)

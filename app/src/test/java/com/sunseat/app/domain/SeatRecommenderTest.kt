@@ -42,18 +42,18 @@ class SeatRecommenderTest {
     @Test
     fun busRecommendsLessExposedSide() {
         val advice = recommender.advise(lr(Mode.BUS, left = 300.0, right = 50.0))
-        assertEquals(SeatAdvice.Recommend(Side.RIGHT, "진행 방향 오른쪽", emptyList()), advice)
+        assertEquals(SeatAdvice.Recommend(Side.RIGHT, emptyList()), advice)
 
         val other = recommender.advise(lr(Mode.BUS, left = 10.0, right = 400.0)) as SeatAdvice.Recommend
         assertEquals(Side.LEFT, other.side)
-        assertEquals("진행 방향 왼쪽", other.label)
+        assertEquals(Side.LEFT, other.side)
     }
 
     @Test
     fun carRecommendsPassengerSeats() {
         val right = recommender.advise(lr(Mode.CAR, left = 300.0, right = 50.0)) as SeatAdvice.Recommend
         assertEquals(listOf(CarSeat.PASSENGER, CarSeat.REAR_RIGHT), right.carSeats)
-        assertEquals("조수석·뒷좌석 오른쪽", right.label)
+        assertEquals(listOf(CarSeat.PASSENGER, CarSeat.REAR_RIGHT), right.carSeats)
 
         val left = recommender.advise(lr(Mode.CAR, left = 50.0, right = 300.0)) as SeatAdvice.Recommend
         assertEquals(listOf(CarSeat.REAR_LEFT), left.carSeats)
@@ -79,7 +79,7 @@ class SeatRecommenderTest {
         val seek = recommender.advise(lr(Mode.BUS, 300.0, 50.0), SunGoal.SEEK) as SeatAdvice.Recommend
         assertEquals(Side.RIGHT, avoid.side)
         assertEquals(Side.LEFT, seek.side)
-        assertEquals("진행 방향 왼쪽", seek.label)
+        assertEquals(Side.LEFT, seek.side)
     }
 
     @Test

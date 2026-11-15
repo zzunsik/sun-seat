@@ -96,7 +96,6 @@ data class InputActions(
     val submit: () -> Unit = {},
 )
 
-private val DepartureFormat = DateTimeFormatter.ofPattern("M월 d일 (E) HH:mm", Locale.KOREAN)
 
 /** 입력 화면: 출발·도착, 수단, 출발 시각, 햇빛 피하기/받기. 상태 없음(미리보기·스크린샷용). */
 @Composable
@@ -272,7 +271,7 @@ private fun OptionsCard(state: InputUiState, actions: InputActions) {
         if (state.departure != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    state.departure.format(DepartureFormat),
+                    state.departure.format(DateTimeFormatter.ofPattern(stringResource(R.string.input_date_pattern), Locale.KOREAN)),
                     style = MaterialTheme.typography.titleMedium,
                     color = scheme.onSurface,
                     modifier = Modifier.weight(1f),
