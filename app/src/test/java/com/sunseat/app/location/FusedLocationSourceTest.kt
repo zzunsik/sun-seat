@@ -12,6 +12,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 
+@org.robolectric.annotation.Config(application = android.app.Application::class)
 @RunWith(RobolectricTestRunner::class)
 class FusedLocationSourceTest {
 

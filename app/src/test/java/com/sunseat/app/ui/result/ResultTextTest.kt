@@ -16,7 +16,7 @@ import org.robolectric.annotation.Config
 import java.time.Duration
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(application = android.app.Application::class, sdk = [36])
 class ResultTextTest {
     private val context: Context get() = ApplicationProvider.getApplicationContext()
 

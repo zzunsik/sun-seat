@@ -1,0 +1,104 @@
+package com.sunseat.app.ui.map
+
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import com.sunseat.app.R
+import com.sunseat.app.domain.Mode
+import com.sunseat.app.ui.theme.Sizes
+import com.sunseat.app.ui.theme.Spacing
+import com.sunseat.app.ui.theme.SunSeatTheme
+import kotlin.math.cos
+import kotlin.math.sin
+
+enum class MapRenderer { SDK, PREVIEW }
+@Suppress("ComposeCompositionLocalUsage") // 네이티브 SDK를 테스트 렌더러로 교체하는 경계
+val LocalMapRenderer = staticCompositionLocalOf { MapRenderer.SDK }
+
+@Composable
+fun SunSeatMap(state: MapState, modifier: Modifier = Modifier) {
+    val description = stringResource(R.string.map_description, state.origin?.name.orEmpty(), state.destination?.name.orEmpty())
+    Box(modifier.semantics { contentDescription = description }) {
+        if (LocalMapRenderer.current == MapRenderer.PREVIEW) MapPlaceholder(state, Modifier.fillMaxSize())
+        else NativeMap(state, Modifier.fillMaxSize())
+        if (state.origin != null || state.destination != null) {
+            Row(Modifier.align(Alignment.TopStart).background(SunSeatTheme.scheme.surface).padding(Spacing.s), horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalAlignment = Alignment.CenterVertically) {
+                val ink = SunSeatTheme.scheme.onSurface
+                if (state.origin != null) {
+                    Canvas(Modifier.size(Sizes.iconSmall)) { drawCircle(ink, size.minDimension / 3, style = Stroke(Sizes.mapWalk.toPx())) }
+                    Text(stringResource(R.string.input_origin), color = ink, style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
+                }
+                if (state.destination != null) {
+                    Canvas(Modifier.size(Sizes.iconSmall)) { drawRect(ink, Offset(size.width / 6, size.height / 6), androidx.compose.ui.geometry.Size(size.width * 2 / 3, size.height * 2 / 3)) }
+                    Text(stringResource(R.string.input_destination), color = ink, style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
+                }
+            }
+        }
+    }
+}
+
+/** 네이티브 지도 없이 실제 경로 좌표를 보여 주는 테스트 렌더러. */
+@Composable
+fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
+    val scheme = SunSeatTheme.scheme
+    val sun = SunSeatTheme.colors.onSunContainer
+    Box(modifier) {
+    Canvas(Modifier.fillMaxSize().background(scheme.surfaceContainer)) {
+        val top = state.padding.top.toPx()
+        val bottom = state.padding.bottom.toPx()
+        val projection = MapProjection(state.points(), size.width, (size.height - top - bottom).coerceAtLeast(1f), Sizes.mapInset.toPx())
+        fun position(point: com.sunseat.app.domain.LatLng): Offset = projection.project(point).let { Offset(it.first, it.second + top) }
+        val grid = Sizes.mapInset.toPx()
+        var x = 0f
+        while (x < size.width) { drawLine(scheme.outlineVariant, Offset(x, 0f), Offset(x, size.height), Sizes.hairline.toPx()); x += grid }
+        var y = 0f
+        while (y < size.height) { drawLine(scheme.outlineVariant, Offset(0f, y), Offset(size.width, y), Sizes.hairline.toPx()); y += grid }
+        state.routes.withIndex().sortedBy { it.index == state.selectedRoute }.forEach { (index, route) -> route.legs.forEach { leg ->
+            if (leg.path.size > 1) {
+                val path = Path().apply { leg.path.forEachIndexed { i, p -> val at = position(p); if (i == 0) moveTo(at.x, at.y) else lineTo(at.x, at.y) } }
+                val width = when (leg.mode) { Mode.WALK -> Sizes.mapWalk; Mode.SUBWAY -> Sizes.mapSubway; else -> Sizes.mapRoute }.toPx()
+                drawPath(path, if (index == state.selectedRoute) scheme.onSurface else scheme.outline, style = Stroke(width, cap = StrokeCap.Round, pathEffect = if (leg.mode == Mode.WALK) PathEffect.dashPathEffect(floatArrayOf(grid / 4, grid / 5)) else null))
+            }
+        } }
+        state.origin?.let { drawCircle(scheme.surface, Sizes.mapMarker.toPx() / 3, position(it.location)); drawCircle(scheme.onSurface, Sizes.mapMarker.toPx() / 3, position(it.location), style = Stroke(Sizes.mapWalk.toPx())) }
+        state.destination?.let { val p = position(it.location); val radius = Sizes.mapMarker.toPx() / 3; drawRect(scheme.onSurface, p - Offset(radius, radius), androidx.compose.ui.geometry.Size(radius * 2, radius * 2)) }
+        state.cursor?.let { cursor ->
+            val p = position(cursor.position)
+            if (cursor.sunAltitude > 0) {
+                val angle = Math.toRadians(cursor.sunAzimuth)
+                val length = Sizes.mapSunRay.toPx() * (1 - cursor.sunAltitude.coerceIn(0.0, 90.0) / 120).toFloat()
+                val end = p + Offset(sin(angle).toFloat(), -cos(angle).toFloat()) * length
+                drawLine(sun, p, end, Sizes.mapRoute.toPx(), StrokeCap.Round)
+                drawCircle(sun, Sizes.mapWalk.toPx(), end)
+            }
+            rotate(cursor.heading.toFloat(), p) {
+                val radius = Sizes.mapMarker.toPx() / 2
+                val arrow = Path().apply { moveTo(p.x, p.y - radius); lineTo(p.x + radius / 2, p.y + radius); lineTo(p.x, p.y + radius / 2); lineTo(p.x - radius / 2, p.y + radius); close() }
+                drawPath(arrow, scheme.onSurface)
+            }
+        }
+    }
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomEnd) {
+        Text(stringResource(R.string.map_preview), Modifier.background(scheme.surface).padding(Spacing.s), color = scheme.onSurfaceVariant, style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
+    }
+    }
+}

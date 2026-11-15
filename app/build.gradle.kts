@@ -24,6 +24,8 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         // API 키는 local.properties에서만 읽는다. 없으면 빈 문자열로 빌드된다(CI 포함).
+        val mapKey = localProps.getProperty("KAKAO_NATIVE_APP_KEY", "")
+        buildConfigField("String", "KAKAO_NATIVE_APP_KEY", "\"$mapKey\"")
         val kakaoKey = localProps.getProperty("KAKAO_REST_API_KEY", "")
         buildConfigField("String", "KAKAO_REST_API_KEY", "\"$kakaoKey\"")
     }
@@ -31,6 +33,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 
@@ -59,6 +62,7 @@ kotlin {
 }
 
 dependencies {
+    implementation(libs.kakao.map)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.activity.compose)

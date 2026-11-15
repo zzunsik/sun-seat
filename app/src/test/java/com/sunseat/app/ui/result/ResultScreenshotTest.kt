@@ -27,7 +27,7 @@ import org.robolectric.annotation.GraphicsMode
 /** 결과 화면 스크린샷(밝은·어두운, 구간마다 다름, 해 없음, 자가용 눈부심)과 접근성 검사. */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [36], qualifiers = "w390dp-h844dp-xxhdpi")
+@Config(application = android.app.Application::class, sdk = [36], qualifiers = "w390dp-h844dp-xxhdpi")
 class ResultScreenshotTest {
     @get:Rule
     val compose = createComposeRule()
@@ -39,8 +39,10 @@ class ResultScreenshotTest {
 
     private fun render(request: TripRequest, state: ResultUiState, dark: Boolean) {
         compose.setContent {
+            androidx.compose.runtime.CompositionLocalProvider(com.sunseat.app.ui.map.LocalMapRenderer provides com.sunseat.app.ui.map.MapRenderer.PREVIEW) {
             SunSeatTheme(darkTheme = dark) {
                 ResultScreen(request, state, ResultActions(), animateIn = false, zone = zone)
+            }
             }
         }
         compose.waitForIdle()
