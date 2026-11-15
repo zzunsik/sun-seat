@@ -19,7 +19,7 @@ import org.robolectric.annotation.GraphicsMode
 /** 경로 후보 화면 스크린샷(조회 중·목록·경로 없음·오류)과 접근성 검사. */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [36], qualifiers = "w390dp-h844dp-xxhdpi")
+@Config(application = android.app.Application::class, sdk = [36], qualifiers = "w390dp-h844dp-xxhdpi")
 class CandidatesScreenshotTest {
     @get:Rule
     val compose = createComposeRule()

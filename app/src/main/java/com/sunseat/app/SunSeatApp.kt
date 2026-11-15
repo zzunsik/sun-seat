@@ -6,6 +6,13 @@ import com.sunseat.app.location.LocationProvider
 
 /** 앱 전역 의존성. 화면은 인터페이스만 받아서 테스트에서 가짜로 바꾼다. */
 class SunSeatApp : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        if (BuildConfig.KAKAO_NATIVE_APP_KEY.isNotBlank()) {
+            com.kakao.vectormap.KakaoMapSdk.init(this, BuildConfig.KAKAO_NATIVE_APP_KEY)
+        }
+    }
+
     val graph: AppGraph by lazy { AppGraph(this) }
 }
 

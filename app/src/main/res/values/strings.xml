@@ -163,4 +163,10 @@
     <string name="common_bus">버스</string>
     <string name="candidates_bus_name">버스 %1$s</string>
     <string name="input_date_pattern">M월 d일 (E) HH:mm</string>
+    <string name="map_title">이동 경로</string>
+    <string name="map_missing_key">지도를 준비 중이에요. 자리 추천은 볼 수 있어요.</string>
+    <string name="map_error">지도를 불러오지 못했어요. 자리 추천은 볼 수 있어요.</string>
+    <string name="map_loading">지도를 불러오는 중…</string>
+    <string name="map_description">출발 %1$s, 도착 %2$s 경로 지도</string>
+    <string name="map_preview">경로 미리보기</string>
 </resources>

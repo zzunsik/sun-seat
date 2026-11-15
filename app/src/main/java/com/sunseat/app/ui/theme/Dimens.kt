@@ -22,6 +22,14 @@ object Spacing {
 
 /** 부품 크기 토큰. docs/DESIGN.md 4 */
 object Sizes {
+    val mapHeight = 240.dp
+    val mapMarker = 32.dp
+    val mapRoute = 5.dp
+    val mapWalk = 3.dp
+    val mapSubway = 7.dp
+    val mapInset = 40.dp
+    val mapSunRay = 72.dp
+
     /** 상단 떠 있는 캡슐 아래로 내용이 시작하는 여백 */
     val topCapsuleClearance = 80.dp
 

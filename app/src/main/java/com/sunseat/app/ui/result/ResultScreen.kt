@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -294,6 +295,18 @@ private fun ResultContent(
                         )
                     }
                 }
+            }
+        }
+        Stagger(shown, index++) {
+            SectionCard(title = stringResource(R.string.map_title)) {
+                com.sunseat.app.ui.map.SunSeatMap(
+                    com.sunseat.app.ui.map.MapState(
+                        routes = listOf(com.sunseat.app.domain.Route(result.legs.map { it.leg })),
+                        origin = request.origin,
+                        destination = request.destination,
+                    ),
+                    Modifier.fillMaxWidth().height(Sizes.mapHeight),
+                )
             }
         }
         result.sunPlacement?.let { placement ->
