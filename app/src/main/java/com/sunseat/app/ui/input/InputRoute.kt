@@ -21,9 +21,10 @@ fun InputRoute(
     graph: AppGraph,
     onSubmit: (TripRequest) -> Unit,
     modifier: Modifier = Modifier,
+    currentLocationName: String = androidx.compose.ui.res.stringResource(com.sunseat.app.R.string.location_use_current),
     viewModel: InputViewModel = viewModel(
         factory = viewModelFactory {
-            initializer { InputViewModel(graph.kakao.placeSearch, graph.locationProvider) }
+            initializer { InputViewModel(graph.kakao.placeSearch, graph.locationProvider, currentLocationName = currentLocationName) }
         },
     ),
 ) {

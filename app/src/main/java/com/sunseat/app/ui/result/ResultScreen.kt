@@ -43,6 +43,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import com.sunseat.app.ui.text.word
+import com.sunseat.app.ui.text.label
 import com.sunseat.app.R
 import com.sunseat.app.domain.LegAdvice
 import com.sunseat.app.domain.LegResult
@@ -92,13 +94,12 @@ internal val TimeFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm"
 /** 눈금 생략 기준: 양 끝 시각과 이만큼 가까운 정각 눈금은 겹치므로 그리지 않는다 */
 private const val TICK_EDGE_MARGIN = 0.18f
 
-internal fun Side.word(): String = if (this == Side.LEFT) "왼쪽" else "오른쪽"
 
 /** 결론 문장. 대중교통은 "진행 방향 왼쪽에 앉으세요"(버스 창가·지하철 벤치 모두), 자가용은 좌석 이름. */
-internal fun headlineRes(request: TripRequest, result: TripResult): Pair<Int, String?> = when (val a = result.advice) {
+internal fun headlineRes(context: android.content.Context, request: TripRequest, result: TripResult): Pair<Int, String?> = when (val a = result.advice) {
     is TripAdvice.Sit ->
-        if (request.mode == TravelMode.CAR) R.string.result_sit_car to a.label
-        else R.string.result_sit_side to a.side.word()
+        if (request.mode == TravelMode.CAR) R.string.result_sit_car to a.carSeats.label(context)
+        else R.string.result_sit_side to a.side.word(context)
     TripAdvice.Mixed -> R.string.result_mixed to null
     TripAdvice.NoDifference -> R.string.result_no_difference to null
     TripAdvice.NoSun -> R.string.result_no_sun to null
@@ -243,7 +244,7 @@ private fun ResultContent(
                         color = scheme.onSurfaceVariant,
                     )
                 }
-                val (res, arg) = headlineRes(request, result)
+                val (res, arg) = headlineRes(androidx.compose.ui.platform.LocalContext.current, request, result)
                 Text(
                     if (arg != null) stringResource(res, arg) else stringResource(res),
                     style = MaterialTheme.typography.headlineMedium.copy(lineBreak = LineBreak.Heading),
@@ -379,7 +380,7 @@ private fun LegRow(leg: LegResult, mode: TravelMode) {
             is LegAdvice.Sit -> {
                 val subway = leg.leg.mode == Mode.SUBWAY
                 val advice = when {
-                    mode == TravelMode.CAR -> stringResource(R.string.result_leg_sit_car, a.label)
+                    mode == TravelMode.CAR -> stringResource(R.string.result_leg_sit_car, a.carSeats.label())
                     subway -> stringResource(R.string.result_leg_sit_bench, a.side.word())
                     else -> stringResource(R.string.result_leg_sit_window, a.side.word())
                 }

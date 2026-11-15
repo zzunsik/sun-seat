@@ -1,5 +1,7 @@
 package com.sunseat.app.ui.components
 
+import androidx.compose.ui.res.stringResource
+import com.sunseat.app.R
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -28,7 +30,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import com.sunseat.app.R
 import com.sunseat.app.domain.Side
 import com.sunseat.app.ui.icons.SunSeatIcons
 import com.sunseat.app.ui.theme.CapsuleShape
@@ -63,10 +64,10 @@ fun SeatSunDiagram(
         ?.takeIf { sun != DiagramSun.AHEAD }
         ?: (sun.state(Side.LEFT) to sun.state(Side.RIGHT))
     val desc = when (sun) {
-        DiagramSun.LEFT -> "해는 진행 방향 왼쪽"
-        DiagramSun.RIGHT -> "해는 진행 방향 오른쪽"
-        DiagramSun.AHEAD -> "해는 진행 방향 앞쪽, 좌우 차이 작음"
-    } + (recommended?.let { if (it == Side.LEFT) ", 왼쪽 추천" else ", 오른쪽 추천" } ?: "")
+        DiagramSun.LEFT -> stringResource(R.string.diagram_left)
+        DiagramSun.RIGHT -> stringResource(R.string.diagram_right)
+        DiagramSun.AHEAD -> stringResource(R.string.diagram_ahead)
+    } + (recommended?.let { if (it == Side.LEFT) stringResource(R.string.diagram_recommend_left) else stringResource(R.string.diagram_recommend_right) } ?: "")
     Row(
         modifier
             .fillMaxWidth()
@@ -75,9 +76,9 @@ fun SeatSunDiagram(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.m),
     ) {
-        SideLabel("왼쪽", states.first, recommended == Side.LEFT, alignEnd = true, modifier = Modifier.weight(1f))
+        SideLabel(stringResource(R.string.common_left), states.first, recommended == Side.LEFT, alignEnd = true, modifier = Modifier.weight(1f))
         Vehicle(sun, states, recommended, car, Modifier.width(Sizes.vehicleWidth).fillMaxHeight())
-        SideLabel("오른쪽", states.second, recommended == Side.RIGHT, alignEnd = false, modifier = Modifier.weight(1f))
+        SideLabel(stringResource(R.string.common_right), states.second, recommended == Side.RIGHT, alignEnd = false, modifier = Modifier.weight(1f))
     }
 }
 
@@ -105,9 +106,9 @@ private fun SideLabel(side: String, state: SideState, recommended: Boolean, alig
         }
         Text(side, style = MaterialTheme.typography.titleMedium, color = scheme.onSurface)
         when (state) {
-            SideState.SUN -> ExposurePill(Exposure.Sun, "햇빛")
-            SideState.SHADE -> ExposurePill(Exposure.Shade, "그늘")
-            SideState.SIMILAR -> Text("비슷해요", style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
+            SideState.SUN -> ExposurePill(Exposure.Sun, stringResource(R.string.common_sun))
+            SideState.SHADE -> ExposurePill(Exposure.Shade, stringResource(R.string.common_shade))
+            SideState.SIMILAR -> Text(stringResource(R.string.common_similar), style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
         }
         if (recommended) {
             Row(
@@ -118,7 +119,7 @@ private fun SideLabel(side: String, state: SideState, recommended: Boolean, alig
                 horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
             ) {
                 Icon(painterResource(R.drawable.ic_ms_check), contentDescription = null, tint = scheme.onSurface, modifier = Modifier.size(Sizes.iconSmall))
-                Text("추천", style = MaterialTheme.typography.labelMedium, color = scheme.onSurface)
+                Text(stringResource(R.string.common_recommend), style = MaterialTheme.typography.labelMedium, color = scheme.onSurface)
             }
         }
     }

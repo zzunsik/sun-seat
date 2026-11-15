@@ -40,7 +40,7 @@ data class BenchExposure(
 }
 
 sealed interface BenchAdvice {
-    data class Recommend(val side: Side, val label: String) : BenchAdvice
+    data class Recommend(val side: Side) : BenchAdvice
 
     /** 선호 기준으로 두 벤치의 차이가 기준 미만이다. */
     data object NoDifference : BenchAdvice
@@ -118,13 +118,12 @@ class SubwayBenchRecommender(
         if (differenceRatio(l, r) < noDifferenceThreshold) return BenchAdvice.NoDifference
         val less = if (l < r) Side.LEFT else Side.RIGHT
         val side = if (goal == SunGoal.AVOID) less else less.opposite
-        return BenchAdvice.Recommend(side, benchLabel(side))
+        return BenchAdvice.Recommend(side)
     }
 
     companion object {
         const val FRONT_MAX_EFFECTIVE_ALTITUDE_DEG = 30.0
 
-        fun benchLabel(side: Side): String = if (side == Side.LEFT) "진행 방향 왼쪽 좌석" else "진행 방향 오른쪽 좌석"
 
         /** 객차 단면(진행 방향에 수직인 면)에 투영한 태양 고도 h' = atan(tan h / |sin r|)(도). */
         fun effectiveAltitude(altitude: Double, relativeAngle: Double): Double {

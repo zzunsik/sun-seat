@@ -30,7 +30,7 @@ import java.time.LocalDateTime
 data class ChosenRoute(val route: Route, val totalDuration: Duration)
 
 /** 후보 카드의 구간 표시 하나. [lineName]은 지하철 노선 색을 고를 때 쓴다. */
-data class LegChip(val mode: Mode, val label: String, val lineName: String = "")
+data class LegChip(val mode: Mode, val lineName: String = "", val walkMinutes: Long = 0)
 
 /** 경로 후보 카드 하나. */
 data class CandidateUi(
@@ -70,12 +70,7 @@ sealed interface CandidatesState {
 internal fun TransitRouteOption.toUi(id: Int, now: LocalDateTime?, fastest: Boolean): CandidateUi {
     val chips = route.legs.mapIndexed { i, leg ->
         val name = legDetails.getOrNull(i)?.vehicles?.firstOrNull()?.name.orEmpty()
-        when (leg.mode) {
-            Mode.SUBWAY -> LegChip(leg.mode, name.ifBlank { "지하철" }, lineName = name)
-            Mode.BUS -> LegChip(leg.mode, if (name.isBlank()) "버스" else "버스 $name")
-            Mode.WALK -> LegChip(leg.mode, "도보 ${leg.duration.toMinutes().coerceAtLeast(1)}분")
-            Mode.CAR -> LegChip(leg.mode, "자가용")
-        }
+        LegChip(leg.mode, lineName = name, walkMinutes = leg.duration.toMinutes().coerceAtLeast(1))
     }
     val rides = route.legs.filter { it.mode != Mode.WALK }
     return CandidateUi(

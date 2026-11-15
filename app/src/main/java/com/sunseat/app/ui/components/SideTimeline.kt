@@ -1,5 +1,7 @@
 package com.sunseat.app.ui.components
 
+import androidx.compose.ui.res.stringResource
+import com.sunseat.app.R
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -70,8 +72,8 @@ fun SideTimeline(
     }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
         Legend(showGap = gaps.isNotEmpty())
-        TimelineRow("왼쪽", leftSun, gaps, fill.value, selected = if (showSelection) 1f - selectedRight else 0f)
-        TimelineRow("오른쪽", rightSun, gaps, fill.value, selected = if (showSelection) selectedRight else 0f)
+        TimelineRow(stringResource(R.string.common_left), leftSun, gaps, fill.value, selected = if (showSelection) 1f - selectedRight else 0f)
+        TimelineRow(stringResource(R.string.common_right), rightSun, gaps, fill.value, selected = if (showSelection) selectedRight else 0f)
         TickRow(ticks, Modifier.fillMaxWidth().padding(start = Sizes.timelineLabel))
     }
 }
@@ -85,9 +87,9 @@ private fun Legend(showGap: Boolean) {
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.clearAndSetSemantics { },
     ) {
-        LegendItem("햇빛") { drawSwatch(c.sun, hatch = c.onSun) }
-        LegendItem("그늘") { drawSwatch(c.shade, hatch = null) }
-        if (showGap) LegendItem("도보") { drawSwatch(gap, hatch = null) }
+        LegendItem(stringResource(R.string.common_sun)) { drawSwatch(c.sun, hatch = c.onSun) }
+        LegendItem(stringResource(R.string.common_shade)) { drawSwatch(c.shade, hatch = null) }
+        if (showGap) LegendItem(stringResource(R.string.common_walk)) { drawSwatch(gap, hatch = null) }
     }
 }
 
@@ -123,10 +125,11 @@ private fun TimelineRow(label: String, sun: List<SunSpan>, gaps: List<SunSpan>, 
     val gapColor = SunSeatTheme.scheme.outline
     val ring = SunSeatTheme.scheme.onSurface
     val sunPct = (sun.sumOf { (it.end - it.start).toDouble() } * 100).toInt()
+    val description = stringResource(R.string.timeline_description, label, sunPct, 100 - sunPct)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.semantics(mergeDescendants = true) {
-            contentDescription = "$label 햇빛 ${sunPct}퍼센트, 그늘 ${100 - sunPct}퍼센트"
+            contentDescription = description
         },
     ) {
         Text(

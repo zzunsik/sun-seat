@@ -113,7 +113,7 @@ class TripAdvisorTest {
     @Test
     fun carLabelsSeatsAndDetectsGlare() {
         val avoid = advisor(90.0, 30.0).advise(Route(listOf(north(Mode.CAR, 30))), t0, SunGoal.AVOID)
-        assertEquals("뒷좌석 왼쪽", (avoid.advice as TripAdvice.Sit).label)
+        assertEquals(listOf(CarSeat.REAR_LEFT), (avoid.advice as TripAdvice.Sit).carSeats)
         val glare = advisor(0.0, 10.0).advise(Route(listOf(north(Mode.CAR, 30))), t0, SunGoal.AVOID)
         assertEquals(LegAdvice.NoDifference, glare.legs[0].advice)
         assertTrue(glare.glare.isNotEmpty())

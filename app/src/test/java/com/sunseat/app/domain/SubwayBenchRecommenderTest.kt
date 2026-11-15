@@ -81,7 +81,7 @@ class SubwayBenchRecommenderTest {
     @Test
     fun avoidBackPrefersBenchWithLessBackSun() {
         val result = recommender.recommendLeg(mixed, BenchPreference.AVOID_BACK)
-        assertEquals(BenchAdvice.Recommend(Side.LEFT, "진행 방향 왼쪽 좌석"), result.advice)
+        assertEquals(BenchAdvice.Recommend(Side.LEFT), result.advice)
     }
 
     @Test
