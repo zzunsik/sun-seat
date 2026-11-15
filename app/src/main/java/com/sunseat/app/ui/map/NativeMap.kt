@@ -61,11 +61,11 @@ internal fun NativeMap(state: MapState, modifier: Modifier = Modifier, keyAvaila
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val density = LocalDensity.current
-    val scheme = SunSeatTheme.scheme
+    val scheme = com.sunseat.app.ui.theme.LightScheme
     val ink = scheme.onSurface.toArgb()
     val surface = scheme.surface.toArgb()
     val muted = scheme.outline.toArgb()
-    val sun = SunSeatTheme.colors.onSunContainer.toArgb()
+    val sun = com.sunseat.app.ui.theme.LightSunSeatColors.onSunContainer.toArgb()
     val latest by rememberUpdatedState(state)
     val metrics = with(density) { MapMetrics(Sizes.mapMarker.toPx(), Sizes.mapRoute.toPx(), Sizes.mapWalk.toPx(), Sizes.mapSubway.toPx(), Sizes.mapInset.toPx(), Sizes.mapSunRay.toPx()) }
     val session = remember(context, lifecycle, ink, surface, muted, sun, metrics) { MapSession(context, ink, surface, muted, sun, metrics) }

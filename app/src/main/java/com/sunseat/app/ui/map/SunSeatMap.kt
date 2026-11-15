@@ -59,8 +59,8 @@ fun SunSeatMap(state: MapState, modifier: Modifier = Modifier) {
 /** 네이티브 지도 없이 실제 경로 좌표를 보여 주는 테스트 렌더러. */
 @Composable
 fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
-    val scheme = SunSeatTheme.scheme
-    val sun = SunSeatTheme.colors.onSunContainer
+    val scheme = com.sunseat.app.ui.theme.LightScheme
+    val sun = com.sunseat.app.ui.theme.LightSunSeatColors.onSunContainer
     Box(modifier) {
     Canvas(Modifier.fillMaxSize().background(scheme.surfaceContainer)) {
         val top = state.padding.top.toPx()
