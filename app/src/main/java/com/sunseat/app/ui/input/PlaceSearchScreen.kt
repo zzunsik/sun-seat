@@ -41,6 +41,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -51,7 +53,7 @@ import com.sunseat.app.ui.theme.Spacing
 import com.sunseat.app.ui.theme.SunSeatTheme
 
 @Composable
-internal fun PlaceSearchScreen(search: SearchState, actions: InputActions, modifier: Modifier = Modifier, favorites: List<com.sunseat.app.data.favorites.Favorite> = emptyList(), noticeRes: Int? = null, showFavorites: Boolean = true, showLocation: Boolean = true, near: com.sunseat.app.domain.LatLng? = null) {
+internal fun PlaceSearchScreen(search: SearchState, actions: InputActions, modifier: Modifier = Modifier, favorites: List<com.sunseat.app.data.favorites.Favorite> = emptyList(), noticeRes: Int? = null, showFavorites: Boolean = true, showLocation: Boolean = true, near: com.sunseat.app.domain.LatLng? = null, recent: List<com.sunseat.app.data.recent.RecentPlace> = emptyList(), showRecent: Boolean = false) {
     val scheme = SunSeatTheme.scheme
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
@@ -124,6 +126,22 @@ internal fun PlaceSearchScreen(search: SearchState, actions: InputActions, modif
             if (showFavorites && search.query.isBlank()) {
                 items(favorites, key = { "favorite-" + it.id }) { favorite ->
                     ResultRow(com.sunseat.app.ui.favorites.favoriteName(favorite), favorite.address, R.drawable.ic_ms_star_filled, { actions.chooseFavorite(favorite) })
+                }
+            }
+            if (showRecent && search.query.isBlank()) {
+                item {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.screen).padding(top = Spacing.m), verticalAlignment = Alignment.CenterVertically) {
+                        Text(stringResource(R.string.recent_title), Modifier.weight(1f).semantics { heading() }, style = MaterialTheme.typography.titleSmall)
+                        if (recent.isNotEmpty()) QuietButton(onClick = actions.clearRecent) { Text(stringResource(R.string.recent_clear)) }
+                    }
+                    if (recent.isEmpty()) Text(stringResource(R.string.recent_empty), Modifier.padding(horizontal = Spacing.screen, vertical = Spacing.s), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+                }
+                items(recent, key = { "recent-" + it.id }) { place ->
+                    ResultRow(place.name, place.address, R.drawable.ic_ms_schedule, { actions.chooseRecent(place) }, trailing = {
+                        IconButton(onClick = { actions.removeRecent(place.id) }) {
+                            Icon(painterResource(R.drawable.ic_ms_close), stringResource(R.string.recent_remove, place.name), tint = scheme.onSurface)
+                        }
+                    })
                 }
             }
             if (search.messageRes != null) {

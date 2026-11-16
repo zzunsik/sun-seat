@@ -51,6 +51,9 @@ import java.time.LocalDateTime
 
 /** 화면 동작 묶음. 상태를 가진 쪽(InputRoute)이 채운다. */
 data class InputActions(
+    val chooseRecent: (com.sunseat.app.data.recent.RecentPlace) -> Unit = {},
+    val removeRecent: (String) -> Unit = {},
+    val clearRecent: () -> Unit = {},
     val manageFavorites: (com.sunseat.app.data.favorites.FavoriteKind?) -> Unit = {},
     val chooseFavorite: (com.sunseat.app.data.favorites.Favorite) -> Unit = {},
     val toggleFavorite: (Place) -> Unit = {},
@@ -111,7 +114,7 @@ fun InputScreen(
                     Icon(painterResource(R.drawable.ic_ms_my_location), stringResource(R.string.location_use_current), tint = scheme.onSurface)
                 }
             }
-            if (state.search != null) PlaceSearchScreen(state.search, actions, favorites = state.favorites, noticeRes = state.favoriteMessageRes, near = state.origin?.takeIf { it.isCurrentLocation }?.place?.location)
+            if (state.search != null) PlaceSearchScreen(state.search, actions, favorites = state.favorites, noticeRes = state.favoriteMessageRes ?: state.recentMessageRes, recent = state.recent, showRecent = true, near = state.origin?.takeIf { it.isCurrentLocation }?.place?.location)
         }
     }
     if (showTime) TimeSheet(state.departure, state.timeMode, state.mode, onDismiss = { showTime = false }, onApply = actions.setSchedule)

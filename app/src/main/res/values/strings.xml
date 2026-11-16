@@ -235,4 +235,9 @@
     <string name="input_distance_km">%1$.1fkm</string>
     <string name="result_unmodeled_time">아래 시간축은 이동 구간 기준이에요. 대기·접근 시간은 햇빛 계산에서 제외해요.</string>
     <string name="result_schedule">%1$s · %2$s 출발 · %3$s 도착</string>
+    <string name="recent_title">최근 장소</string>
+    <string name="recent_clear">모두 지우기</string>
+    <string name="recent_empty">최근 고른 장소가 여기에 보여요.</string>
+    <string name="recent_remove">%1$s 최근 장소에서 삭제</string>
+    <string name="recent_save_error">최근 장소를 저장하지 못했어요. 다시 골라 주세요.</string>
 </resources>

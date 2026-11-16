@@ -57,6 +57,8 @@ data class InputUiState(
     val locating: Boolean = false,
     @param:StringRes val locationMessageRes: Int? = null,
     val locationAction: LocationAction? = null,
+    val recent: List<com.sunseat.app.data.recent.RecentPlace> = emptyList(),
+    @param:StringRes val recentMessageRes: Int? = null,
     val favorites: List<com.sunseat.app.data.favorites.Favorite> = emptyList(),
     @param:StringRes val favoriteMessageRes: Int? = null,
 ) {
@@ -86,6 +88,7 @@ class InputViewModel(
     private val locationProvider: LocationProvider,
     private val currentLocationName: String,
     settings: kotlinx.coroutines.flow.Flow<com.sunseat.app.data.settings.Settings> = kotlinx.coroutines.flow.flowOf(com.sunseat.app.data.settings.Settings.DEFAULT),
+    private val recentRepository: com.sunseat.app.data.recent.RecentPlacesRepository? = null,
     private val favoriteRepository: com.sunseat.app.data.favorites.FavoritesRepository? = null,
 ) : ViewModel() {
 
@@ -95,6 +98,9 @@ class InputViewModel(
     private var goalChosen = false
     private var modeChosen = false
     init {
+        recentRepository?.let { repository ->
+            viewModelScope.launch { repository.places.collect { saved -> _state.update { it.copy(recent = saved) } } }
+        }
         favoriteRepository?.let { repository ->
             viewModelScope.launch { repository.favorites.collect { saved -> _state.update { it.copy(favorites = saved) } } }
         }
@@ -172,6 +178,21 @@ class InputViewModel(
         }
     }
 
+    fun chooseRecent(recent: com.sunseat.app.data.recent.RecentPlace) {
+        if (_state.value.search == null) return
+        setMode(recent.mode)
+        choosePlace(recent.asPlace())
+    }
+    fun removeRecent(id: String) = mutateRecent { it.remove(id) }
+    fun clearRecent() = mutateRecent { it.clear() }
+    private fun mutateRecent(operation: suspend (com.sunseat.app.data.recent.RecentPlacesRepository) -> Unit) {
+        val repository = recentRepository ?: return
+        viewModelScope.launch {
+            try { operation(repository); _state.update { it.copy(recentMessageRes = null) } }
+            catch (_: java.io.IOException) { _state.update { it.copy(recentMessageRes = R.string.recent_save_error) } }
+        }
+    }
+
     fun chooseFavorite(favorite: com.sunseat.app.data.favorites.Favorite) = choosePlace(favorite.asPlace())
     fun toggleFavorite(place: Place) {
         val repository = favoriteRepository ?: return
@@ -198,6 +219,8 @@ class InputViewModel(
             }.copy(search = null)
         }
         searchJob?.cancel()
+        val mode = _state.value.mode
+        mutateRecent { it.remember(place, mode) }
     }
 
     /** 위치 권한 요청 결과. 허용이면 바로 현재 위치를 찾는다. */

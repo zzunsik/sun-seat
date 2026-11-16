@@ -6,6 +6,7 @@ import java.time.ZoneId
 import java.time.Duration
 
 /** 이동 수단 선택. 대중교통은 경로 후보를 고르고, 자가용은 경로 하나로 간다. */
+@kotlinx.serialization.Serializable
 enum class TravelMode { TRANSIT, CAR }
 enum class TimeMode { DEPART, ARRIVE }
 
