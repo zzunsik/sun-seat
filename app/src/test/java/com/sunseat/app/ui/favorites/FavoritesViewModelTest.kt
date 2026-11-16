@@ -99,4 +99,71 @@ class FavoritesViewModelTest {
         model.restore(deletion)
         assertEquals(renamed, favorites.favorites.first { it.isNotEmpty() }.single())
     }
+
+    private val office = Place("office", "Office tower", "Office address", "", LatLng(37.56, 126.97), "")
+    private val newHome = Place("new-home", "New home", "New address", "", LatLng(37.48, 127.05), "")
+    private fun FavoritesRepository.kinds() = favorites.value.associate { it.kind to it.placeName }
+
+    @Test fun replacingHomeKeepsWorkAndOnlyOneHome() = runTest(dispatcher) {
+        val favorites = repository(backgroundScope)
+        val model = FavoritesViewModel(favorites, Search(place), FavoriteKind.HOME)
+        model.choosePlace(place)
+        favorites.favorites.first { it.size == 1 }
+        model.openSearch(FavoriteKind.WORK)
+        model.choosePlace(office)
+        favorites.favorites.first { it.size == 2 }
+        model.openSearch(FavoriteKind.HOME)
+        assertEquals(com.sunseat.app.R.string.favorites_search_home, model.state.value.search!!.hintRes)
+        model.choosePlace(newHome)
+        favorites.favorites.first { list -> list.any { it.placeName == newHome.name } }
+        model.state.first { it.search == null && it.favorites.size == 2 && it.favorites.any { f -> f.placeName == newHome.name } }
+        assertEquals(mapOf(FavoriteKind.HOME to newHome.name, FavoriteKind.WORK to office.name), favorites.kinds())
+        assertEquals(2, model.state.value.favorites.size)
+    }
+
+    @Test fun choosingWorkAtHomeLocationMovesThePlaceInsteadOfDuplicating() = runTest(dispatcher) {
+        val favorites = repository(backgroundScope)
+        favorites.put(place, FavoriteKind.HOME)
+        val model = FavoritesViewModel(favorites, Search(place), FavoriteKind.WORK)
+        model.choosePlace(place)
+        favorites.favorites.first { it.singleOrNull()?.kind == FavoriteKind.WORK }
+        assertEquals(mapOf(FavoriteKind.WORK to place.name), favorites.kinds())
+    }
+
+    @Test fun deletingWorkKeepsHomeAndUndoAfterNewWorkConflicts() = runTest(dispatcher) {
+        val favorites = repository(backgroundScope)
+        favorites.put(place, FavoriteKind.HOME)
+        favorites.put(office, FavoriteKind.WORK)
+        val model = FavoritesViewModel(favorites, Search(place))
+        val work = favorites.favorites.first { it.size == 2 }.single { it.kind == FavoriteKind.WORK }
+        model.remove(work)
+        val removed = model.deletions.first()
+        assertEquals(mapOf(FavoriteKind.HOME to place.name), favorites.favorites.first { it.size == 1 }.associate { it.kind to it.placeName })
+
+        // 되돌리기 전에 다른 회사를 정하면 되돌리지 않고 알린다
+        model.openSearch(FavoriteKind.WORK)
+        model.choosePlace(newHome)
+        // 저장이 끝나 검색이 닫힌 뒤에 되돌린다(저장 완료가 오류 표시를 지우지 않게)
+        model.state.first { it.search == null }
+        runCurrent()
+        model.restore(removed)
+        model.state.first { it.errorRes != null }
+        assertEquals(com.sunseat.app.R.string.favorites_undo_conflict, model.state.value.errorRes)
+        assertEquals(mapOf(FavoriteKind.HOME to place.name, FavoriteKind.WORK to newHome.name), favorites.kinds())
+    }
+
+    @Test fun deletingHomeThenUndoRestoresIt() = runTest(dispatcher) {
+        val favorites = repository(backgroundScope)
+        favorites.put(place, FavoriteKind.HOME)
+        favorites.put(office, FavoriteKind.WORK)
+        val model = FavoritesViewModel(favorites, Search(place))
+        val before = favorites.favorites.first { it.size == 2 }
+        model.remove(before.single { it.kind == FavoriteKind.HOME })
+        val removed = model.deletions.first()
+        favorites.favorites.first { it.size == 1 }
+        model.restore(removed)
+        assertEquals(before, favorites.favorites.first { it.size == 2 })
+        runCurrent()
+        assertNull(model.state.value.errorRes)
+    }
 }
