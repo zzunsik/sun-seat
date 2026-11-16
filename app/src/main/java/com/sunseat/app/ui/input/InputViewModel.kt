@@ -71,8 +71,8 @@ data class InputUiState(
 
 @StringRes
 internal fun ApiError.messageRes(): Int = when (this) {
-    ApiError.MISSING_KEY -> R.string.search_error_missing_key
-    ApiError.UNAUTHORIZED -> R.string.search_error_unauthorized
+    ApiError.MISSING_KEY -> R.string.search_error_unavailable
+    ApiError.UNAUTHORIZED -> R.string.search_error_unavailable
     ApiError.QUOTA_EXCEEDED -> R.string.search_error_quota
     ApiError.NETWORK -> R.string.search_error_network
     ApiError.UNKNOWN -> R.string.search_error_unknown

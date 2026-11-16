@@ -142,8 +142,8 @@ class InputViewModelTest {
     @Test
     fun apiErrorsMapToMessages() = runTest(dispatcher) {
         val cases = mapOf(
-            ApiError.MISSING_KEY to R.string.search_error_missing_key,
-            ApiError.UNAUTHORIZED to R.string.search_error_unauthorized,
+            ApiError.MISSING_KEY to R.string.search_error_unavailable,
+            ApiError.UNAUTHORIZED to R.string.search_error_unavailable,
             ApiError.QUOTA_EXCEEDED to R.string.search_error_quota,
             ApiError.NETWORK to R.string.search_error_network,
             ApiError.UNKNOWN to R.string.search_error_unknown,

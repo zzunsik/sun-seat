@@ -110,7 +110,7 @@ internal fun headlineRes(context: android.content.Context, request: TripRequest,
     TripAdvice.NoSun -> (if (result.onlyExcludedRides()) R.string.result_no_outdoor else R.string.result_no_sun) to null
 }
 
-private fun TripResult.onlyExcludedRides(): Boolean = legs.any { it.advice == LegAdvice.Underground || it.advice == LegAdvice.UnknownGround } &&
+private fun TripResult.onlyExcludedRides(): Boolean = legs.isNotEmpty() &&
     legs.all { it.advice in setOf(LegAdvice.Walk, LegAdvice.Underground, LegAdvice.UnknownGround) }
 
 /** 결과 화면: 결론 → (눈부심) → 해 위치 → 앉은 쪽 기준 타임라인 → 구간별. 상태 없음. */
@@ -157,7 +157,7 @@ fun ResultScreen(
                         Text(
                             if (result != null) stringResource(
                                 R.string.result_schedule,
-                                stringResource(if (request.mode == TravelMode.CAR) R.string.input_mode_car else R.string.input_mode_transit),
+                                stringResource(if (request.mode == TravelMode.CAR) R.string.common_car else R.string.input_mode_transit),
                                 state.departure.atZone(zone).format(TimeFormat), result.arrival.atZone(zone).format(TimeFormat),
                             ) else stringResource(
                                 if (request.mode == TravelMode.CAR) R.string.result_subtitle_car else R.string.result_subtitle_transit,
@@ -288,7 +288,7 @@ private fun ResultContent(
                             ExposurePill(Exposure.Sun, stringResource(R.string.result_ahead_sun, formatDuration(result.aheadSun)))
                         }
                         ChoiceGroup(
-                            label = stringResource(R.string.input_goal),
+                            label = stringResource(R.string.common_sun),
                             options = listOf(ChoiceOption(stringResource(R.string.input_goal_avoid)), ChoiceOption(stringResource(R.string.input_goal_seek))),
                             selected = result.goal.ordinal,
                             onSelect = { actions.setGoal(SunGoal.entries[it]) },
@@ -440,7 +440,7 @@ private fun LegRow(leg: LegResult, mode: TravelMode, onSettings: () -> Unit) {
                 } else {
                     val other = leg.sun(a.side.opposite)
                     Text(
-                        stringResource(R.string.result_leg_other, if (other.isZero) stringResource(R.string.result_leg_other_shade) else stringResource(R.string.result_sun, formatDuration(other))),
+                        stringResource(R.string.result_leg_other, if (other.isZero) stringResource(R.string.common_shade) else stringResource(R.string.result_sun, formatDuration(other))),
                         style = MaterialTheme.typography.bodySmall,
                         color = scheme.onSurfaceVariant,
                     )

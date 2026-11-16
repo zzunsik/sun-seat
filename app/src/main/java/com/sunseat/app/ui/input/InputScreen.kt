@@ -97,10 +97,10 @@ fun InputScreen(
                 EndpointsCard(state, actions)
                 Surface(color = scheme.surface, shape = MaterialTheme.shapes.large) {
                     Column(Modifier.padding(Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                        NeutralTabs(listOf(stringResource(R.string.input_mode_transit), stringResource(R.string.input_mode_car)), state.mode.ordinal) { actions.setMode(TravelMode.entries[it]) }
+                        NeutralTabs(listOf(stringResource(R.string.input_mode_transit), stringResource(R.string.common_car)), state.mode.ordinal) { actions.setMode(TravelMode.entries[it]) }
                         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
                             QuietButton(onClick = { showTime = true }) { Text(scheduleLabel(state.departure, state.timeMode)); DropArrow() }
-                            QuietButton(onClick = { showGoal = true }) { Text(stringResource(if (state.goal == SunGoal.AVOID) R.string.input_goal_avoid else R.string.input_goal_seek)); DropArrow() }
+                            QuietButton(onClick = { showGoal = true }) { Text(stringResource(if (state.goal == SunGoal.AVOID) R.string.input_goal_chip_avoid else R.string.input_goal_chip_seek)); DropArrow() }
                         }
                     }
                 }
@@ -129,7 +129,7 @@ fun InputScreen(
 @Composable private fun GoalSheet(goal: SunGoal, onDismiss: () -> Unit, onSelect: (SunGoal) -> Unit) {
     androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss, containerColor = SunSeatTheme.scheme.surface) {
         Column(Modifier.fillMaxWidth().padding(Spacing.screen), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
-            Text(stringResource(R.string.input_goal), style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.common_sun), style = MaterialTheme.typography.titleLarge)
             SunGoal.entries.forEach { option -> NeutralFilterChip(option == goal, stringResource(if (option == SunGoal.AVOID) R.string.input_goal_avoid else R.string.input_goal_seek)) { onSelect(option) } }
             Spacer(Modifier.size(Spacing.l))
         }

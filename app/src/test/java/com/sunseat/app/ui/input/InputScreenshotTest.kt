@@ -56,6 +56,8 @@ class InputScreenshotTest {
         compose.waitForIdle()
     }
 
+    @Test fun unavailableLight() { render(InputUiState(search = SearchState(EndpointField.ORIGIN, query = "서울역", messageRes = R.string.search_error_unavailable)), false); shot("input_unavailable_light") }
+    @Test fun unavailableDark() { render(InputUiState(search = SearchState(EndpointField.ORIGIN, query = "서울역", messageRes = R.string.search_error_unavailable)), true); shot("input_unavailable_dark") }
     @Test fun emptyDark() { render(InputUiState(), true); shot("input_empty_dark") }
     @Test fun originLight() { render(filled.copy(destination = null), false); shot("input_origin_light") }
     @Test fun originDark() { render(filled.copy(destination = null), true); shot("input_origin_dark") }

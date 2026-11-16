@@ -204,7 +204,12 @@ class CandidatesViewModel(
     }
 
     private fun ApiError.toState() = CandidatesState.Error(
-        messageRes = messageRes(),
+        messageRes = when (this) {
+            ApiError.MISSING_KEY, ApiError.UNAUTHORIZED -> R.string.candidates_error_unavailable
+            ApiError.QUOTA_EXCEEDED -> R.string.candidates_error_quota
+            ApiError.NETWORK -> R.string.search_error_network
+            ApiError.UNKNOWN -> R.string.candidates_error_unknown
+        },
         iconRes = if (this == ApiError.NETWORK) R.drawable.ic_ms_wifi_off else R.drawable.ic_ms_error,
         canRetry = this != ApiError.MISSING_KEY && this != ApiError.UNAUTHORIZED,
     )

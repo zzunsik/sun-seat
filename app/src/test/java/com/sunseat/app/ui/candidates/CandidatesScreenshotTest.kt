@@ -63,6 +63,9 @@ class CandidatesScreenshotTest {
     @Test fun noRouteLight() { render(noRoute, false); shot("candidates_no_route_light") }
     @Test fun errorDark() { render(CandidatesState.Error(R.string.search_error_network, R.drawable.ic_ms_wifi_off, canRetry = true), true); shot("candidates_error_dark") }
 
+    @Test fun errorLight() { render(CandidatesState.Error(R.string.search_error_network, R.drawable.ic_ms_wifi_off, canRetry = true), false); shot("candidates_error_light") }
+    @Test fun unavailableLight() { render(CandidatesState.Error(R.string.candidates_error_unavailable, R.drawable.ic_ms_error, canRetry = false), false); shot("candidates_unavailable_light") }
+    @Test fun unavailableDark() { render(CandidatesState.Error(R.string.candidates_error_unavailable, R.drawable.ic_ms_error, canRetry = false), true); shot("candidates_unavailable_dark") }
     @Test fun sunLight() { render(list.copy(sort = CandidateSort.SUN), false); shot("candidates_sun_light") }
     @Test fun sunDark() { render(list.copy(sort = CandidateSort.SUN), true); shot("candidates_sun_dark") }
     @Test fun filterLight() { render(list.copy(filters = setOf(com.sunseat.app.data.route.TransitRouteType.BUS), selectedId = 1), false); shot("candidates_filter_light") }
