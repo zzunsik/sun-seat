@@ -89,6 +89,19 @@ class InputViewModelTest {
     }
 
     @Test
+    fun recentPlaceAppliesCoordinatesAndModeWithoutSearch() = runTest(dispatcher) {
+        val api = FakePlaces()
+        val vm = vm(api)
+        vm.openSearch(EndpointField.ORIGIN); vm.choosePlace(seoul)
+        vm.openSearch(EndpointField.DESTINATION)
+        vm.chooseRecent(com.sunseat.app.data.recent.RecentPlace(busan.id, busan.name, busan.address, busan.location.latitude, busan.location.longitude, TravelMode.CAR, 0))
+        assertEquals(busan.location, vm.state.value.destination!!.place.location)
+        assertEquals(TravelMode.CAR, vm.state.value.mode)
+        assertTrue(api.queries.isEmpty())
+        assertEquals(busan.location, vm.automaticRequest()!!.destination.location)
+    }
+
+    @Test
     fun automaticRequestOnlyEmitsForChangedCompleteInput() = runTest(dispatcher) {
         val vm = vm()
         assertNull(vm.automaticRequest())

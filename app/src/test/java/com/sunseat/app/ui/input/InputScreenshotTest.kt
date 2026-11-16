@@ -136,5 +136,17 @@ class InputScreenshotTest {
         org.junit.Assert.assertTrue(closed)
     }
 
+    private fun recentPlaces(dark: Boolean) {
+        compose.enableAccessibilityChecks()
+        render(InputUiState(search = SearchState(EndpointField.DESTINATION), recent = listOf(
+            com.sunseat.app.data.recent.RecentPlace("seoul", "서울역", "서울 용산구 한강대로", 37.55, 126.97, TravelMode.TRANSIT, 0),
+            com.sunseat.app.data.recent.RecentPlace("park", "서울숲", "서울 성동구 뚝섬로", 37.54, 127.04, TravelMode.CAR, 1),
+        )), dark)
+        compose.onRoot().tryPerformAccessibilityChecks()
+        shot("input_recent_${if (dark) "dark" else "light"}")
+    }
+    @Test fun recentLight() = recentPlaces(false)
+    @Test fun recentDark() = recentPlaces(true)
+
     private fun shot(name: String) = compose.onRoot().captureRoboImage("src/test/screenshots/$name.png")
 }

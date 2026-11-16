@@ -20,6 +20,7 @@ class AppGraph(app: Application) {
     private val applicationScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
     val favorites: com.sunseat.app.data.favorites.FavoritesRepository by lazy { com.sunseat.app.data.favorites.DataStoreFavoritesRepository(app, applicationScope) }
     val settings: com.sunseat.app.data.settings.SettingsRepository by lazy { com.sunseat.app.data.settings.DataStoreSettingsRepository(app, applicationScope) }
+    val recent: com.sunseat.app.data.recent.RecentPlacesRepository by lazy { com.sunseat.app.data.recent.DataStoreRecentPlacesRepository(app, applicationScope) }
     val kakao: KakaoApis by lazy { KakaoApis() }
     val locationProvider: LocationProvider by lazy { LocationProvider(app) }
 }
