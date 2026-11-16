@@ -85,6 +85,7 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
 data class ResultActions(
+    val onSimulation: () -> Unit = {},
     val onSchedule: (java.time.LocalDateTime?, com.sunseat.app.domain.TimeMode) -> Unit = { _, _ -> },
     val onSettings: () -> Unit = {},
     val onBack: () -> Unit = {},
@@ -294,6 +295,7 @@ private fun ResultContent(
                         )
                     }
                 }
+                QuietButton(onClick = actions.onSimulation) { Text(stringResource(R.string.simulation_title)) }
             }
         }
         if (result.glare.isNotEmpty()) {

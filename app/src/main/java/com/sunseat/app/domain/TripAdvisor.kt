@@ -116,6 +116,11 @@ class TripAdvisor(
         }
     }
 
+    /** Shared by the timeline: no second set of seat-light rules. */
+    fun illumination(leg: Leg, segment: SegmentExposure): Pair<Set<Side>, Boolean> =
+        if (leg.mode == Mode.SUBWAY && leg.groundLevel != GroundLevel.ABOVE) emptySet<Side>() to false
+        else seatSides(leg.mode, segment)
+
     fun advise(
         route: Route,
         departure: Instant,
@@ -132,7 +137,7 @@ class TripAdvisor(
             var right = Duration.ZERO
             var ahead = Duration.ZERO
             le.segments.forEach { s ->
-                val (sides, isAhead) = seatSides(le.leg.mode, s)
+                val (sides, isAhead) = illumination(le.leg, s)
                 if (Side.LEFT in sides) left += s.duration
                 if (Side.RIGHT in sides) right += s.duration
                 if (isAhead) ahead += s.duration
@@ -202,7 +207,7 @@ class TripAdvisor(
         val total = route.duration.takeIf { !it.isZero } ?: Duration.ofSeconds(1)
         fun pos(t: Instant) = frac(Duration.between(departure, t), total)
         fun spans(side: Side): List<Span> = exposure.legs.flatMap { le ->
-            le.segments.filter { side in seatSides(le.leg.mode, it).first }.map { Span(pos(it.startTime), pos(it.endTime)) }
+            le.segments.filter { side in illumination(le.leg, it).first }.map { Span(pos(it.startTime), pos(it.endTime)) }
         }.let(::merge)
         val walkSpans = exposure.legs.filter { it.leg.mode == Mode.WALK || (it.leg.mode == Mode.SUBWAY && it.leg.groundLevel != GroundLevel.ABOVE) }
             .map { Span(pos(it.startTime), pos(it.startTime + it.leg.duration)) }

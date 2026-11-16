@@ -129,6 +129,10 @@ private class MapSession(context: Context, private val ink: Int, private val sur
     private var ray: Label? = null
     private var lastCursor: MapCursor? = null
     private var following = false
+    private var playbackMode = false
+    private val progressLines = mutableListOf<com.kakao.vectormap.route.RouteLine>()
+    private var lastProgress: Float? = null
+    private var lastRayAltitude: Double? = null
     private var gesture: () -> Unit = {}
     private val startIcon = marker(0, ink)
     private val endIcon = marker(1, ink)
@@ -143,15 +147,18 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         gesture = state.onGesture
         if (geometry == null) target.setOnCameraMoveStartListener { _, type -> if (type != GestureType.Unknown) gesture() }
         val next = Triple(state.routes, state.selectedRoute, state.origin to state.destination)
-        val geometryChanged = geometry != next
+        val geometryChanged = geometry != next || playbackMode != (state.routeProgress != null)
         if (geometryChanged) {
             geometry = next
+            playbackMode = state.routeProgress != null
+            progressLines.clear(); lastProgress = null
             target.routeLineManager?.layer?.let { layer ->
                 layer.removeAll()
                 state.routes.withIndex().sortedBy { it.index == state.selectedRoute }.forEach { (index, route) ->
+                    val lineColors = if (playbackMode && index == state.selectedRoute) listOf(muted, ink) else listOf(if (index == state.selectedRoute) ink else muted)
+                    lineColors.forEachIndexed { pass, color ->
                     val styles = mutableListOf<RouteLineStyles>()
                     val segments = route.legs.filter { it.path.size > 1 }.map { leg ->
-                        val color = if (index == state.selectedRoute) ink else muted
                         val style = when (leg.mode) {
                             Mode.WALK -> RouteLineStyle.from(RouteLinePattern.from(dot(color), metrics.walk * 2))
                             Mode.SUBWAY -> RouteLineStyle.from(metrics.subway, color)
@@ -161,11 +168,15 @@ private class MapSession(context: Context, private val ink: Int, private val sur
                         styles += lineStyles
                         RouteLineSegment.from(leg.path.map { it.sdk() }, lineStyles)
                     }
-                    if (segments.isNotEmpty()) layer.addRouteLine(RouteLineOptions.from(segments).setStylesSet(RouteLineStylesSet.from(styles)))
+                    if (segments.isNotEmpty()) {
+                        val line = layer.addRouteLine(RouteLineOptions.from(segments).setStylesSet(RouteLineStylesSet.from(styles)))
+                        if (playbackMode && index == state.selectedRoute && pass == 1) progressLines += line
+                    }
+                    }
                 }
             }
             target.labelManager?.layer?.let { layer ->
-                layer.removeAll(); cursor = null; ray = null; lastCursor = null
+                layer.removeAll(); cursor = null; ray = null; lastCursor = null; lastRayAltitude = null
                 state.origin?.let { layer.addLabel(LabelOptions.from(it.location.sdk()).setStyles(LabelStyle.from(startIcon).setApplyDpScale(false))) }
                 state.destination?.let { layer.addLabel(LabelOptions.from(it.location.sdk()).setStyles(LabelStyle.from(endIcon).setApplyDpScale(false))) }
             }
@@ -175,6 +186,10 @@ private class MapSession(context: Context, private val ink: Int, private val sur
             target.setPadding(0, (state.padding.top.value * density).toInt(), 0, (state.padding.bottom.value * density).toInt())
             val points = state.points()
             if (points.isNotEmpty()) target.moveCamera(CameraUpdateFactory.fitMapPoints(points.map { it.sdk() }.toTypedArray(), metrics.inset.toInt(), 17))
+        }
+        if (state.routeProgress != lastProgress) {
+            state.routeProgress?.let { progress -> progressLines.forEach { it.setProgress(progress.coerceIn(0f, 1f) - 1f) } }
+            lastProgress = state.routeProgress
         }
         val position = state.cursor
         if (position == null) { cursor?.hide(); ray?.hide() }
@@ -187,6 +202,11 @@ private class MapSession(context: Context, private val ink: Int, private val sur
                 cursor?.moveTo(position.position.sdk()); cursor?.rotateTo(Math.toRadians(position.heading).toFloat())
                 ray?.moveTo(position.position.sdk()); ray?.rotateTo(Math.toRadians(position.sunAzimuth).toFloat())
                 ray?.scaleTo(1f, (1 - position.sunAltitude.coerceIn(0.0, 90.0) / 120).toFloat())
+            }
+            if (position.sunAltitude != lastRayAltitude) {
+                val rayColor = androidx.core.graphics.ColorUtils.setAlphaComponent(sun, (255 * sunRayOpacity(position.sunAltitude)).toInt())
+                ray?.setStyles(LabelStyle.from(marker(3, rayColor)).setApplyDpScale(false).setAnchorPoint(0.5f, 1f))
+                lastRayAltitude = position.sunAltitude
             }
             if (position.sunAltitude > 0) ray?.show() else ray?.hide()
             if (state.followCursor && (position != lastCursor || !following)) target.moveCamera(CameraUpdateFactory.newCenterPosition(position.position.sdk()))
