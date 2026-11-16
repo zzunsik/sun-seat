@@ -32,8 +32,10 @@ jobs:
       - name: Lint (compose-lints 포함)
         run: ./gradlew lint --console=plain
 
-      - name: Unit tests
-        run: ./gradlew test --console=plain
+      # 디버그 단위 테스트는 스크린샷을 app/src/test/screenshots/의 기준 이미지와 비교하고,
+      # 한 장이라도 다르면 실패한다. 기준 이미지 갱신은 AGENTS.md "화면 작업" 참고.
+      - name: Unit tests + screenshot verify
+        run: ./gradlew verifyRoborazziDebug testReleaseUnitTest --console=plain
 
       - name: Upload reports
         if: always()
@@ -44,3 +46,25 @@ jobs:
             app/build/reports/
             app/build/test-results/
           if-no-files-found: ignore
+
+      # 비교에 실패하면 차이 이미지(*_compare.png)와 실제 렌더링, Roborazzi 리포트를 올린다.
+      - name: Upload screenshot diffs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: screenshot-diffs
+          path: |
+            app/build/outputs/roborazzi/
+            app/build/reports/roborazzi/
+          if-no-files-found: ignore
+
+      # TEMP(#59): Linux에서 기준 이미지를 기록해 내려받는다. 부트스트랩 후 삭제.
+      - name: TEMP record screenshots
+        if: always()
+        run: ./gradlew recordRoborazziDebug --console=plain
+      - name: TEMP upload recorded screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: TEMP-recorded-screenshots
+          path: app/src/test/screenshots/
