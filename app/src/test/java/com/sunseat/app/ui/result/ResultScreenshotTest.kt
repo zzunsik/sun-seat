@@ -80,5 +80,47 @@ class ResultScreenshotTest {
         compose.onRoot().tryPerformAccessibilityChecks()
     }
 
+    private fun mixedGroundRoute() = Route(listOf(
+        transitRoute.legs.first().copy(groundLevel = com.sunseat.app.domain.GroundLevel.BELOW),
+        transitRoute.legs.last().copy(groundLevel = com.sunseat.app.domain.GroundLevel.UNKNOWN),
+    ))
+
+    @Config(qualifiers = "w390dp-h1900dp-xxhdpi")
+    @Test fun mixedGroundLight() {
+        compose.enableAccessibilityChecks()
+        render(transitRequest, state(mixedGroundRoute(), 90.0, 30.0), false)
+        compose.onRoot().tryPerformAccessibilityChecks()
+        shot("result_mixed_ground_light")
+    }
+
+    @Config(qualifiers = "w390dp-h1900dp-xxhdpi")
+    @Test fun mixedGroundDark() {
+        compose.enableAccessibilityChecks()
+        render(transitRequest, state(mixedGroundRoute(), 90.0, 30.0), true)
+        compose.onRoot().tryPerformAccessibilityChecks()
+        shot("result_mixed_ground_dark")
+    }
+
+    private fun excludedRoute() = Route(listOf(
+        transitRoute.legs.first().copy(groundLevel = com.sunseat.app.domain.GroundLevel.BELOW),
+        transitRoute.legs.first().copy(groundLevel = com.sunseat.app.domain.GroundLevel.UNKNOWN),
+    ))
+
+    @Config(qualifiers = "w390dp-h1200dp-xxhdpi")
+    @Test fun excludedLight() {
+        compose.enableAccessibilityChecks()
+        render(transitRequest, state(excludedRoute(), 90.0, 30.0), false)
+        compose.onRoot().tryPerformAccessibilityChecks()
+        shot("result_excluded_light")
+    }
+
+    @Config(qualifiers = "w390dp-h1200dp-xxhdpi")
+    @Test fun excludedDark() {
+        compose.enableAccessibilityChecks()
+        render(transitRequest, state(excludedRoute(), 90.0, 30.0), true)
+        compose.onRoot().tryPerformAccessibilityChecks()
+        shot("result_excluded_dark")
+    }
+
     private fun shot(name: String) = compose.onRoot().captureRoboImage("src/test/screenshots/$name.png")
 }

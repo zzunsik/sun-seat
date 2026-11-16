@@ -62,7 +62,7 @@ fun SideTimeline(
     animateIn: Boolean = true,
     /** 추천할 쪽이 없으면(구간마다 다름·차이 없음) 선택 테두리를 그리지 않는다 */
     showSelection: Boolean = true,
-    /** 추천 대상이 아닌 구간(도보). 회색으로 칠하고 범례에 "도보"를 더한다 */
+    /** 추천 대상이 아닌 구간(도보·지하·미확인). 회색으로 표시한다 */
     gaps: List<SunSpan> = emptyList(),
 ) {
     val reduce = SunSeatTheme.reduceMotion
@@ -89,7 +89,7 @@ private fun Legend(showGap: Boolean) {
     ) {
         LegendItem(stringResource(R.string.common_sun)) { drawSwatch(c.sun, hatch = c.onSun) }
         LegendItem(stringResource(R.string.common_shade)) { drawSwatch(c.shade, hatch = null) }
-        if (showGap) LegendItem(stringResource(R.string.common_walk)) { drawSwatch(gap, hatch = null) }
+        if (showGap) LegendItem(stringResource(R.string.timeline_excluded)) { drawSwatch(gap, hatch = null) }
     }
 }
 
@@ -125,7 +125,10 @@ private fun TimelineRow(label: String, sun: List<SunSpan>, gaps: List<SunSpan>, 
     val gapColor = SunSeatTheme.scheme.outline
     val ring = SunSeatTheme.scheme.onSurface
     val sunPct = (sun.sumOf { (it.end - it.start).toDouble() } * 100).toInt()
-    val description = stringResource(R.string.timeline_description, label, sunPct, 100 - sunPct)
+    val excludedPct = (gaps.sumOf { (it.end - it.start).toDouble() } * 100).toInt().coerceIn(0, 100)
+    val shadePct = (100 - sunPct - excludedPct).coerceAtLeast(0)
+    val description = if (gaps.isEmpty()) stringResource(R.string.timeline_description, label, sunPct, shadePct)
+        else stringResource(R.string.timeline_excluded_description, label, sunPct, shadePct, excludedPct)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.semantics(mergeDescendants = true) {

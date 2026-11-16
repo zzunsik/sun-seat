@@ -25,10 +25,10 @@ object ResultFixtures {
         TripAdvisor(analyzer = ExposureAnalyzer { _, _, _ -> SunPosition(azimuth, altitude) })
 
     private fun north(mode: Mode, min: Long, from: String, to: String, lat0: Double = 37.50) =
-        Leg(mode, listOf(LatLng(lat0, 127.0), LatLng(lat0 + 0.05, 127.0), LatLng(lat0 + 0.1, 127.0)), Duration.ofMinutes(min), from, to)
+        Leg(mode, listOf(LatLng(lat0, 127.0), LatLng(lat0 + 0.05, 127.0), LatLng(lat0 + 0.1, 127.0)), Duration.ofMinutes(min), from, to, com.sunseat.app.domain.GroundLevel.ABOVE)
 
     private fun south(mode: Mode, min: Long, from: String, to: String, lat0: Double = 37.60) =
-        Leg(mode, listOf(LatLng(lat0, 127.0), LatLng(lat0 - 0.1, 127.0)), Duration.ofMinutes(min), from, to)
+        Leg(mode, listOf(LatLng(lat0, 127.0), LatLng(lat0 - 0.1, 127.0)), Duration.ofMinutes(min), from, to, com.sunseat.app.domain.GroundLevel.ABOVE)
 
     private val walk = Leg(Mode.WALK, listOf(LatLng(37.6, 127.0), LatLng(37.6, 127.001)), Duration.ofMinutes(3), "시청", "시청")
 
