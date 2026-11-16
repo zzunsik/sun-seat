@@ -57,14 +57,3 @@ jobs:
             app/build/outputs/roborazzi/
             app/build/reports/roborazzi/
           if-no-files-found: ignore
-
-      # TEMP(#59): Linux에서 기준 이미지를 기록해 내려받는다. 부트스트랩 후 삭제.
-      - name: TEMP record screenshots
-        if: always()
-        run: ./gradlew recordRoborazziDebug --console=plain
-      - name: TEMP upload recorded screenshots
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: TEMP-recorded-screenshots
-          path: app/src/test/screenshots/
