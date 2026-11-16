@@ -8,6 +8,7 @@ data class TimelinePoint(
     val time: Instant, val position: LatLng?, val heading: Double?, val sun: SunPosition?,
     val litSides: Set<Side>, val ahead: Boolean, val legIndex: Int, val leg: Leg,
     val recommended: Side?, val routeProgress: Float, val sunSide: Side?,
+    val spot: SeatSpot? = null,
 ) {
     val undergroundOrUnknown: Boolean get() = leg.mode == Mode.SUBWAY && leg.groundLevel != GroundLevel.ABOVE
 }
@@ -62,7 +63,7 @@ class TripTimeline(
         val position = segment?.let { LatLng(it.from.latitude + (it.to.latitude - it.from.latitude) * fraction, it.from.longitude + (it.to.longitude - it.from.longitude) * fraction) } ?: frame.leg.path.firstOrNull()
         val illumination = segment?.let { advisor.illumination(frame.leg, it) } ?: (emptySet<Side>() to false)
         return TimelinePoint(clamped, position, segment?.heading, segment?.sun, illumination.first, illumination.second, frame.index, frame.leg,
-            (result.legs.getOrNull(frame.index)?.advice as? LegAdvice.Sit)?.side,
-            if (distance > 0) ((frame.distanceStart + frame.distance * fraction) / distance).toFloat().coerceIn(0f, 1f) else 0f, segment?.side)
+            (result.legs.getOrNull(frame.index)?.advice as? LegAdvice.Sit)?.sideAt(clamped),
+            if (distance > 0) ((frame.distanceStart + frame.distance * fraction) / distance).toFloat().coerceIn(0f, 1f) else 0f, segment?.side, (result.legs.getOrNull(frame.index)?.advice as? LegAdvice.Sit)?.spotAt(clamped))
     }
 }

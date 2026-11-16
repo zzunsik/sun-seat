@@ -21,6 +21,8 @@ data class Leg(
     val endName: String,
     /** Only ABOVE subway legs participate in sunlight recommendations. */
     val groundLevel: GroundLevel = GroundLevel.UNKNOWN,
+    val busType: String? = null,
+    val estimatedStationTiming: Boolean = false,
 )
 
 /** 구간을 순서대로 이은 경로. */

@@ -55,6 +55,19 @@ class CandidatesViewModelTest {
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
 
+    @Test fun taxiShowsFareAndPassengerCalculationBeforeSelection() = runTest(dispatcher) {
+        val car = FakeCar(ApiResult.Success(CarRouteResult(CarRouteOption(carRoute, 10000, 0, 14500))))
+        val vm = CandidatesViewModel(carRequest.copy(mode = com.sunseat.app.domain.TravelMode.TAXI), noTransit, car, compute = dispatcher)
+        advanceUntilIdle()
+        val item = (vm.state.value as CandidatesState.Options).items.single()
+        assertEquals(14500, item.fare)
+        assertEquals(1, car.calls)
+        assertEquals(0, noTransit.calls)
+        assertTrue(item.chosen.cachedResult!!.glare.isEmpty())
+        val sit = item.chosen.cachedResult!!.legs.single().advice as? com.sunseat.app.domain.LegAdvice.Sit
+        assertTrue(sit == null || com.sunseat.app.domain.CarSeat.PASSENGER !in sit.carSeats)
+    }
+
     @Test
     fun transitOptionsMapToCards() = runTest(dispatcher) {
         val vm = CandidatesViewModel(transitRequest, FakeTransit(ApiResult.Success(TransitRoutes(options))), noCar, now = { java.time.LocalDateTime.of(2026, 11, 15, 9, 0) }, compute = dispatcher)

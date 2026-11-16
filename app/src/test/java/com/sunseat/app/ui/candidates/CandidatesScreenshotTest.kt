@@ -36,7 +36,7 @@ class CandidatesScreenshotTest {
     private val noRoute = R.string.candidates_no_transit.let { CandidatesState.NoRoute(it, R.string.candidates_no_transit_detail, suggestCar = true) }
 
     @OptIn(ExperimentalMaterial3Api::class)
-    private fun render(state: CandidatesState, dark: Boolean) {
+    private fun render(state: CandidatesState, dark: Boolean, request: com.sunseat.app.domain.TripRequest = transitRequest) {
         android.provider.Settings.Global.putFloat(org.robolectric.RuntimeEnvironment.getApplication().contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 0f)
         compose.mainClock.autoAdvance = true
         lateinit var sheet: BottomSheetScaffoldState
@@ -45,7 +45,7 @@ class CandidatesScreenshotTest {
             sheet = rememberBottomSheetScaffoldState()
             scope = rememberCoroutineScope()
             androidx.compose.runtime.CompositionLocalProvider(com.sunseat.app.ui.map.LocalMapRenderer provides com.sunseat.app.ui.map.MapRenderer.PREVIEW) {
-                SunSeatTheme(darkTheme = dark) { CandidatesScreen(transitRequest, state, CandidatesActions(), animateLoader = false, scaffoldState = sheet) }
+                SunSeatTheme(darkTheme = dark) { CandidatesScreen(request, state, CandidatesActions(), animateLoader = false, scaffoldState = sheet) }
             }
         }
         compose.waitForIdle()
@@ -56,6 +56,17 @@ class CandidatesScreenshotTest {
     }
 
     @Test fun loadingLight() { render(CandidatesState.Loading(com.sunseat.app.domain.TravelMode.TRANSIT), false); shot("candidates_loading_light") }
+    private fun taxi(dark: Boolean) {
+        val route = com.sunseat.app.ui.result.ResultFixtures.carRoute
+        val result = com.sunseat.app.ui.result.ResultFixtures.advisor(90.0, 20.0).advise(route, com.sunseat.app.ui.result.ResultFixtures.departure, transitRequest.goal, travelMode = com.sunseat.app.domain.TravelMode.TAXI)
+        val item = list.items.first().copy(totalDuration = route.duration, arrival = (result.departure + route.duration).atZone(java.time.ZoneId.of("Asia/Seoul")).toLocalDateTime(), transfers = 0, walkMinutes = 0, fare = 14500, chips = listOf(LegChip(com.sunseat.app.domain.Mode.CAR)), chosen = ChosenRoute(route, route.duration, result))
+        compose.enableAccessibilityChecks()
+        render(CandidatesState.Options(listOf(item), selectedId = item.id), dark, transitRequest.copy(mode = com.sunseat.app.domain.TravelMode.TAXI))
+        compose.onRoot().tryPerformAccessibilityChecks()
+        shot("candidates_taxi_${if (dark) "dark" else "light"}")
+    }
+    @Test fun taxiLight() = taxi(false)
+    @Test fun taxiDark() = taxi(true)
     @Test fun loadingDark() { render(CandidatesState.Loading(com.sunseat.app.domain.TravelMode.TRANSIT), true); shot("candidates_loading_dark") }
     @Test fun loadingCarLight() { render(CandidatesState.Loading(com.sunseat.app.domain.TravelMode.CAR), false); shot("candidates_loading_car_light") }
     @Test fun listLight() { render(list, false); shot("candidates_list_light") }

@@ -7,7 +7,7 @@ import java.time.Duration
 
 /** 이동 수단 선택. 대중교통은 경로 후보를 고르고, 자가용은 경로 하나로 간다. */
 @kotlinx.serialization.Serializable
-enum class TravelMode { TRANSIT, CAR }
+enum class TravelMode { TRANSIT, TAXI, CAR }
 enum class TimeMode { DEPART, ARRIVE }
 
 /** 추천을 받기 위한 입력. 입력 화면(#11)이 만들고 경로 후보(#12)·결과(#13)가 쓴다. */
