@@ -38,6 +38,8 @@ class ResultScreenshotTest {
     }
 
     private fun render(request: TripRequest, state: ResultUiState, dark: Boolean) {
+        // 로딩 애니메이션(Lottie)을 미리 읽어 둔다. 비동기 로딩이 캡처보다 늦으면 해가 빠진 화면이 찍힌다(#59).
+        com.airbnb.lottie.LottieCompositionFactory.fromRawResSync(org.robolectric.RuntimeEnvironment.getApplication(), com.sunseat.app.R.raw.sun_loading)
         compose.setContent {
             androidx.compose.runtime.CompositionLocalProvider(com.sunseat.app.ui.map.LocalMapRenderer provides com.sunseat.app.ui.map.MapRenderer.PREVIEW) {
             SunSeatTheme(darkTheme = dark) {
