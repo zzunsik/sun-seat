@@ -23,7 +23,7 @@ data class SunSeatColors(
 )
 
 internal val LightSunSeatColors = SunSeatColors(
-    sun = Color(0xFFF2B01E),
+    sun = Color(0xFFE53935),
     onSun = Color(0xFF1E1602),
     sunContainer = Color(0xFFFFF1C7),
     onSunContainer = Color(0xFF6B4700),
