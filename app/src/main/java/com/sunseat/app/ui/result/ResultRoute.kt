@@ -39,7 +39,7 @@ fun ResultRoute(
     onSchedule: (java.time.LocalDateTime?, com.sunseat.app.domain.TimeMode, SunGoal) -> Unit = { _, _, _ -> },
     viewModel: ResultViewModel = viewModel(
         key = request.toString() + chosen.hashCode(),
-        factory = viewModelFactory { initializer { ResultViewModel(request, chosen, settings = graph.settings.settings) } },
+        factory = viewModelFactory { initializer { ResultViewModel(request, chosen, now = { graph.clock.instant() }, settings = graph.settings.settings) } },
     ),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()

@@ -76,4 +76,83 @@ class SeatDetailsTest {
         assertEquals(Side.RIGHT, advice.switches.single().to.side)
         assertEquals(Duration.ZERO, result.sunIfFollowed)
     }
+
+    // ---- 경계값(#60): 해가 진 시각, 정남·정북 진행, 0분 구간 ----
+
+    @Test fun sunAtOrBelowHorizonGivesNoSeatDetail() {
+        listOf(0.0, -0.01, -10.0).forEach { altitude ->
+            listOf(Mode.BUS, Mode.CAR, Mode.SUBWAY).forEach { mode ->
+                val result = advisor(90.0, altitude).advise(Route(listOf(leg(mode))), start, SunGoal.AVOID)
+                val legResult = result.legs.single()
+                assertEquals("$mode $altitude", LegAdvice.NoSun, legResult.advice)
+                // 타임라인·그림에도 햇빛이 칠해지지 않는다
+                assertEquals(Duration.ZERO, legResult.leftSun + legResult.rightSun + legResult.aheadSun)
+                assertNull(result.sunPlacement)
+                assertTrue(result.leftSpans.isEmpty() && result.rightSpans.isEmpty())
+                assertEquals(TripAdvice.NoSun, result.advice)
+                assertEquals(Duration.ZERO, result.sunIfFollowed)
+                assertEquals(Duration.ofMinutes(20), result.shadeIfFollowed)
+                assertTrue(legResult.frontWindows.isEmpty())
+                assertTrue(result.glare.isEmpty())
+            }
+        }
+        // 해가 막 뜬 경우(고도 0.01°)는 자리 추천이 나온다
+        assertTrue(advisor(90.0, 0.01).advise(Route(listOf(leg())), start, SunGoal.AVOID).legs.single().advice is LegAdvice.Sit)
+    }
+
+    @Test fun sunSettingMidLegSplitsLitAndDarkTime() {
+        val sunset = TripAdvisor(ExposureAnalyzer { _, _, time -> SunPosition(270.0, if (time < start.plusSeconds(600)) 5.0 else -1.0) })
+        val result = sunset.advise(Route(listOf(leg())), start, SunGoal.AVOID)
+        val advice = result.legs.single().advice as LegAdvice.Sit
+        assertEquals(Side.RIGHT, advice.side)
+        assertTrue(advice.switches.isEmpty())
+        assertEquals(Duration.ofMinutes(10), result.legs.single().leftSun)
+        assertEquals(Duration.ZERO, result.sunIfFollowed)
+    }
+
+    private val southPath = path.reversed()
+    private fun heading(path: List<LatLng>, azimuth: Double, altitude: Double = 20.0, mode: Mode = Mode.BUS) =
+        advisor(azimuth, altitude).advise(Route(listOf(Leg(mode, path, Duration.ofMinutes(20), "A", "B", GroundLevel.ABOVE))), start, SunGoal.AVOID)
+
+    @Test fun dueNorthAndDueSouthMirrorSides() {
+        // 동쪽 해: 북행이면 오른쪽, 남행이면 왼쪽에 해가 있다
+        assertEquals(Side.LEFT, (heading(path, 90.0).legs.single().advice as LegAdvice.Sit).side)
+        assertEquals(Side.RIGHT, (heading(southPath, 90.0).legs.single().advice as LegAdvice.Sit).side)
+        assertEquals(Side.RIGHT, (heading(path, 270.0).legs.single().advice as LegAdvice.Sit).side)
+        assertEquals(Side.LEFT, (heading(southPath, 270.0).legs.single().advice as LegAdvice.Sit).side)
+        // 낮은 남쪽 해: 남행이면 앞, 북행이면 뒤
+        assertEquals(SeatZone.MIDDLE_REAR, (heading(southPath, 180.0).legs.single().advice as LegAdvice.Sit).spot.zone)
+        assertEquals(SeatZone.FRONT_MIDDLE, (heading(path, 180.0).legs.single().advice as LegAdvice.Sit).spot.zone)
+    }
+
+    @Test fun sunExactlyAheadOrBehindIsNotASideRecommendation() {
+        listOf(path to 0.0, path to 180.0, southPath to 180.0, southPath to 0.0).forEach { (p, azimuth) ->
+            val result = heading(p, azimuth)
+            val leg = result.legs.single()
+            assertEquals(Duration.ZERO, leg.leftSun)
+            assertEquals(Duration.ZERO, leg.rightSun)
+            assertEquals(Duration.ofMinutes(20), leg.aheadSun)
+            assertEquals(TripAdvice.NoDifference, result.advice)
+            assertEquals(SunPlacement.AHEAD, result.sunPlacement)
+        }
+        // 앞쪽 원뿔(±25°) 경계: 25°는 아직 앞, 25° 밖은 옆
+        assertEquals(Duration.ofMinutes(20), heading(path, 24.99).legs.single().aheadSun)
+        assertTrue(heading(path, 25.01).legs.single().advice is LegAdvice.Sit)
+    }
+
+    @Test fun zeroMinuteLegsDoNotAddTimeOrSwitches() {
+        listOf(Mode.BUS, Mode.CAR, Mode.SUBWAY).forEach { mode ->
+            val zero = Leg(mode, path, Duration.ZERO, "A", "B", GroundLevel.ABOVE)
+            val only = advisor(90.0, 20.0).advise(Route(listOf(zero)), start, SunGoal.AVOID, travelMode = if (mode == Mode.CAR) TravelMode.CAR else TravelMode.TRANSIT)
+            assertEquals("$mode", Duration.ZERO, only.sunIfFollowed + only.shadeIfFollowed)
+            assertEquals(start, only.arrival)
+            (only.legs.single().advice as? LegAdvice.Sit)?.let { assertTrue(it.switches.isEmpty()) }
+
+            val mixed = advisor(90.0, 20.0).advise(Route(listOf(zero, leg(mode, 10))), start, SunGoal.AVOID)
+            val alone = advisor(90.0, 20.0).advise(Route(listOf(leg(mode, 10))), start, SunGoal.AVOID)
+            assertEquals("$mode", alone.sunIfFollowed, mixed.sunIfFollowed)
+            assertEquals("$mode", alone.shadeIfFollowed, mixed.shadeIfFollowed)
+            assertEquals("$mode", alone.advice, mixed.advice)
+        }
+    }
 }

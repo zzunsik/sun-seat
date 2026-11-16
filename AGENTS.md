@@ -27,6 +27,12 @@
 - CI(빌드·lint·단위 테스트)가 통과해야 병합한다. 병합은 squash로 하고 브랜치는 지운다.
 - main과 충돌하면 main 기준으로 다시 맞춘 뒤 테스트를 다시 돌린다.
 
+## 테스트
+
+- **버그 수정 PR은 먼저 실패하는 재현 테스트를 넣고 고친다.** 고치기 전 코드에서 그 테스트가 실패하는 것을 확인하고 PR 본문에 적는다.
+- 기능 PR은 영향받는 기존 흐름 테스트(`ui/navigation/SunSeatFlowTest` 등)가 통과해야 한다. 흐름을 일부러 바꿨으면 테스트도 같은 PR에서 고친다.
+- 화면 흐름 테스트는 `FlowTestGraph`(가짜 설정·임시 DataStore·가짜 카카오 서버·고정 시각)를 쓴다. 지도는 `LocalMapRenderer`의 테스트 렌더러로 그린다.
+
 ## 비밀 정보
 
 - `KAKAO_REST_API_KEY`, `sdk.dir`, 서명 키 정보는 `local.properties`에만 둔다. 이 파일과 키 파일(`*.jks`, `*.keystore`)은 커밋하지 않는다.
