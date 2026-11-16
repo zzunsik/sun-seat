@@ -139,6 +139,10 @@ internal fun PtRoute.toOption(): TransitRouteOption? {
             duration = Duration.ofSeconds(p.time.roundToLong()),
             startName = stopNames.firstOrNull().orEmpty(),
             endName = stopNames.lastOrNull().orEmpty(),
+            groundLevel = if (mode == Mode.SUBWAY) {
+                val levels = p.vehicles.map { com.sunseat.app.domain.SubwayGroundData.bundled.section(it.name, stopNames) }
+                levels.distinct().singleOrNull() ?: com.sunseat.app.domain.GroundLevel.UNKNOWN
+            } else com.sunseat.app.domain.GroundLevel.UNKNOWN,
         )
         details += TransitLegDetail(
             vehicles = p.vehicles.map { TransitVehicle(it.name, it.type) },

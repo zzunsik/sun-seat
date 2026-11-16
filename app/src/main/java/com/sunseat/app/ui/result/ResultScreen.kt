@@ -104,8 +104,11 @@ internal fun headlineRes(context: android.content.Context, request: TripRequest,
         else R.string.result_sit_side to a.side.word(context)
     TripAdvice.Mixed -> R.string.result_mixed to null
     TripAdvice.NoDifference -> R.string.result_no_difference to null
-    TripAdvice.NoSun -> R.string.result_no_sun to null
+    TripAdvice.NoSun -> (if (result.onlyExcludedRides()) R.string.result_no_outdoor else R.string.result_no_sun) to null
 }
+
+private fun TripResult.onlyExcludedRides(): Boolean = legs.any { it.advice == LegAdvice.Underground || it.advice == LegAdvice.UnknownGround } &&
+    legs.all { it.advice in setOf(LegAdvice.Walk, LegAdvice.Underground, LegAdvice.UnknownGround) }
 
 /** 결과 화면: 결론 → (눈부심) → 해 위치 → 앉은 쪽 기준 타임라인 → 구간별. 상태 없음. */
 @Composable
@@ -255,9 +258,9 @@ private fun ResultContent(
                 )
                 when {
                     noSun -> {
-                        Text(stringResource(R.string.result_no_sun_detail), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+                        Text(stringResource(if (result.onlyExcludedRides()) R.string.result_no_outdoor_detail else R.string.result_no_sun_detail), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
                         PrimaryButton(onClick = actions.onRestart, modifier = Modifier.fillMaxWidth()) {
-                            Text(stringResource(R.string.result_change_time), style = MaterialTheme.typography.labelLarge)
+                            Text(stringResource(if (result.onlyExcludedRides()) R.string.result_find_route else R.string.result_change_time), style = MaterialTheme.typography.labelLarge)
                         }
                     }
                     else -> {
@@ -376,6 +379,8 @@ private fun LegRow(leg: LegResult, mode: TravelMode, onSettings: () -> Unit) {
             Text(formatDuration(leg.leg.duration), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
         }
         when (val a = leg.advice) {
+            LegAdvice.Underground -> Text(stringResource(R.string.result_leg_underground), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+            LegAdvice.UnknownGround -> Text(stringResource(R.string.result_leg_unknown_ground), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             LegAdvice.Walk -> Text(stringResource(R.string.result_leg_walk), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             LegAdvice.NoSun -> Text(stringResource(R.string.result_leg_no_sun), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             LegAdvice.NoDifference -> {
