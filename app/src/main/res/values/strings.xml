@@ -219,4 +219,20 @@
     <string name="timeline_excluded">추천 제외</string>
     <string name="timeline_excluded_description">%1$s 햇빛 %2$d퍼센트, 그늘 %3$d퍼센트, 추천 제외 %4$d퍼센트</string>
     <string name="result_find_route">경로 다시 찾기</string>
+    <string name="input_time_title">이동 시각</string>
+    <string name="input_depart_tab">출발 시각</string>
+    <string name="input_arrive_tab">도착 시각</string>
+    <string name="input_today">오늘</string>
+    <string name="input_tomorrow">내일</string>
+    <string name="input_after_tomorrow">모레</string>
+    <string name="input_time_note">경로는 조회 시점 기준이에요. 선택한 시각으로 햇빛을 계산해요.</string>
+    <string name="input_time_now">지금</string>
+    <string name="input_time_apply">적용</string>
+    <string name="input_now_depart">지금 출발</string>
+    <string name="input_departure_label">%1$s %2$s 출발</string>
+    <string name="input_arrival_label">%1$s %2$s 도착</string>
+    <string name="input_distance_m">%1$dm</string>
+    <string name="input_distance_km">%1$.1fkm</string>
+    <string name="result_unmodeled_time">아래 시간축은 이동 구간 기준이에요. 대기·접근 시간은 햇빛 계산에서 제외해요.</string>
+    <string name="result_schedule">%1$s · %2$s 출발 · %3$s 도착</string>
 </resources>

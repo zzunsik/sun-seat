@@ -17,6 +17,7 @@ data class MapState(
     val followCursor: Boolean = false,
     val padding: MapPadding = MapPadding(),
     val onGesture: () -> Unit = {},
+    val showDecorations: Boolean = true,
 )
 data class MapCursor(val position: LatLng, val heading: Double, val sunAzimuth: Double, val sunAltitude: Double)
 data class MapPadding(val top: Dp = 0.dp, val bottom: Dp = 0.dp)

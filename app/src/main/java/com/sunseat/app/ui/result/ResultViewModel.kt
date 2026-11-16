@@ -6,6 +6,7 @@ import com.sunseat.app.domain.SunGoal
 import com.sunseat.app.domain.TripAdvisor
 import com.sunseat.app.domain.TripRequest
 import com.sunseat.app.domain.TripResult
+import com.sunseat.app.domain.departureInstant
 import com.sunseat.app.ui.candidates.ChosenRoute
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -39,7 +40,7 @@ class ResultViewModel(
     settings: kotlinx.coroutines.flow.Flow<com.sunseat.app.data.settings.Settings> = kotlinx.coroutines.flow.flowOf(com.sunseat.app.data.settings.Settings.DEFAULT),
 ) : ViewModel() {
 
-    private val departure: Instant = request.departure?.atZone(zone)?.toInstant() ?: now()
+    private val departure: Instant = request.departureInstant(chosen.totalDuration, now(), zone)
     private val _state = MutableStateFlow(ResultUiState(goal = request.goal, departure = departure))
     val state: StateFlow<ResultUiState> = _state.asStateFlow()
     private var job: Job? = null
@@ -68,7 +69,7 @@ class ResultViewModel(
         val goal = _state.value.goal
         val preference = benchPreference
         job = viewModelScope.launch {
-            val result = withContext(compute) { advisor.advise(chosen.route, departure, goal, benchPreference = preference) }
+            val result = withContext(compute) { advisor.advise(chosen.route, departure, goal, benchPreference = preference, totalDuration = chosen.totalDuration) }
             _state.update { it.copy(result = result) }
         }
     }

@@ -51,7 +51,7 @@ class InputViewModelTest {
     private val fixedNow = LocalDateTime.of(2026, 11, 15, 8, 0)
 
     private fun vm(places: PlaceSearchApi = FakePlaces(), location: LocationProvider = LocationProvider { LocationResult.Unavailable }) =
-        InputViewModel(places, location, currentLocationName = "현재 위치", now = { fixedNow })
+        InputViewModel(places, location, currentLocationName = "현재 위치")
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
@@ -59,7 +59,7 @@ class InputViewModelTest {
     @Test
     fun defaultsArriveWithoutOverwritingUserChoices() = runTest(dispatcher) {
         val settings = kotlinx.coroutines.flow.MutableStateFlow(com.sunseat.app.data.settings.Settings.DEFAULT)
-        val vm = InputViewModel(FakePlaces(), LocationProvider { LocationResult.Unavailable }, currentLocationName = "현재 위치", now = { fixedNow }, settings = settings)
+        val vm = InputViewModel(FakePlaces(), LocationProvider { LocationResult.Unavailable }, currentLocationName = "현재 위치", settings = settings)
         settings.value = settings.value.copy(goal = SunGoal.SEEK, mode = TravelMode.CAR)
         advanceUntilIdle()
         assertEquals(SunGoal.SEEK, vm.state.value.goal)
@@ -86,6 +86,24 @@ class InputViewModelTest {
         assertEquals(listOf("서울역"), places.queries)
         assertEquals(listOf(seoul), vm.state.value.search!!.results)
         assertFalse(vm.state.value.search!!.loading)
+    }
+
+    @Test
+    fun automaticRequestOnlyEmitsForChangedCompleteInput() = runTest(dispatcher) {
+        val vm = vm()
+        assertNull(vm.automaticRequest())
+        vm.openSearch(EndpointField.ORIGIN); vm.choosePlace(seoul)
+        assertNull(vm.automaticRequest())
+        vm.openSearch(EndpointField.DESTINATION); vm.choosePlace(busan)
+        assertEquals(seoul.location, vm.automaticRequest()!!.origin.location)
+        assertNull(vm.automaticRequest())
+        vm.openSearch(EndpointField.DESTINATION); vm.choosePlace(busan)
+        assertNull(vm.automaticRequest())
+        vm.setSchedule(fixedNow.plusDays(1), com.sunseat.app.domain.TimeMode.ARRIVE)
+        assertEquals(com.sunseat.app.domain.TimeMode.ARRIVE, vm.automaticRequest()!!.timeMode)
+        assertNull(vm.automaticRequest())
+        vm.setSchedule(null, com.sunseat.app.domain.TimeMode.ARRIVE)
+        assertEquals(com.sunseat.app.domain.TimeMode.DEPART, vm.state.value.timeMode)
     }
 
     @Test
@@ -178,12 +196,12 @@ class InputViewModelTest {
     }
 
     @Test
-    fun pastDepartureBecomesNow() = runTest(dispatcher) {
+    fun explicitlySelectedPastTimeIsPreserved() = runTest(dispatcher) {
         val vm = vm()
         vm.openSearch(EndpointField.ORIGIN); vm.choosePlace(seoul)
         vm.openSearch(EndpointField.DESTINATION); vm.choosePlace(busan)
         vm.setDeparture(fixedNow.minusHours(1))
-        assertNull(vm.buildRequest()!!.departure)
+        assertEquals(fixedNow.minusHours(1), vm.buildRequest()!!.departure)
         vm.setDeparture(fixedNow.plusHours(2))
         assertEquals(fixedNow.plusHours(2), vm.buildRequest()!!.departure)
     }

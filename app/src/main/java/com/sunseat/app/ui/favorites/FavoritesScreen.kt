@@ -22,7 +22,7 @@ import com.sunseat.app.data.favorites.*
 import com.sunseat.app.ui.components.QuietButton
 import com.sunseat.app.ui.components.SectionCard
 import com.sunseat.app.ui.input.InputActions
-import com.sunseat.app.ui.input.SearchOverlay
+import com.sunseat.app.ui.input.PlaceSearchScreen
 import com.sunseat.app.ui.theme.Sizes
 import com.sunseat.app.ui.theme.Spacing
 import com.sunseat.app.ui.theme.SunSeatTheme
@@ -53,7 +53,7 @@ fun FavoritesRoute(graph: AppGraph, setup: FavoriteKind?, onBack: () -> Unit, mo
     Box(modifier) {
         FavoritesScreen(state, FavoritesActions(onBack, model::openSearch, model::requestRename, model::remove, model::rename, model::cancelRename), snackbar = snackbar)
         state.search?.let { search ->
-            SearchOverlay(search, InputActions(closeSearch = model::closeSearch, onQueryChange = model::onQueryChange, searchNow = model::searchNow, choosePlace = model::choosePlace), noticeRes = state.errorRes, showFavorites = false, showLocation = false)
+            PlaceSearchScreen(search, InputActions(closeSearch = model::closeSearch, onQueryChange = model::onQueryChange, searchNow = model::searchNow, choosePlace = model::choosePlace), noticeRes = state.errorRes, showFavorites = false, showLocation = false)
         }
     }
 }

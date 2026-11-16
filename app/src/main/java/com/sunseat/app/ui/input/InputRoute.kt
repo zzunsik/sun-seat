@@ -2,6 +2,7 @@ package com.sunseat.app.ui.input
 
 import android.content.Intent
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -34,6 +35,13 @@ fun InputRoute(
     val context = LocalContext.current
     val permission = rememberLocationPermissionState(onResult = viewModel::onLocationPermission)
 
+    LaunchedEffect(state.origin, state.destination, state.mode, state.departure, state.timeMode, state.goal, state.search, state.locating) {
+        viewModel.automaticRequest()?.let(onSubmit)
+    }
+    LaunchedEffect(permission.status) {
+        if (permission.status.isGranted && state.origin == null && !state.locating) viewModel.fetchCurrentLocation()
+    }
+
     InputScreen(
         state = state,
         modifier = modifier,
@@ -63,6 +71,7 @@ fun InputRoute(
             swap = viewModel::swap,
             setMode = viewModel::setMode,
             setDeparture = viewModel::setDeparture,
+            setSchedule = viewModel::setSchedule,
             setGoal = viewModel::setGoal,
             submit = { viewModel.submit()?.let(onSubmit) },
         ),

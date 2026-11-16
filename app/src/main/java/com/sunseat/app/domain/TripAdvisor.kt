@@ -81,6 +81,8 @@ data class TripResult(
     /** 도보 구간(추천 대상 아님) */
     val walkSpans: List<Span>,
     val glare: List<GlareWindow>,
+    /** End of the modeled leg timeline; waiting/access time has no geometry. */
+    val modeledArrival: Instant = arrival,
 )
 
 /**
@@ -119,6 +121,7 @@ class TripAdvisor(
         departure: Instant,
         goal: SunGoal,
         benchPreference: BenchPreference = BenchPreference.AVOID_BACK,
+        totalDuration: Duration = route.duration,
     ): TripResult {
         val exposure = analyzer.analyze(route, departure)
         val seatByLeg = seats.recommend(exposure, goal).associateBy { it.legIndex }
@@ -212,7 +215,8 @@ class TripAdvisor(
 
         return TripResult(
             departure = departure,
-            arrival = departure + route.duration,
+            arrival = departure + maxOf(totalDuration, route.duration),
+            modeledArrival = departure + route.duration,
             goal = goal,
             advice = advice,
             legs = legs,
