@@ -59,10 +59,11 @@ fun SettingsScreen(settings: Settings, update: ((Settings) -> Settings) -> Unit,
             ChoiceGroup(stringResource(R.string.settings_default_goal), listOf(ChoiceOption(stringResource(R.string.input_goal_avoid)), ChoiceOption(stringResource(R.string.input_goal_seek))), settings.goal.ordinal,
                 onSelect = { index -> update { it.copy(goal = SunGoal.entries[index]) } })
             Spacer(Modifier.height(Spacing.s))
-            ChoiceGroup(stringResource(R.string.settings_default_mode), listOf(ChoiceOption(stringResource(R.string.input_mode_transit)), ChoiceOption(stringResource(R.string.input_mode_car))), settings.mode.ordinal,
+            ChoiceGroup(stringResource(R.string.settings_default_mode), listOf(ChoiceOption(stringResource(R.string.input_mode_transit)), ChoiceOption(stringResource(R.string.common_car))), settings.mode.ordinal,
                 onSelect = { index -> update { it.copy(mode = TravelMode.entries[index]) } })
         }
         SectionCard(title = stringResource(R.string.settings_bench)) {
+            Text(stringResource(R.string.settings_bench_detail), style = MaterialTheme.typography.bodySmall, color = SunSeatTheme.scheme.onSurfaceVariant)
             val labels = listOf(R.string.settings_avoid_back, R.string.settings_avoid_front, R.string.settings_min_total)
             BenchPreference.entries.forEachIndexed { index, option ->
                 val checked = settings.benchPreference == option

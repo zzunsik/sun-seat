@@ -114,7 +114,7 @@ fun CandidatesScreen(
                         IconButton(onClick = actions.onBack) { Icon(painterResource(R.drawable.ic_ms_arrow_back), stringResource(R.string.common_back)) }
                         Text("${request.origin.name} → ${request.destination.name}", Modifier.weight(1f).heightIn(min = Spacing.touch).clickable(role = Role.Button, onClick = actions.onBack), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    NeutralTabs(listOf(stringResource(R.string.input_mode_transit), stringResource(R.string.input_mode_car)), request.mode.ordinal) { actions.onRequestChange(request.copy(mode = TravelMode.entries[it])) }
+                    NeutralTabs(listOf(stringResource(R.string.input_mode_transit), stringResource(R.string.common_car)), request.mode.ordinal) { actions.onRequestChange(request.copy(mode = TravelMode.entries[it])) }
                     QuietButton(onClick = { showTime = true }) { Text(scheduleLabel(request.departure, request.timeMode)); Icon(painterResource(R.drawable.ic_ms_chevron_right), null, Modifier.size(Sizes.iconSmall).rotate(90f)) }
                 }
             }
