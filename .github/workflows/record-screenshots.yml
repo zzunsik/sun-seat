@@ -1,0 +1,39 @@
+name: Record screenshots
+
+# 의도한 화면 변경 후 기준 이미지를 CI와 같은 환경(ubuntu, Robolectric NATIVE)에서 다시 기록한다.
+# 실행: gh workflow run record-screenshots.yml --ref <PR 브랜치>
+# 결과: "screenshots" artifact. 내려받아 app/src/test/screenshots/에 덮어쓰고 같은 PR에 커밋한다.
+# 절차는 AGENTS.md "화면 작업" 참고.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - uses: android-actions/setup-android@v4
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      # 빌드 캐시에서 테스트 결과를 가져오면 이미지가 기록되지 않으므로 항상 다시 실행한다.
+      - name: Record
+        run: ./gradlew recordRoborazziDebug testDebugUnitTest --rerun --console=plain
+
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v7
+        with:
+          name: screenshots
+          path: app/src/test/screenshots/
+          if-no-files-found: error

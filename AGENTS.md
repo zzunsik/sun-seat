@@ -43,7 +43,7 @@
 
 - JDK 25, Android SDK platform 37. Android Studio 없이 명령줄로 빌드한다.
 - 의존성 버전은 `gradle/libs.versions.toml`에서만 관리한다.
-- 검사: `./gradlew assembleDebug lint test`
+- 검사: `./gradlew assembleDebug lint verifyRoborazziDebug` (CI와 같다. `verifyRoborazziDebug`는 단위 테스트 전체를 돌리며 스크린샷도 비교한다)
 
 ## 코드 구조
 
@@ -58,3 +58,15 @@
   - Compose 접근성 검사(터치 영역·대비)
   - 독립 디자인 리뷰: 화면을 만든 쪽과 분리된 리뷰어가 실제 화면을 보고 위계·가독성·색·상태·접근성을 판정한다
 - 좌·우는 색만으로 구분하지 않고 글자로도 표시한다.
+
+### 스크린샷 기준 이미지
+
+- 기준 이미지는 `app/src/test/screenshots/*.png`이고, CI(ubuntu, Robolectric NATIVE)에서 기록한 것을 정본으로 삼는다. CI는 `./gradlew verifyRoborazziDebug`로 비교하며 한 장이라도 다르면 실패한다. 허용 오차는 두지 않는다.
+- 로컬 확인: `./gradlew verifyRoborazziDebug`. Windows에서도 현재 기준 이미지와 일치했지만, 로컬과 CI 결과가 다르면 CI가 맞다. 로컬에서 기록한 이미지(`recordRoborazziDebug`)는 커밋하지 않는다.
+- 비교에 실패하면 CI 실행의 `screenshot-diffs` artifact에서 `*_compare.png`(기준·실제·차이)와 `*_actual.png`를 확인한다.
+- 의도한 화면 변경이면 같은 PR에서 기준 이미지를 갱신한다.
+  1. 브랜치를 push한 뒤 `gh workflow run record-screenshots.yml --ref <브랜치>`
+  2. 끝나면 `gh run download <run-id> -n screenshots -D app/src/test/screenshots`
+  3. 바뀐 이미지만 확인해 같은 PR에 커밋한다. 화면을 지운 경우 남은 이미지도 지운다.
+- 리뷰어는 PR의 바뀐 이미지 diff가 의도한 변경뿐인지 확인한다.
+- 스크린샷은 실행할 때마다 같아야 한다. 비동기로 읽는 리소스(Lottie 등)는 캡처 전에 미리 읽어 두고, 애니메이션은 멈춘 상태로 찍는다.
