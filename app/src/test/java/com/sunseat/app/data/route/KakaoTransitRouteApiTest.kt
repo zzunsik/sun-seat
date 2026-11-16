@@ -106,6 +106,16 @@ class KakaoTransitRouteApiTest {
     }
 
     @Test
+    fun marksSubwayPlatformsFromBundledData() {
+        fun option(line: String, vararg stops: String) = PtRoute(steps = listOf(PtStep(
+            properties = PtStepProperties(type = "SUBWAY", stops = stops.map { PtStop(it) }, vehicles = listOf(PtVehicle(line))),
+        ))).toOption()!!.route.legs.single().groundLevel
+        assertEquals(com.sunseat.app.domain.GroundLevel.ABOVE, option("2호선", "성수", "건대입구", "구의"))
+        assertEquals(com.sunseat.app.domain.GroundLevel.BELOW, option("2호선", "시청", "을지로입구"))
+        assertEquals(com.sunseat.app.domain.GroundLevel.UNKNOWN, option("가상노선", "갑역", "을역"))
+    }
+
+    @Test
     fun noResults() = runBlocking {
         server.enqueueJson(
             """{"status":"NO_RESULTS","properties":{"total":0,"bus":0,"subway":0,"busAndSubway":0},"routes":[]}""",

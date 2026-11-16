@@ -14,10 +14,10 @@ class TripAdvisorTest {
 
     /** 북쪽으로 가는 직선 구간 */
     private fun north(mode: Mode, min: Long, lat0: Double = 37.0) =
-        Leg(mode, listOf(LatLng(lat0, 127.0), LatLng(lat0 + 0.05, 127.0), LatLng(lat0 + 0.1, 127.0)), Duration.ofMinutes(min), "A", "B")
+        Leg(mode, listOf(LatLng(lat0, 127.0), LatLng(lat0 + 0.05, 127.0), LatLng(lat0 + 0.1, 127.0)), Duration.ofMinutes(min), "A", "B", com.sunseat.app.domain.GroundLevel.ABOVE)
 
     private fun south(mode: Mode, min: Long, lat0: Double = 37.1) =
-        Leg(mode, listOf(LatLng(lat0, 127.0), LatLng(lat0 - 0.1, 127.0)), Duration.ofMinutes(min), "B", "C")
+        Leg(mode, listOf(LatLng(lat0, 127.0), LatLng(lat0 - 0.1, 127.0)), Duration.ofMinutes(min), "B", "C", com.sunseat.app.domain.GroundLevel.ABOVE)
 
     @Test
     fun sunOnRightRecommendsLeftWhenAvoiding() {
