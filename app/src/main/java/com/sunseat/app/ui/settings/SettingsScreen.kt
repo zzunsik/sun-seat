@@ -38,16 +38,16 @@ import com.sunseat.app.ui.theme.SunSeatTheme
 import com.sunseat.app.ui.theme.rememberSunSeatHaptics
 
 @Composable
-fun SettingsRoute(repository: SettingsRepository, onBack: () -> Unit, onLicenses: () -> Unit, modifier: Modifier = Modifier,
+fun SettingsRoute(repository: SettingsRepository, onBack: () -> Unit, onLicenses: () -> Unit, modifier: Modifier = Modifier, onFavorites: () -> Unit = {},
     model: SettingsViewModel = viewModel(factory = viewModelFactory { initializer { SettingsViewModel(repository) } }),
 ) {
     val settings by model.settings.collectAsStateWithLifecycle()
     val failed by model.saveError.collectAsStateWithLifecycle()
-    SettingsScreen(settings, model::update, onBack, onLicenses, modifier, failed)
+    SettingsScreen(settings, model::update, onBack, onLicenses, modifier, failed, onFavorites)
 }
 
 @Composable
-fun SettingsScreen(settings: Settings, update: ((Settings) -> Settings) -> Unit, onBack: () -> Unit, onLicenses: () -> Unit, modifier: Modifier = Modifier, saveError: Boolean = false) {
+fun SettingsScreen(settings: Settings, update: ((Settings) -> Settings) -> Unit, onBack: () -> Unit, onLicenses: () -> Unit, modifier: Modifier = Modifier, saveError: Boolean = false, onFavorites: () -> Unit = {}) {
     val haptics = rememberSunSeatHaptics()
     SettingsPage(stringResource(R.string.settings_title), onBack, modifier) {
         if (saveError) Text(stringResource(R.string.settings_save_error), color = SunSeatTheme.scheme.error)
@@ -74,6 +74,7 @@ fun SettingsScreen(settings: Settings, update: ((Settings) -> Settings) -> Unit,
                 }
             }
         }
+        QuietButton(onClick = onFavorites) { Text(stringResource(R.string.favorites_title)) }
         SectionCard(title = stringResource(R.string.settings_info)) {
             Text(stringResource(R.string.settings_version, BuildConfig.VERSION_NAME), style = MaterialTheme.typography.bodyMedium)
             Text(stringResource(R.string.settings_source), style = MaterialTheme.typography.bodyMedium)

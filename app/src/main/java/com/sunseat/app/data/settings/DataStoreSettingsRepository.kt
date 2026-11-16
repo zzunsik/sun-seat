@@ -17,9 +17,9 @@ import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private val Context.settingsDataStore by preferencesDataStore(name = "settings")
+internal val Context.userPreferences by preferencesDataStore(name = "settings")
 class DataStoreSettingsRepository(private val store: DataStore<Preferences>, scope: CoroutineScope) : SettingsRepository {
-    constructor(context: Context, scope: CoroutineScope) : this(context.applicationContext.settingsDataStore, scope)
+    constructor(context: Context, scope: CoroutineScope) : this(context.applicationContext.userPreferences, scope)
     private val current = MutableStateFlow(Settings.DEFAULT)
     private val ready = MutableStateFlow(false)
     override val settings = current.asStateFlow()

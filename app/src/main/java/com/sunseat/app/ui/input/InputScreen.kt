@@ -3,6 +3,7 @@ package com.sunseat.app.ui.input
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -81,6 +82,9 @@ import java.util.Locale
 
 /** 화면 동작 묶음. 상태를 가진 쪽(InputRoute)이 채운다. */
 data class InputActions(
+    val manageFavorites: (com.sunseat.app.data.favorites.FavoriteKind?) -> Unit = {},
+    val chooseFavorite: (com.sunseat.app.data.favorites.Favorite) -> Unit = {},
+    val toggleFavorite: (Place) -> Unit = {},
     val onSettings: () -> Unit = {},
     val openSearch: (EndpointField) -> Unit = {},
     val closeSearch: () -> Unit = {},
@@ -155,7 +159,7 @@ fun InputScreen(
             }
         }
 
-        if (state.search != null) SearchOverlay(state.search, actions)
+        if (state.search != null) SearchOverlay(state.search, actions, favorites = state.favorites, noticeRes = state.favoriteMessageRes)
     }
     }
 }
@@ -340,14 +344,14 @@ private fun OptionsCard(state: InputUiState, actions: InputActions) {
 private enum class DepartureStep { None, Date, Time }
 
 @Composable
-private fun SearchOverlay(search: SearchState, actions: InputActions) {
+internal fun SearchOverlay(search: SearchState, actions: InputActions, modifier: Modifier = Modifier, favorites: List<com.sunseat.app.data.favorites.Favorite> = emptyList(), noticeRes: Int? = null, showFavorites: Boolean = true, showLocation: Boolean = true) {
     val scheme = SunSeatTheme.scheme
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     BackHandler(onBack = actions.closeSearch)
     LaunchedEffect(search.field) { runCatching { focus.requestFocus() } }
 
-    Surface(Modifier.fillMaxSize(), color = scheme.background, contentColor = scheme.onSurface) {
+    Surface(modifier.fillMaxSize(), color = scheme.background, contentColor = scheme.onSurface) {
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
         Row(
             Modifier.fillMaxWidth().padding(start = Spacing.xs, end = Spacing.screen, top = Spacing.s, bottom = Spacing.s),
@@ -363,7 +367,7 @@ private fun SearchOverlay(search: SearchState, actions: InputActions) {
                 textStyle = MaterialTheme.typography.bodyLarge,
                 placeholder = {
                     Text(
-                        stringResource(if (search.field == EndpointField.ORIGIN) R.string.input_search_hint_origin else R.string.input_search_hint_destination),
+                        stringResource(search.hintRes ?: if (search.field == EndpointField.ORIGIN) R.string.input_search_hint_origin else R.string.input_search_hint_destination),
                         style = MaterialTheme.typography.bodyLarge,
                     )
                 },
@@ -383,9 +387,23 @@ private fun SearchOverlay(search: SearchState, actions: InputActions) {
                 modifier = Modifier.weight(1f).focusRequester(focus),
             )
         }
+        if (showFavorites) {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = Spacing.screen), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
+                listOf(com.sunseat.app.data.favorites.FavoriteKind.HOME, com.sunseat.app.data.favorites.FavoriteKind.WORK).forEach { kind ->
+                    val saved = favorites.firstOrNull { it.kind == kind }
+                    if (saved == null) com.sunseat.app.ui.components.QuietButton(onClick = { actions.manageFavorites(kind) }) { Text(stringResource(if (kind == com.sunseat.app.data.favorites.FavoriteKind.HOME) R.string.favorites_set_home else R.string.favorites_set_work)) }
+                    else com.sunseat.app.ui.components.QuietButton(onClick = { actions.chooseFavorite(saved) }) { Text(com.sunseat.app.ui.favorites.favoriteName(saved)) }
+                }
+                favorites.filter { it.kind == com.sunseat.app.data.favorites.FavoriteKind.CUSTOM }.forEach { favorite ->
+                    com.sunseat.app.ui.components.QuietButton(onClick = { actions.chooseFavorite(favorite) }) { Text(com.sunseat.app.ui.favorites.favoriteName(favorite)) }
+                }
+                com.sunseat.app.ui.components.QuietButton(onClick = { actions.manageFavorites(null) }) { Text(stringResource(R.string.favorites_edit)) }
+            }
+        }
+        if (noticeRes != null) Text(stringResource(noticeRes), Modifier.padding(Spacing.screen), color = scheme.error)
         if (search.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
         LazyColumn(Modifier.fillMaxSize()) {
-            if (search.field == EndpointField.ORIGIN) {
+            if (showLocation && search.field == EndpointField.ORIGIN && search.query.isBlank()) {
                 item {
                     ResultRow(
                         title = stringResource(R.string.location_use_current),
@@ -394,6 +412,11 @@ private fun SearchOverlay(search: SearchState, actions: InputActions) {
                         onClick = actions.useCurrentLocation,
                     )
                     HorizontalDivider(color = scheme.outlineVariant, modifier = Modifier.padding(horizontal = Spacing.screen))
+                }
+            }
+            if (showFavorites && search.query.isBlank()) {
+                items(favorites, key = { "favorite-" + it.id }) { favorite ->
+                    ResultRow(com.sunseat.app.ui.favorites.favoriteName(favorite), favorite.address, R.drawable.ic_ms_star_filled, { actions.chooseFavorite(favorite) })
                 }
             }
             if (search.messageRes != null) {
@@ -420,6 +443,12 @@ private fun SearchOverlay(search: SearchState, actions: InputActions) {
                     subtitle = place.roadAddress.ifBlank { place.address },
                     iconRes = R.drawable.ic_ms_location_on,
                     onClick = { actions.choosePlace(place) },
+                    trailing = if (showFavorites) { {
+                        val saved = favorites.any { it.matches(place) }
+                        IconButton(onClick = { actions.toggleFavorite(place) }) {
+                            Icon(painterResource(if (saved) R.drawable.ic_ms_star_filled else R.drawable.ic_ms_star), contentDescription = stringResource(if (saved) R.string.favorites_remove else R.string.favorites_add), tint = scheme.onSurface, modifier = Modifier.size(Sizes.iconMedium))
+                        }
+                    } } else null,
                 )
             }
         }
@@ -428,7 +457,7 @@ private fun SearchOverlay(search: SearchState, actions: InputActions) {
 }
 
 @Composable
-private fun ResultRow(title: String, subtitle: String?, iconRes: Int, onClick: () -> Unit) {
+private fun ResultRow(title: String, subtitle: String?, iconRes: Int, onClick: () -> Unit, trailing: (@Composable () -> Unit)? = null) {
     val scheme = SunSeatTheme.scheme
     Row(
         Modifier
@@ -446,5 +475,6 @@ private fun ResultRow(title: String, subtitle: String?, iconRes: Int, onClick: (
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
+        trailing?.invoke()
     }
 }

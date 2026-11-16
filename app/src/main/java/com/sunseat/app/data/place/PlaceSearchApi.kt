@@ -3,7 +3,7 @@ package com.sunseat.app.data.place
 import com.sunseat.app.data.network.ApiResult
 import com.sunseat.app.domain.LatLng
 
-/** 검색된 장소. 검색 결과는 저장·재사용하지 않는다. */
+/** 검색된 장소. 결과 목록은 저장하지 않으며 사용자가 저장한 장소는 별도 저장소에서 관리한다. */
 data class Place(
     val id: String,
     val name: String,

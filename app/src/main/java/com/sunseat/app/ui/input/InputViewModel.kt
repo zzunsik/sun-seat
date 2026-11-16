@@ -42,6 +42,7 @@ data class SearchState(
     @param:StringRes val messageRes: Int? = null,
     /** 오류일 때 다시 시도 버튼을 보여 준다 */
     val canRetry: Boolean = false,
+    @param:StringRes val hintRes: Int? = null,
 )
 
 data class InputUiState(
@@ -55,6 +56,8 @@ data class InputUiState(
     val locating: Boolean = false,
     @param:StringRes val locationMessageRes: Int? = null,
     val locationAction: LocationAction? = null,
+    val favorites: List<com.sunseat.app.data.favorites.Favorite> = emptyList(),
+    @param:StringRes val favoriteMessageRes: Int? = null,
 ) {
     val sameEndpoints: Boolean get() = origin != null && destination != null && origin.place.location == destination.place.location
     val canSubmit: Boolean get() = origin != null && destination != null && !sameEndpoints && !locating
@@ -74,7 +77,7 @@ internal fun ApiError.messageRes(): Int = when (this) {
 
 /**
  * 입력 화면 상태. 검색어는 [SEARCH_DEBOUNCE_MILLIS] 동안 입력이 멈추면 검색한다.
- * 장소 검색 결과는 저장하지 않는다(docs/requirements.md 4.1).
+ * 검색 결과 목록은 저장하지 않는다. 선택 장소 저장은 즐겨찾기 저장소가 맡는다(docs/requirements.md 4.1).
  */
 @OptIn(FlowPreview::class)
 class InputViewModel(
@@ -83,6 +86,7 @@ class InputViewModel(
     private val currentLocationName: String,
     private val now: () -> LocalDateTime = { LocalDateTime.now() },
     settings: kotlinx.coroutines.flow.Flow<com.sunseat.app.data.settings.Settings> = kotlinx.coroutines.flow.flowOf(com.sunseat.app.data.settings.Settings.DEFAULT),
+    private val favoriteRepository: com.sunseat.app.data.favorites.FavoritesRepository? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(InputUiState())
@@ -91,6 +95,9 @@ class InputViewModel(
     private var goalChosen = false
     private var modeChosen = false
     init {
+        favoriteRepository?.let { repository ->
+            viewModelScope.launch { repository.favorites.collect { saved -> _state.update { it.copy(favorites = saved) } } }
+        }
         viewModelScope.launch {
             settings.collect { defaults ->
                 _state.update { it.copy(goal = if (goalChosen) it.goal else defaults.goal, mode = if (modeChosen) it.mode else defaults.mode) }
@@ -101,7 +108,7 @@ class InputViewModel(
     private var locationJob: Job? = null
 
     fun openSearch(field: EndpointField) {
-        _state.update { it.copy(search = SearchState(field)) }
+        _state.update { it.copy(search = SearchState(field), favoriteMessageRes = null) }
     }
 
     fun closeSearch() {
@@ -148,6 +155,21 @@ class InputViewModel(
                         canRetry = result.error != ApiError.MISSING_KEY && result.error != ApiError.UNAUTHORIZED,
                     )
                 }.let { s.copy(search = it) }
+            }
+        }
+    }
+
+    fun chooseFavorite(favorite: com.sunseat.app.data.favorites.Favorite) = choosePlace(favorite.asPlace())
+    fun toggleFavorite(place: Place) {
+        val repository = favoriteRepository ?: return
+        viewModelScope.launch {
+            try {
+                repository.toggle(place)
+                _state.update { it.copy(favoriteMessageRes = null) }
+            } catch (_: com.sunseat.app.data.favorites.FavoriteLimitException) {
+                _state.update { it.copy(favoriteMessageRes = R.string.favorites_limit) }
+            } catch (_: java.io.IOException) {
+                _state.update { it.copy(favoriteMessageRes = R.string.favorites_save_error) }
             }
         }
     }
