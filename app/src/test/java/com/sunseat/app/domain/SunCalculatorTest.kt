@@ -68,3 +68,7 @@ class SunCalculatorTest {
         }
     }
 }
+
+class MergeGateProbeTest {
+    @org.junit.Test fun failsOnPurpose() = org.junit.Assert.fail("merge gate probe (#61) - do not merge")
+}
