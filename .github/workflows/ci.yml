@@ -57,3 +57,18 @@ jobs:
             app/build/outputs/roborazzi/
             app/build/reports/roborazzi/
           if-no-files-found: ignore
+
+  # 머지 판단용 단일 검사. scripts/merge-pr.sh는 이 검사가 PR의 현재 커밋에서 성공일 때만 머지한다.
+  # job을 추가하면 needs에 함께 넣는다.
+  ci-passed:
+    if: always()
+    needs: [build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 모든 CI job 성공 확인
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "job 결과: $RESULTS"
+          for r in $RESULTS; do [ "$r" = "success" ] || { echo "성공하지 않은 job이 있습니다."; exit 1; }; done
