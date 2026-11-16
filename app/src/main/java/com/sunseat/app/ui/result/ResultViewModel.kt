@@ -40,14 +40,15 @@ class ResultViewModel(
     settings: kotlinx.coroutines.flow.Flow<com.sunseat.app.data.settings.Settings> = kotlinx.coroutines.flow.flowOf(com.sunseat.app.data.settings.Settings.DEFAULT),
 ) : ViewModel() {
 
-    private val departure: Instant = request.departureInstant(chosen.totalDuration, now(), zone)
-    private val _state = MutableStateFlow(ResultUiState(goal = request.goal, departure = departure))
+    private val departure: Instant = request.departureInstant(chosen.totalDuration, chosen.cachedResult?.departure ?: now(), zone)
+    private val cached = chosen.cachedResult?.takeIf { it.goal == request.goal && it.departure == departure }
+    private val _state = MutableStateFlow(ResultUiState(goal = request.goal, departure = departure, result = cached))
     val state: StateFlow<ResultUiState> = _state.asStateFlow()
     private var job: Job? = null
 
-    private var benchPreference = com.sunseat.app.domain.BenchPreference.AVOID_BACK
+    private var benchPreference = chosen.preference
     init {
-        recompute()
+        if (cached == null) recompute()
         viewModelScope.launch {
             settings.collect { defaults ->
                 if (benchPreference != defaults.benchPreference) {

@@ -88,6 +88,18 @@ class ResultViewModelTest {
     }
 
     @Test
+    fun usesCandidateCacheWithoutRecalculation() = runTest(dispatcher) {
+        val cached = advisor(90.0, 30.0).advise(transitRoute, departure, SunGoal.AVOID)
+        var calls = 0
+        val counting = com.sunseat.app.domain.TripAdvisor(com.sunseat.app.domain.ExposureAnalyzer { _, _, _ -> calls++; com.sunseat.app.domain.SunPosition(90.0, 30.0) })
+        val vm = ResultViewModel(transitRequest, chosen(transitRoute).copy(cachedResult = cached), counting, now = { departure.plusSeconds(30) }, zone = zone, compute = dispatcher)
+        org.junit.Assert.assertSame(cached, vm.state.value.result)
+        advanceUntilIdle()
+        assertEquals(0, calls)
+        assertEquals(departure, vm.state.value.departure)
+    }
+
+    @Test
     fun sameGoalDoesNotRecompute() = runTest(dispatcher) {
         val vm = vm()
         advanceUntilIdle()
