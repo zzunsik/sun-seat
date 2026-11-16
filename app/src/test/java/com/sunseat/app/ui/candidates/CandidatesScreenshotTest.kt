@@ -37,6 +37,8 @@ class CandidatesScreenshotTest {
 
     @OptIn(ExperimentalMaterial3Api::class)
     private fun render(state: CandidatesState, dark: Boolean, request: com.sunseat.app.domain.TripRequest = transitRequest) {
+        // 로딩 애니메이션(Lottie)을 미리 읽어 둔다. 비동기 로딩이 캡처보다 늦으면 해가 빠진 화면이 찍힌다(#59).
+        com.airbnb.lottie.LottieCompositionFactory.fromRawResSync(org.robolectric.RuntimeEnvironment.getApplication(), R.raw.sun_loading)
         android.provider.Settings.Global.putFloat(org.robolectric.RuntimeEnvironment.getApplication().contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 0f)
         compose.mainClock.autoAdvance = true
         lateinit var sheet: BottomSheetScaffoldState
