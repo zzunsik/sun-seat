@@ -17,6 +17,8 @@ sealed interface LegAdvice {
 
     /** 도보: 추천 대상이 아니다. */
     data object Walk : LegAdvice
+    data object Underground : LegAdvice
+    data object UnknownGround : LegAdvice
 }
 
 /** 지하철 벤치에 앉았을 때 등 뒤·정면 직사 시간. */
@@ -136,10 +138,14 @@ class TripAdvisor(
                 Mode.WALK -> LegResult(le.legIndex, le.leg, LegAdvice.Walk, Duration.ZERO, Duration.ZERO)
                 Mode.SUBWAY -> {
                     val b = benchByLeg[le.legIndex]
-                    val advice = when (val a = b?.advice) {
+                    val advice = when {
+                        le.leg.groundLevel == GroundLevel.BELOW -> LegAdvice.Underground
+                        le.leg.groundLevel == GroundLevel.UNKNOWN -> LegAdvice.UnknownGround
+                        else -> when (val a = b?.advice) {
                         is BenchAdvice.Recommend -> LegAdvice.Sit(a.side)
                         BenchAdvice.NoDifference -> LegAdvice.NoDifference
                         BenchAdvice.NoSun, null -> LegAdvice.NoSun
+                        }
                     }
                     LegResult(
                         le.legIndex, le.leg, advice, left, right,
@@ -162,7 +168,7 @@ class TripAdvisor(
             }
         }
 
-        val rides = legs.filter { it.advice != LegAdvice.Walk }
+        val rides = legs.filter { it.advice !in setOf(LegAdvice.Walk, LegAdvice.Underground, LegAdvice.UnknownGround) }
         val sits = rides.mapNotNull { it.advice as? LegAdvice.Sit }
         val advice = when {
             rides.isEmpty() || rides.all { it.advice == LegAdvice.NoSun } -> TripAdvice.NoSun
@@ -195,7 +201,7 @@ class TripAdvisor(
         fun spans(side: Side): List<Span> = exposure.legs.flatMap { le ->
             le.segments.filter { side in seatSides(le.leg.mode, it).first }.map { Span(pos(it.startTime), pos(it.endTime)) }
         }.let(::merge)
-        val walkSpans = exposure.legs.filter { it.leg.mode == Mode.WALK }
+        val walkSpans = exposure.legs.filter { it.leg.mode == Mode.WALK || (it.leg.mode == Mode.SUBWAY && it.leg.groundLevel != GroundLevel.ABOVE) }
             .map { Span(pos(it.startTime), pos(it.startTime + it.leg.duration)) }
 
         val glare = if (route.legs.any { it.mode == Mode.CAR }) {

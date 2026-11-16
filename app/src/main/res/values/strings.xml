@@ -190,4 +190,11 @@
     <string name="settings_pretendard">Pretendard · SIL Open Font License 1.1</string>
     <string name="settings_androidx">AndroidX · Apache License 2.0</string>
     <string name="settings_kakao">카카오 운영정책</string>
+    <string name="result_leg_underground">지하 구간 · 자리 추천에서 제외했어요</string>
+    <string name="result_leg_unknown_ground">지상 여부를 확인할 수 없어 추천에서 제외했어요</string>
+    <string name="result_no_outdoor">추천할 지상 구간이 없어요</string>
+    <string name="result_no_outdoor_detail">지하 구간과 지상 여부가 불확실한 구간은 제외해요.</string>
+    <string name="timeline_excluded">추천 제외</string>
+    <string name="timeline_excluded_description">%1$s 햇빛 %2$d퍼센트, 그늘 %3$d퍼센트, 추천 제외 %4$d퍼센트</string>
+    <string name="result_find_route">경로 다시 찾기</string>
 </resources>

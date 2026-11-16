@@ -66,6 +66,9 @@ class ExposureAnalyzer(private val sun: SunPositionSource = SunCalculator) {
     }
 
     fun analyzeLeg(legIndex: Int, leg: Leg, start: Instant): LegExposure {
+        if (leg.mode == Mode.SUBWAY && leg.groundLevel in setOf(GroundLevel.BELOW, GroundLevel.UNKNOWN)) {
+            return LegExposure(legIndex, leg, start, emptyList())
+        }
         val path = leg.path
         if (path.size < 2) return LegExposure(legIndex, leg, start, emptyList())
 
