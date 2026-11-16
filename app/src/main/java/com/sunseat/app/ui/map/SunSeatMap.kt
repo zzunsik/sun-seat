@@ -76,9 +76,29 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
             if (leg.path.size > 1) {
                 val path = Path().apply { leg.path.forEachIndexed { i, p -> val at = position(p); if (i == 0) moveTo(at.x, at.y) else lineTo(at.x, at.y) } }
                 val width = when (leg.mode) { Mode.WALK -> Sizes.mapWalk; Mode.SUBWAY -> Sizes.mapSubway; else -> Sizes.mapRoute }.toPx()
-                drawPath(path, if (index == state.selectedRoute) scheme.onSurface else scheme.outline, style = Stroke(width, cap = StrokeCap.Round, pathEffect = if (leg.mode == Mode.WALK) PathEffect.dashPathEffect(floatArrayOf(grid / 4, grid / 5)) else null))
+                drawPath(path, if (index == state.selectedRoute && state.routeProgress == null) scheme.onSurface else scheme.outline, style = Stroke(width, cap = StrokeCap.Round, pathEffect = if (leg.mode == Mode.WALK) PathEffect.dashPathEffect(floatArrayOf(grid / 4, grid / 5)) else null))
             }
         } }
+        state.routeProgress?.let { progress ->
+            val legs = state.routes.getOrNull(state.selectedRoute)?.legs.orEmpty()
+            val total = legs.sumOf { leg -> leg.path.zipWithNext { a, b -> com.sunseat.app.domain.ExposureAnalyzer.distanceMeters(a, b) }.sum() }
+            var remaining = total * progress.coerceIn(0f, 1f)
+            legs.forEach { leg ->
+                val path = Path()
+                var started = false
+                leg.path.zipWithNext().forEach { (from, to) ->
+                    val distance = com.sunseat.app.domain.ExposureAnalyzer.distanceMeters(from, to)
+                    if (remaining > 0 && distance > 0) {
+                        if (!started) { val at = position(from); path.moveTo(at.x, at.y); started = true }
+                        val fraction = (remaining / distance).coerceIn(0.0, 1.0)
+                        val end = position(com.sunseat.app.domain.LatLng(from.latitude + (to.latitude - from.latitude) * fraction, from.longitude + (to.longitude - from.longitude) * fraction))
+                        path.lineTo(end.x, end.y)
+                    }
+                    remaining -= distance
+                }
+                if (started) drawPath(path, scheme.onSurface, style = Stroke(Sizes.mapRoute.toPx(), cap = StrokeCap.Round))
+            }
+        }
         state.origin?.let { drawCircle(scheme.surface, Sizes.mapMarker.toPx() / 3, position(it.location)); drawCircle(scheme.onSurface, Sizes.mapMarker.toPx() / 3, position(it.location), style = Stroke(Sizes.mapWalk.toPx())) }
         state.destination?.let { val p = position(it.location); val radius = Sizes.mapMarker.toPx() / 3; drawRect(scheme.onSurface, p - Offset(radius, radius), androidx.compose.ui.geometry.Size(radius * 2, radius * 2)) }
         state.cursor?.let { cursor ->
@@ -87,8 +107,8 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
                 val angle = Math.toRadians(cursor.sunAzimuth)
                 val length = Sizes.mapSunRay.toPx() * (1 - cursor.sunAltitude.coerceIn(0.0, 90.0) / 120).toFloat()
                 val end = p + Offset(sin(angle).toFloat(), -cos(angle).toFloat()) * length
-                drawLine(sun, p, end, Sizes.mapRoute.toPx(), StrokeCap.Round)
-                drawCircle(sun, Sizes.mapWalk.toPx(), end)
+                drawLine(sun.copy(alpha = sunRayOpacity(cursor.sunAltitude)), p, end, Sizes.mapRoute.toPx(), StrokeCap.Round)
+                drawCircle(sun.copy(alpha = sunRayOpacity(cursor.sunAltitude)), Sizes.mapWalk.toPx(), end)
             }
             rotate(cursor.heading.toFloat(), p) {
                 val radius = Sizes.mapMarker.toPx() / 2

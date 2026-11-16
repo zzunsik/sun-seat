@@ -17,6 +17,7 @@ data class MapState(
     val followCursor: Boolean = false,
     val padding: MapPadding = MapPadding(),
     val onGesture: () -> Unit = {},
+    val routeProgress: Float? = null,
     val showDecorations: Boolean = true,
 )
 data class MapCursor(val position: LatLng, val heading: Double, val sunAzimuth: Double, val sunAltitude: Double)
@@ -36,3 +37,6 @@ internal class MapProjection(points: List<LatLng>, private val width: Float, pri
         ((height / 2 - (point.latitude - (minY + maxY) / 2) * scale).toFloat())
 }
 internal fun MapState.points(): List<LatLng> = routes.flatMap { it.legs }.flatMap { it.path } + listOfNotNull(origin?.location, destination?.location)
+
+/** Low sun is visually stronger; all rays retain the semantic sun color. */
+internal fun sunRayOpacity(altitude: Double): Float = (1.0 - 0.30 * altitude.coerceIn(0.0, 90.0) / 90.0).toFloat()

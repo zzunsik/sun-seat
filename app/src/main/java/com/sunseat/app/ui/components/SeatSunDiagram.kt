@@ -59,11 +59,12 @@ fun SeatSunDiagram(
      * null이면 해가 드는 창 쪽만 해를 받는 것으로 칠한다.
      */
     seatSun: Pair<Boolean, Boolean>? = null,
+    sunVisible: Boolean = true,
 ) {
-    val states = seatSun?.let { (l, r) -> (if (l) SideState.SUN else SideState.SHADE) to (if (r) SideState.SUN else SideState.SHADE) }
+    val states = if (!sunVisible) SideState.SHADE to SideState.SHADE else seatSun?.let { (l, r) -> (if (l) SideState.SUN else SideState.SHADE) to (if (r) SideState.SUN else SideState.SHADE) }
         ?.takeIf { sun != DiagramSun.AHEAD }
         ?: (sun.state(Side.LEFT) to sun.state(Side.RIGHT))
-    val desc = when (sun) {
+    val desc = if (!sunVisible) stringResource(R.string.diagram_no_sun) else when (sun) {
         DiagramSun.LEFT -> stringResource(R.string.diagram_left)
         DiagramSun.RIGHT -> stringResource(R.string.diagram_right)
         DiagramSun.AHEAD -> stringResource(R.string.diagram_ahead)
@@ -77,7 +78,7 @@ fun SeatSunDiagram(
         horizontalArrangement = Arrangement.spacedBy(Spacing.m),
     ) {
         SideLabel(stringResource(R.string.common_left), states.first, recommended == Side.LEFT, alignEnd = true, modifier = Modifier.weight(1f))
-        Vehicle(sun, states, recommended, car, Modifier.width(Sizes.vehicleWidth).fillMaxHeight())
+        Vehicle(sun, states, recommended, car, Modifier.width(Sizes.vehicleWidth).fillMaxHeight(), sunVisible)
         SideLabel(stringResource(R.string.common_right), states.second, recommended == Side.RIGHT, alignEnd = false, modifier = Modifier.weight(1f))
     }
 }
@@ -126,7 +127,7 @@ private fun SideLabel(side: String, state: SideState, recommended: Boolean, alig
 }
 
 @Composable
-private fun Vehicle(sun: DiagramSun, states: Pair<SideState, SideState>, recommended: Side?, car: Boolean, modifier: Modifier = Modifier) {
+private fun Vehicle(sun: DiagramSun, states: Pair<SideState, SideState>, recommended: Side?, car: Boolean, modifier: Modifier = Modifier, sunVisible: Boolean = true) {
     val c = SunSeatTheme.colors
     val scheme = SunSeatTheme.scheme
     Canvas(modifier) {
@@ -136,7 +137,7 @@ private fun Vehicle(sun: DiagramSun, states: Pair<SideState, SideState>, recomme
         val ax = w / 2f
         val top = (if (sun == DiagramSun.AHEAD) Sizes.diagramSunArea else Sizes.diagramArrowArea).toPx()
 
-        if (sun == DiagramSun.AHEAD) drawSun(c.sun, Offset(ax, 10f * d), 6f * d)
+        if (sunVisible && sun == DiagramSun.AHEAD) drawSun(c.sun, Offset(ax, 10f * d), 6f * d)
         // 진행 방향 화살표
         val arrowTop = top - 18f * d
         drawLine(scheme.onSurface, Offset(ax, top - 6f * d), Offset(ax, arrowTop), 2.5f * d, StrokeCap.Round)
@@ -189,7 +190,7 @@ private fun Vehicle(sun: DiagramSun, states: Pair<SideState, SideState>, recomme
         }
 
         // 해 쪽 창으로 들어오는 햇살(점선)
-        if (sun != DiagramSun.AHEAD) {
+        if (sunVisible && sun != DiagramSun.AHEAD) {
             val onRight = sun == DiagramSun.RIGHT
             val edge = if (onRight) left + bodyW else left
             val dir = if (onRight) 1f else -1f

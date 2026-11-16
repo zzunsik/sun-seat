@@ -23,13 +23,14 @@ sealed interface Screen {
     data object Licenses : Screen
     data object Input : Screen
     data class Candidates(val request: TripRequest) : Screen
+    data class Simulation(val request: TripRequest, val chosen: ChosenRoute, val result: com.sunseat.app.domain.TripResult) : Screen
     data class Result(val request: TripRequest, val chosen: ChosenRoute) : Screen
 }
 
 /** Navigation 3 화면 흐름. 시스템 뒤로 가기는 NavDisplay가 처리한다. */
 @Composable
-fun SunSeatNavHost(graph: AppGraph, modifier: Modifier = Modifier) {
-    val backStack = remember { mutableStateListOf<Screen>(Screen.Input) }
+fun SunSeatNavHost(graph: AppGraph, modifier: Modifier = Modifier, navigation: SunSeatNavigationViewModel = androidx.lifecycle.viewmodel.compose.viewModel()) {
+    val backStack = navigation.backStack
     NavDisplay(
         backStack = backStack,
         modifier = modifier,
@@ -63,12 +64,16 @@ fun SunSeatNavHost(graph: AppGraph, modifier: Modifier = Modifier) {
                     onSearchByCar = { backStack[backStack.lastIndex] = Screen.Candidates(key.request.copy(mode = TravelMode.CAR)) },
                 )
             }
+            entry<Screen.Simulation> { key ->
+                com.sunseat.app.ui.simulation.SimulationRoute(key.request, key.chosen.route, key.result, onBack = { backStack.removeAt(backStack.lastIndex) })
+            }
             entry<Screen.Result> { key ->
                 ResultRoute(
                     graph = graph,
                     onSettings = { backStack.add(Screen.Settings) },
                     request = key.request,
                     chosen = key.chosen,
+                    onSimulation = { result -> backStack.add(Screen.Simulation(key.request.copy(goal = result.goal), key.chosen, result)) },
                     onSchedule = { value, mode, goal -> backStack[backStack.lastIndex] = Screen.Result(key.request.copy(departure = value, timeMode = mode, goal = goal), key.chosen.copy(cachedResult = null)) },
                     onBack = { backStack.removeAt(backStack.lastIndex) },
                     // 다시 찾기: 입력 화면으로 돌아간다(입력 내용은 입력 화면 상태에 남아 있다)
@@ -77,4 +82,9 @@ fun SunSeatNavHost(graph: AppGraph, modifier: Modifier = Modifier) {
             }
         },
     )
+}
+
+/** Activity-scoped stack survives configuration changes with its entry ViewModels. */
+class SunSeatNavigationViewModel : androidx.lifecycle.ViewModel() {
+    val backStack = mutableStateListOf<Screen>(Screen.Input)
 }
