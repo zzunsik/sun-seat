@@ -13,6 +13,12 @@ val localProps = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }
 
+val releaseSigningKeys = listOf("RELEASE_STORE_FILE", "RELEASE_STORE_PASSWORD", "RELEASE_KEY_ALIAS", "RELEASE_KEY_PASSWORD")
+val releaseSigningConfigured = releaseSigningKeys.all { !localProps.getProperty(it).isNullOrBlank() }
+require(releaseSigningConfigured || releaseSigningKeys.none { !localProps.getProperty(it).isNullOrBlank() }) {
+    "Release signing requires all four RELEASE_* properties in local.properties."
+}
+
 android {
     namespace = "com.sunseat.app"
     compileSdk = 37
@@ -30,8 +36,20 @@ android {
         buildConfigField("String", "KAKAO_REST_API_KEY", "\"$kakaoKey\"")
     }
 
+    signingConfigs {
+        if (releaseSigningConfigured) {
+            create("personalRelease") {
+                storeFile = rootProject.file(localProps.getProperty("RELEASE_STORE_FILE"))
+                storePassword = localProps.getProperty("RELEASE_STORE_PASSWORD")
+                keyAlias = localProps.getProperty("RELEASE_KEY_ALIAS")
+                keyPassword = localProps.getProperty("RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (releaseSigningConfigured) signingConfig = signingConfigs.getByName("personalRelease")
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }

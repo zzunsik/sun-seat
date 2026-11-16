@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 임시 해 아이콘. 최종 아이콘은 #17에서 만든다. -->
+<!-- 시작 화면용 해 심벌. 런처의 해·자리 아이콘과는 별도로 유지한다. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
