@@ -3,6 +3,12 @@ package com.sunseat.app.ui.input
 import androidx.compose.ui.test.junit4.accessibility.enableAccessibilityChecks
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.tryPerformAccessibilityChecks
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.sunseat.app.R
@@ -46,8 +52,29 @@ class InputScreenshotTest {
     )
 
     private fun render(state: InputUiState, dark: Boolean) {
-        compose.setContent { SunSeatTheme(darkTheme = dark) { InputScreen(state, InputActions()) } }
+        compose.setContent { androidx.compose.runtime.CompositionLocalProvider(com.sunseat.app.ui.map.LocalMapRenderer provides com.sunseat.app.ui.map.MapRenderer.PREVIEW) { SunSeatTheme(darkTheme = dark) { InputScreen(state, InputActions()) } } }
+        compose.waitForIdle()
     }
+
+    @Test fun emptyDark() { render(InputUiState(), true); shot("input_empty_dark") }
+    @Test fun originLight() { render(filled.copy(destination = null), false); shot("input_origin_light") }
+    @Test fun originDark() { render(filled.copy(destination = null), true); shot("input_origin_dark") }
+    @Test fun searchDark() { render(searching, true); shot("input_search_dark") }
+    @Test fun searchEmptyLight() { render(InputUiState(search = SearchState(EndpointField.ORIGIN)), false); shot("input_search_empty_light") }
+    @Test fun searchEmptyDark() { render(InputUiState(search = SearchState(EndpointField.ORIGIN)), true); shot("input_search_empty_dark") }
+    @Test fun searchErrorLight() { render(InputUiState(search = SearchState(EndpointField.ORIGIN, query = "서울역", messageRes = R.string.search_error_network, canRetry = true)), false); shot("input_search_error_light") }
+
+    private fun timeSheet(dark: Boolean, mode: com.sunseat.app.domain.TimeMode) {
+        compose.enableAccessibilityChecks()
+        compose.setContent { SunSeatTheme(darkTheme = dark) { TimeSheet(filled.departure, mode, TravelMode.TRANSIT, {}, { _, _ -> }, now = filled.departure!!) } }
+        compose.waitForIdle()
+        compose.onRoot().tryPerformAccessibilityChecks()
+        shot("input_time_${mode.name.lowercase()}_${if (dark) "dark" else "light"}")
+    }
+    @Test fun departLight() = timeSheet(false, com.sunseat.app.domain.TimeMode.DEPART)
+    @Test fun departDark() = timeSheet(true, com.sunseat.app.domain.TimeMode.DEPART)
+    @Test fun arriveLight() = timeSheet(false, com.sunseat.app.domain.TimeMode.ARRIVE)
+    @Test fun arriveDark() = timeSheet(true, com.sunseat.app.domain.TimeMode.ARRIVE)
 
     @Test fun emptyLight() { render(InputUiState(), false); shot("input_empty_light") }
     @Test fun filledLight() { render(filled, false); shot("input_filled_light") }
@@ -78,6 +105,35 @@ class InputScreenshotTest {
         compose.enableAccessibilityChecks()
         render(searching, true)
         compose.onRoot().tryPerformAccessibilityChecks()
+    }
+
+    @Test fun scheduleDraftAppliesAtomically() {
+        var applied: Pair<LocalDateTime?, com.sunseat.app.domain.TimeMode>? = null
+        compose.setContent { SunSeatTheme { TimeSheet(null, com.sunseat.app.domain.TimeMode.DEPART, TravelMode.TRANSIT, {}, { value, mode -> applied = value to mode }, now = filled.departure!!) } }
+        compose.onNodeWithText("적용").assertIsDisplayed()
+        compose.onNodeWithText("도착 시각").performClick()
+        compose.onNodeWithText("내일").performClick()
+        org.junit.Assert.assertNull(applied)
+        compose.onNodeWithText("적용").performClick()
+        org.junit.Assert.assertEquals(filled.departure!!.plusDays(1), applied!!.first)
+        org.junit.Assert.assertEquals(com.sunseat.app.domain.TimeMode.ARRIVE, applied!!.second)
+    }
+
+    @Test fun searchKeyboardClearAndSystemBack() {
+        val query = androidx.compose.runtime.mutableStateOf("서울역")
+        var submitted = false
+        var closed = false
+        var dispatcher: androidx.activity.OnBackPressedDispatcher? = null
+        compose.setContent {
+            dispatcher = androidx.activity.compose.LocalOnBackPressedDispatcherOwner.current!!.onBackPressedDispatcher
+            SunSeatTheme { PlaceSearchScreen(SearchState(EndpointField.ORIGIN, query = query.value), InputActions(onQueryChange = { query.value = it }, searchNow = { submitted = true }, closeSearch = { closed = true })) }
+        }
+        compose.onNode(hasSetTextAction()).performImeAction()
+        org.junit.Assert.assertTrue(submitted)
+        compose.onNodeWithContentDescription("검색어 지우기").performClick()
+        org.junit.Assert.assertEquals("", query.value)
+        compose.runOnIdle { dispatcher!!.onBackPressed() }
+        org.junit.Assert.assertTrue(closed)
     }
 
     private fun shot(name: String) = compose.onRoot().captureRoboImage("src/test/screenshots/$name.png")

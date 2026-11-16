@@ -150,7 +150,11 @@ fun ResultScreen(
                             overflow = TextOverflow.Ellipsis,
                         )
                         Text(
-                            stringResource(
+                            if (result != null) stringResource(
+                                R.string.result_schedule,
+                                stringResource(if (request.mode == TravelMode.CAR) R.string.input_mode_car else R.string.input_mode_transit),
+                                state.departure.atZone(zone).format(TimeFormat), result.arrival.atZone(zone).format(TimeFormat),
+                            ) else stringResource(
                                 if (request.mode == TravelMode.CAR) R.string.result_subtitle_car else R.string.result_subtitle_transit,
                                 state.departure.atZone(zone).format(TimeFormat),
                             ),
@@ -338,11 +342,12 @@ private fun ResultContent(
             }
             Stagger(shown, index++) {
                 SectionCard(title = stringResource(R.string.result_timeline)) {
+                    if (result.arrival != result.modeledArrival) Text(stringResource(R.string.result_unmodeled_time), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                     Text(stringResource(R.string.result_timeline_detail), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                     SideTimeline(
                         leftSun = result.leftSpans.map { SunSpan(it.start, it.end) },
                         rightSun = result.rightSpans.map { SunSpan(it.start, it.end) },
-                        ticks = ticks(result.departure, result.arrival, zone),
+                        ticks = ticks(result.departure, result.modeledArrival, zone),
                         selectedRight = if (sit?.side == Side.RIGHT) 1f else 0f,
                         showSelection = sit != null,
                         gaps = result.walkSpans.map { SunSpan(it.start, it.end) },
@@ -454,7 +459,7 @@ internal fun mixedSummary(result: TripResult): String {
 internal fun glareText(g: com.sunseat.app.domain.GlareWindow, result: TripResult, zone: ZoneId): String {
     val a = g.start.atZone(zone).format(TimeFormat)
     val b = g.end.atZone(zone).format(TimeFormat)
-    val totalMin = Duration.between(result.departure, result.arrival).toMinutes()
+    val totalMin = Duration.between(result.departure, result.modeledArrival).toMinutes()
     return when {
         g.fromMinute == 0L && g.toMinute >= totalMin -> stringResource(R.string.result_glare_whole, a, b)
         g.fromMinute == 0L -> stringResource(R.string.result_glare_start, g.toMinute, a, b)

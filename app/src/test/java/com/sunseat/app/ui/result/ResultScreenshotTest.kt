@@ -80,6 +80,18 @@ class ResultScreenshotTest {
         compose.onRoot().tryPerformAccessibilityChecks()
     }
 
+    private fun arrivalWithWaiting(dark: Boolean) {
+        compose.enableAccessibilityChecks()
+        val result = advisor(90.0, 30.0).advise(transitRoute, departure, SunGoal.AVOID, totalDuration = transitRoute.duration.plusMinutes(20))
+        render(transitRequest, ResultUiState(SunGoal.AVOID, departure, result), dark)
+        compose.onRoot().tryPerformAccessibilityChecks()
+        shot("result_waiting_${if (dark) "dark" else "light"}")
+    }
+    @Config(qualifiers = "w390dp-h1900dp-xxhdpi")
+    @Test fun arrivalWaitingLight() = arrivalWithWaiting(false)
+    @Config(qualifiers = "w390dp-h1900dp-xxhdpi")
+    @Test fun arrivalWaitingDark() = arrivalWithWaiting(true)
+
     private fun mixedGroundRoute() = Route(listOf(
         transitRoute.legs.first().copy(groundLevel = com.sunseat.app.domain.GroundLevel.BELOW),
         transitRoute.legs.last().copy(groundLevel = com.sunseat.app.domain.GroundLevel.UNKNOWN),

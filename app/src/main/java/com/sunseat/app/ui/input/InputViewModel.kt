@@ -51,6 +51,7 @@ data class InputUiState(
     val mode: TravelMode = TravelMode.TRANSIT,
     /** null이면 "지금" */
     val departure: LocalDateTime? = null,
+    val timeMode: com.sunseat.app.domain.TimeMode = com.sunseat.app.domain.TimeMode.DEPART,
     val goal: SunGoal = SunGoal.AVOID,
     val search: SearchState? = null,
     val locating: Boolean = false,
@@ -84,7 +85,6 @@ class InputViewModel(
     private val placeSearch: PlaceSearchApi,
     private val locationProvider: LocationProvider,
     private val currentLocationName: String,
-    private val now: () -> LocalDateTime = { LocalDateTime.now() },
     settings: kotlinx.coroutines.flow.Flow<com.sunseat.app.data.settings.Settings> = kotlinx.coroutines.flow.flowOf(com.sunseat.app.data.settings.Settings.DEFAULT),
     private val favoriteRepository: com.sunseat.app.data.favorites.FavoritesRepository? = null,
 ) : ViewModel() {
@@ -104,6 +104,19 @@ class InputViewModel(
             }
         }
     }
+    private var lastAutomaticRequest: TripRequest? = null
+    fun automaticRequest(): TripRequest? {
+        if (_state.value.search != null) return null
+        val request = buildRequest() ?: return null
+        if (request == lastAutomaticRequest) return null
+        lastAutomaticRequest = request
+        return request
+    }
+
+    fun setSchedule(value: LocalDateTime?, mode: com.sunseat.app.domain.TimeMode) {
+        _state.update { it.copy(departure = value, timeMode = if (value == null) com.sunseat.app.domain.TimeMode.DEPART else mode) }
+    }
+
     private var searchJob: Job? = null
     private var locationJob: Job? = null
 
@@ -176,10 +189,11 @@ class InputViewModel(
 
     fun choosePlace(place: Place) {
         val field = _state.value.search?.field ?: return
+        if (field == EndpointField.ORIGIN) locationJob?.cancel()
         val endpoint = Endpoint(NamedPlace(place.name, place.location))
         _state.update {
             when (field) {
-                EndpointField.ORIGIN -> it.copy(origin = endpoint, locationMessageRes = null, locationAction = null)
+                EndpointField.ORIGIN -> it.copy(origin = endpoint, locating = false, locationMessageRes = null, locationAction = null)
                 EndpointField.DESTINATION -> it.copy(destination = endpoint)
             }.copy(search = null)
         }
@@ -223,7 +237,8 @@ class InputViewModel(
     }
 
     fun swap() {
-        _state.update { it.copy(origin = it.destination, destination = it.origin) }
+        locationJob?.cancel()
+        _state.update { it.copy(origin = it.destination, destination = it.origin, locating = false) }
     }
 
     fun setMode(mode: TravelMode) { modeChosen = true; _state.update { it.copy(mode = mode) } }
@@ -243,12 +258,12 @@ class InputViewModel(
         return null
     }
 
-    /** 입력이 다 되면 요청을 만든다. 지난 시각은 "지금"으로 바꾼다. */
+    /** 입력이 다 되면 요청을 만든다. 직접 고른 시각은 과거여도 그대로 계산한다. */
     fun buildRequest(): TripRequest? {
         val s = _state.value
         if (!s.canSubmit) return null
-        val departure = s.departure?.takeIf { it.isAfter(now()) }
-        return TripRequest(s.origin!!.place, s.destination!!.place, s.mode, departure, s.goal)
+        val departure = s.departure
+        return TripRequest(s.origin!!.place, s.destination!!.place, s.mode, departure, s.goal, s.timeMode)
     }
 
     companion object {

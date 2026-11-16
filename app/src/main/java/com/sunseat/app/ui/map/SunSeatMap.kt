@@ -40,7 +40,7 @@ fun SunSeatMap(state: MapState, modifier: Modifier = Modifier) {
     Box(modifier.semantics { contentDescription = description }) {
         if (LocalMapRenderer.current == MapRenderer.PREVIEW) MapPlaceholder(state, Modifier.fillMaxSize())
         else NativeMap(state, Modifier.fillMaxSize())
-        if (state.origin != null || state.destination != null) {
+        if (state.showDecorations && (state.origin != null || state.destination != null)) {
             Row(Modifier.align(Alignment.TopStart).background(SunSeatTheme.scheme.surface).padding(Spacing.s), horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalAlignment = Alignment.CenterVertically) {
                 val ink = SunSeatTheme.scheme.onSurface
                 if (state.origin != null) {
@@ -97,7 +97,7 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
             }
         }
     }
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomEnd) {
+    if (state.showDecorations) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomEnd) {
         Text(stringResource(R.string.map_preview), Modifier.background(scheme.surface).padding(Spacing.s), color = scheme.onSurfaceVariant, style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
     }
     }
