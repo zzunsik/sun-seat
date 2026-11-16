@@ -23,11 +23,28 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.flow.update
+import com.sunseat.app.domain.TripResult
+import com.sunseat.app.domain.TripAdvisor
+import com.sunseat.app.domain.SunGoal
+import com.sunseat.app.domain.BenchPreference
+import com.sunseat.app.domain.departureInstant
+import com.sunseat.app.data.route.TransitRouteType
+import java.time.Instant
+import java.time.ZoneId
 import java.time.Duration
 import java.time.LocalDateTime
 
 /** 결과 화면으로 넘기는 선택한 경로. */
-data class ChosenRoute(val route: Route, val totalDuration: Duration)
+data class ChosenRoute(val route: Route, val totalDuration: Duration, val cachedResult: TripResult? = null, val preference: BenchPreference = BenchPreference.AVOID_BACK)
 
 /** 후보 카드의 구간 표시 하나. [lineName]은 지하철 노선 색을 고를 때 쓴다. */
 data class LegChip(val mode: Mode, val lineName: String = "", val walkMinutes: Long = 0)
@@ -47,11 +64,18 @@ data class CandidateUi(
     val boardAt: String,
     val alightAt: String,
     val chosen: ChosenRoute,
+    val type: TransitRouteType = TransitRouteType.OTHER,
 )
 
 sealed interface CandidatesState {
     data class Loading(val mode: TravelMode) : CandidatesState
-    data class Options(val items: List<CandidateUi>) : CandidatesState
+    data class Options(
+        val items: List<CandidateUi>, val sort: CandidateSort = CandidateSort.RECOMMENDED,
+        val filters: Set<TransitRouteType> = emptySet(), val selectedId: Int? = null,
+        val goal: SunGoal = SunGoal.AVOID,
+    ) : CandidatesState {
+        val visible: List<CandidateUi> get() = orderCandidates(items, sort, filters, goal)
+    }
 
     /** 경로 없음. [suggestCar]면 "자가용 기준으로 좌석 보기"를 제안한다. */
     data class NoRoute(
@@ -85,6 +109,7 @@ internal fun TransitRouteOption.toUi(id: Int, now: LocalDateTime?, fastest: Bool
         boardAt = rides.firstOrNull()?.startName.orEmpty(),
         alightAt = rides.lastOrNull()?.endName.orEmpty(),
         chosen = ChosenRoute(route, totalDuration),
+        type = type,
     )
 }
 
@@ -101,6 +126,12 @@ class CandidatesViewModel(
     private val transit: TransitRouteApi,
     private val car: CarRouteApi,
     private val now: () -> LocalDateTime = { LocalDateTime.now() },
+    private val compute: CoroutineDispatcher = Dispatchers.Default,
+    private val zone: ZoneId = ZoneId.systemDefault(),
+    private val preference: BenchPreference = BenchPreference.AVOID_BACK,
+    private val calculate: suspend (Route, Instant, SunGoal, BenchPreference, Duration) -> TripResult = { route, departure, goal, bench, total ->
+        TripAdvisor().advise(route, departure, goal, bench, total)
+    },
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<CandidatesState>(CandidatesState.Loading(request.mode))
@@ -109,18 +140,32 @@ class CandidatesViewModel(
     private val _autoSelected = Channel<ChosenRoute>(Channel.BUFFERED)
     val autoSelected = _autoSelected.receiveAsFlow()
 
+    private var loadJob: Job? = null
+    private var generation = 0
     init { load() }
+    fun setSort(sort: CandidateSort) { _state.update { if (it is CandidatesState.Options) it.copy(sort = sort) else it } }
+    fun toggleFilter(type: TransitRouteType) { _state.update {
+        if (it is CandidatesState.Options) it.copy(filters = if (type in it.filters) it.filters - type else it.filters + type, selectedId = null) else it
+    } }
+    fun clearFilters() { _state.update { if (it is CandidatesState.Options) it.copy(filters = emptySet()) else it } }
+    fun highlight(id: Int) { _state.update { if (it is CandidatesState.Options) it.copy(selectedId = id) else it } }
 
     fun load() {
+        loadJob?.cancel()
+        val version = ++generation
         _state.value = CandidatesState.Loading(request.mode)
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
+            val sampledNow = now()
+            val base = sampledNow.atZone(zone).toInstant()
             val origin = request.origin.location
             val destination = request.destination.location
-            _state.value = when (request.mode) {
+            val loaded = when (request.mode) {
                 TravelMode.TRANSIT -> when (val r = transit.search(origin, destination)) {
                     is ApiResult.Success -> when {
                         r.value.options.isNotEmpty() ->
-                            CandidatesState.Options(r.value.options.toUi(if (request.departure == null) now() else null))
+                            CandidatesState.Options(r.value.options.toUi(sampledNow).map { item ->
+                                item.copy(arrival = (request.departureInstant(item.totalDuration, base, zone) + item.totalDuration).atZone(zone).toLocalDateTime())
+                            }, goal = request.goal)
                         else -> r.value.noRouteReason.toNoRoute()
                     }
                     is ApiResult.Failure -> r.error.toState()
@@ -129,6 +174,8 @@ class CandidatesViewModel(
                     is ApiResult.Success -> {
                         val option = r.value.option
                         if (option != null) {
+                            currentCoroutineContext().ensureActive()
+                            if (version != generation) return@launch
                             _autoSelected.send(ChosenRoute(option.route, option.duration))
                             CandidatesState.Loading(TravelMode.CAR)
                         } else {
@@ -137,6 +184,21 @@ class CandidatesViewModel(
                     }
                     is ApiResult.Failure -> r.error.toState()
                 }
+            }
+            currentCoroutineContext().ensureActive()
+            if (version != generation) return@launch
+            _state.value = loaded
+            val options = loaded as? CandidatesState.Options ?: return@launch
+            coroutineScope {
+                options.items.map { item -> async(compute) {
+                    val result = calculate(item.chosen.route, request.departureInstant(item.totalDuration, base, zone), request.goal, preference, item.totalDuration)
+                    currentCoroutineContext().ensureActive()
+                    if (version == generation) _state.update { current ->
+                        if (current is CandidatesState.Options) current.copy(items = current.items.map {
+                            if (it.id == item.id) it.copy(chosen = it.chosen.copy(cachedResult = result, preference = preference)) else it
+                        }) else current
+                    }
+                } }.awaitAll()
             }
         }
     }
@@ -161,4 +223,28 @@ internal fun CarNoRouteReason?.messageRes(): Int = when (this) {
     CarNoRouteReason.NO_END_ROAD -> R.string.candidates_car_no_end_road
     CarNoRouteReason.SAME_POINTS -> R.string.candidates_same_points
     CarNoRouteReason.NO_RESULTS, null -> R.string.candidates_car_no_route
+}
+
+
+enum class CandidateSort { RECOMMENDED, TIME, TRANSFERS, WALK, SUN }
+
+/** Filters combine with OR; pending sun calculations sort last in both goals. */
+fun orderCandidates(items: List<CandidateUi>, sort: CandidateSort, filters: Set<TransitRouteType>, goal: SunGoal): List<CandidateUi> {
+    val visible = items.filter { filters.isEmpty() || it.type in filters }
+    return when (sort) {
+        CandidateSort.RECOMMENDED -> visible
+        CandidateSort.TIME -> visible.sortedBy { it.totalDuration }
+        CandidateSort.TRANSFERS -> visible.sortedBy { it.transfers }
+        CandidateSort.WALK -> visible.sortedBy { it.walkMinutes }
+        CandidateSort.SUN -> visible.sortedWith(compareBy<CandidateUi> { !it.comparableSun() }.thenComparator { a, b ->
+            val av = a.chosen.cachedResult?.sunIfFollowed ?: Duration.ZERO
+            val bv = b.chosen.cachedResult?.sunIfFollowed ?: Duration.ZERO
+            if (goal == SunGoal.AVOID) av.compareTo(bv) else bv.compareTo(av)
+        })
+    }
+}
+
+private fun CandidateUi.comparableSun(): Boolean {
+    val result = chosen.cachedResult ?: return false
+    return !(result.sunIfFollowed + result.shadeIfFollowed).isZero && result.legs.none { it.advice == com.sunseat.app.domain.LegAdvice.UnknownGround }
 }

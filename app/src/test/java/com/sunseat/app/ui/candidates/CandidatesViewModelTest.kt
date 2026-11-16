@@ -22,6 +22,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -56,7 +57,7 @@ class CandidatesViewModelTest {
 
     @Test
     fun transitOptionsMapToCards() = runTest(dispatcher) {
-        val vm = CandidatesViewModel(transitRequest, FakeTransit(ApiResult.Success(TransitRoutes(options))), noCar, now = { java.time.LocalDateTime.of(2026, 11, 15, 9, 0) })
+        val vm = CandidatesViewModel(transitRequest, FakeTransit(ApiResult.Success(TransitRoutes(options))), noCar, now = { java.time.LocalDateTime.of(2026, 11, 15, 9, 0) }, compute = dispatcher)
         advanceUntilIdle()
         val items = (vm.state.value as CandidatesState.Options).items
         assertEquals(2, items.size)
@@ -78,8 +79,65 @@ class CandidatesViewModelTest {
     }
 
     @Test
+    fun showsListBeforeParallelCalculationsFinish() = runTest(dispatcher) {
+        var active = 0
+        var peak = 0
+        val vm = CandidatesViewModel(transitRequest, FakeTransit(ApiResult.Success(TransitRoutes(options))), noCar, compute = dispatcher,
+            calculate = { route, departure, goal, bench, total ->
+                active++; peak = maxOf(peak, active)
+                kotlinx.coroutines.delay(100)
+                active--
+                com.sunseat.app.domain.TripAdvisor().advise(route, departure, goal, bench, total)
+            })
+        runCurrent()
+        assertEquals(2, (vm.state.value as CandidatesState.Options).items.size)
+        assertTrue((vm.state.value as CandidatesState.Options).items.all { it.chosen.cachedResult == null })
+        assertEquals(2, peak)
+        advanceUntilIdle()
+        assertTrue((vm.state.value as CandidatesState.Options).items.all { it.chosen.cachedResult != null })
+    }
+
+    @Test
+    fun reloadCancelsOldCalculationsAndKeepsNewRoutes() = runTest(dispatcher) {
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        var cancelled = 0
+        val transit = FakeTransit(ApiResult.Success(TransitRoutes(options)))
+        val vm = CandidatesViewModel(transitRequest, transit, noCar, compute = dispatcher,
+            calculate = { route, departure, goal, bench, total ->
+                try { gate.await() } catch (e: kotlinx.coroutines.CancellationException) { cancelled++; throw e }
+                com.sunseat.app.domain.TripAdvisor().advise(route, departure, goal, bench, total)
+            })
+        runCurrent()
+        transit.result = ApiResult.Success(TransitRoutes(listOf(CandidatesFixtures.busOnly)))
+        vm.load(); runCurrent()
+        gate.complete(Unit); advanceUntilIdle()
+        assertEquals(2, cancelled)
+        val item = (vm.state.value as CandidatesState.Options).items.single()
+        assertEquals(com.sunseat.app.data.route.TransitRouteType.BUS, item.type)
+        assertTrue(item.chosen.cachedResult!!.legs.all { it.leg.mode == Mode.BUS })
+    }
+
+    @Test
+    fun cancelledNonCooperativeApiCannotOverwriteLatestList() = runTest(dispatcher) {
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        var calls = 0
+        val api = object : TransitRouteApi {
+            override suspend fun search(origin: LatLng, destination: LatLng): ApiResult<TransitRoutes> {
+                val call = ++calls
+                if (call == 1) kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { gate.await() }
+                return ApiResult.Success(TransitRoutes(listOf(if (call == 1) CandidatesFixtures.subwayOnly else CandidatesFixtures.busOnly)))
+            }
+        }
+        val vm = CandidatesViewModel(transitRequest, api, noCar, compute = dispatcher)
+        runCurrent(); vm.load(); runCurrent()
+        assertEquals(com.sunseat.app.data.route.TransitRouteType.BUS, (vm.state.value as CandidatesState.Options).items.single().type)
+        gate.complete(Unit); advanceUntilIdle()
+        assertEquals(com.sunseat.app.data.route.TransitRouteType.BUS, (vm.state.value as CandidatesState.Options).items.single().type)
+    }
+
+    @Test
     fun noTransitRouteSuggestsCar() = runTest(dispatcher) {
-        val vm = CandidatesViewModel(transitRequest, FakeTransit(ApiResult.Success(TransitRoutes(emptyList(), NoRouteReason.NO_RESULTS))), noCar)
+        val vm = CandidatesViewModel(transitRequest, FakeTransit(ApiResult.Success(TransitRoutes(emptyList(), NoRouteReason.NO_RESULTS))), noCar, compute = dispatcher)
         advanceUntilIdle()
         val s = vm.state.value as CandidatesState.NoRoute
         assertEquals(R.string.candidates_no_transit, s.titleRes)
@@ -89,7 +147,7 @@ class CandidatesViewModelTest {
 
     @Test
     fun samePointsDoesNotSuggestCar() = runTest(dispatcher) {
-        val vm = CandidatesViewModel(transitRequest, FakeTransit(ApiResult.Success(TransitRoutes(emptyList(), NoRouteReason.SAME_POINTS))), noCar)
+        val vm = CandidatesViewModel(transitRequest, FakeTransit(ApiResult.Success(TransitRoutes(emptyList(), NoRouteReason.SAME_POINTS))), noCar, compute = dispatcher)
         advanceUntilIdle()
         assertFalse((vm.state.value as CandidatesState.NoRoute).suggestCar)
     }
@@ -97,7 +155,7 @@ class CandidatesViewModelTest {
     @Test
     fun networkErrorCanRetryAndRetryReloads() = runTest(dispatcher) {
         val transit = FakeTransit(ApiResult.Failure(ApiError.NETWORK))
-        val vm = CandidatesViewModel(transitRequest, transit, noCar)
+        val vm = CandidatesViewModel(transitRequest, transit, noCar, compute = dispatcher)
         advanceUntilIdle()
         val err = vm.state.value as CandidatesState.Error
         assertTrue(err.canRetry)
@@ -112,16 +170,16 @@ class CandidatesViewModelTest {
     }
 
     @Test
-    fun departureSetHidesArrival() = runTest(dispatcher) {
+    fun departureSetShowsScheduledArrival() = runTest(dispatcher) {
         val req = transitRequest.copy(departure = java.time.LocalDateTime.of(2026, 11, 16, 9, 0))
-        val vm = CandidatesViewModel(req, FakeTransit(ApiResult.Success(TransitRoutes(options))), noCar)
+        val vm = CandidatesViewModel(req, FakeTransit(ApiResult.Success(TransitRoutes(options))), noCar, compute = dispatcher)
         advanceUntilIdle()
-        assertEquals(null, (vm.state.value as CandidatesState.Options).items[0].arrival)
+        assertEquals(req.departure!!.plusMinutes(38), (vm.state.value as CandidatesState.Options).items[0].arrival)
     }
 
     @Test
     fun missingKeyCannotRetry() = runTest(dispatcher) {
-        val vm = CandidatesViewModel(transitRequest, FakeTransit(ApiResult.Failure(ApiError.MISSING_KEY)), noCar)
+        val vm = CandidatesViewModel(transitRequest, FakeTransit(ApiResult.Failure(ApiError.MISSING_KEY)), noCar, compute = dispatcher)
         advanceUntilIdle()
         assertFalse((vm.state.value as CandidatesState.Error).canRetry)
     }
@@ -129,7 +187,7 @@ class CandidatesViewModelTest {
     @Test
     fun carRouteIsAutoSelected() = runTest(dispatcher) {
         val car = FakeCar(ApiResult.Success(CarRouteResult(CarRouteOption(carRoute, 9000, 0, 12000))))
-        val vm = CandidatesViewModel(carRequest, noTransit, car)
+        val vm = CandidatesViewModel(carRequest, noTransit, car, compute = dispatcher)
         advanceUntilIdle()
         val chosen = vm.autoSelected.first()
         assertEquals(carRoute, chosen.route)
@@ -139,7 +197,7 @@ class CandidatesViewModelTest {
 
     @Test
     fun carNoRouteShowsReasonWithoutCarSuggestion() = runTest(dispatcher) {
-        val vm = CandidatesViewModel(carRequest, noTransit, FakeCar(ApiResult.Success(CarRouteResult(null, CarNoRouteReason.NO_START_ROAD))))
+        val vm = CandidatesViewModel(carRequest, noTransit, FakeCar(ApiResult.Success(CarRouteResult(null, CarNoRouteReason.NO_START_ROAD))), compute = dispatcher)
         advanceUntilIdle()
         val s = vm.state.value as CandidatesState.NoRoute
         assertEquals(R.string.candidates_car_no_start_road, s.titleRes)

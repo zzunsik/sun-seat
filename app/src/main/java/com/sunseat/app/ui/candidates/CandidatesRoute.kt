@@ -12,6 +12,7 @@ import com.sunseat.app.AppGraph
 import com.sunseat.app.domain.TripRequest
 
 /** 경로 후보 화면을 ViewModel과 연결한다. 자가용은 경로를 찾으면 [onAutoSelect]로 바로 넘긴다. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun CandidatesRoute(
     graph: AppGraph,
@@ -21,10 +22,11 @@ fun CandidatesRoute(
     onAutoSelect: (ChosenRoute) -> Unit,
     onSearchByCar: () -> Unit,
     modifier: Modifier = Modifier,
+    onRequestChange: (TripRequest) -> Unit = {},
     viewModel: CandidatesViewModel = viewModel(
         key = request.toString(),
         factory = viewModelFactory {
-            initializer { CandidatesViewModel(request, graph.kakao.transitRoutes, graph.kakao.carRoutes) }
+            initializer { CandidatesViewModel(request, graph.kakao.transitRoutes, graph.kakao.carRoutes, preference = graph.settings.settings.value.benchPreference) }
         },
     ),
 ) {
@@ -38,6 +40,12 @@ fun CandidatesRoute(
             onBack = onBack,
             onSelect = { onSelect(it.chosen) },
             onRetry = viewModel::load,
+            onHighlight = { item ->
+                if ((viewModel.state.value as? CandidatesState.Options)?.selectedId == item.id) onSelect(item.chosen)
+                else viewModel.highlight(item.id)
+            },
+            onSort = viewModel::setSort, onFilter = viewModel::toggleFilter, onClearFilters = viewModel::clearFilters,
+            onRequestChange = onRequestChange,
             onSearchByCar = onSearchByCar,
         ),
     )

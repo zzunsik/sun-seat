@@ -28,6 +28,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -84,6 +85,7 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
 data class ResultActions(
+    val onSchedule: (java.time.LocalDateTime?, com.sunseat.app.domain.TimeMode) -> Unit = { _, _ -> },
     val onSettings: () -> Unit = {},
     val onBack: () -> Unit = {},
     val onRestart: () -> Unit = {},
@@ -122,7 +124,9 @@ fun ResultScreen(
 ) {
     val scheme = SunSeatTheme.scheme
     val insets = WindowInsets.safeDrawing.asPaddingValues()
+    var showSchedule by rememberSaveable { mutableStateOf(false) }
     val result = state.result
+    if (showSchedule) com.sunseat.app.ui.input.TimeSheet(request.departure, request.timeMode, request.mode, { showSchedule = false }, actions.onSchedule)
     Surface(modifier.fillMaxSize(), color = scheme.background, contentColor = scheme.onSurface) {
         Box(Modifier.fillMaxSize()) {
             if (result == null) {
@@ -161,6 +165,7 @@ fun ResultScreen(
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
+                    IconButton(onClick = { showSchedule = true }) { Icon(painterResource(R.drawable.ic_ms_schedule), stringResource(R.string.input_time_title)) }
                 }
             }
 

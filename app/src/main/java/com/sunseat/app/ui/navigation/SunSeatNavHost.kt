@@ -59,6 +59,7 @@ fun SunSeatNavHost(graph: AppGraph, modifier: Modifier = Modifier) {
                     onSelect = { backStack.add(Screen.Result(key.request, it)) },
                     // 자가용: 후보 화면을 결과 화면으로 바꿔 끼워 뒤로 가면 입력 화면으로 간다
                     onAutoSelect = { backStack[backStack.lastIndex] = Screen.Result(key.request, it) },
+                    onRequestChange = { backStack[backStack.lastIndex] = Screen.Candidates(it) },
                     onSearchByCar = { backStack[backStack.lastIndex] = Screen.Candidates(key.request.copy(mode = TravelMode.CAR)) },
                 )
             }
@@ -68,6 +69,7 @@ fun SunSeatNavHost(graph: AppGraph, modifier: Modifier = Modifier) {
                     onSettings = { backStack.add(Screen.Settings) },
                     request = key.request,
                     chosen = key.chosen,
+                    onSchedule = { value, mode, goal -> backStack[backStack.lastIndex] = Screen.Result(key.request.copy(departure = value, timeMode = mode, goal = goal), key.chosen.copy(cachedResult = null)) },
                     onBack = { backStack.removeAt(backStack.lastIndex) },
                     // 다시 찾기: 입력 화면으로 돌아간다(입력 내용은 입력 화면 상태에 남아 있다)
                     onRestart = { while (backStack.size > 1) backStack.removeAt(backStack.lastIndex) },

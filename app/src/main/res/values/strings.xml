@@ -240,4 +240,20 @@
     <string name="recent_empty">최근 고른 장소가 여기에 보여요.</string>
     <string name="recent_remove">%1$s 최근 장소에서 삭제</string>
     <string name="recent_save_error">최근 장소를 저장하지 못했어요. 다시 골라 주세요.</string>
+    <string name="candidates_sort_recommended">추천순</string>
+    <string name="candidates_sort_time">최소 시간</string>
+    <string name="candidates_sort_transfers">최소 환승</string>
+    <string name="candidates_sort_walk">최소 도보</string>
+    <string name="candidates_sort_sun_less">햇빛 적은 순</string>
+    <string name="candidates_sort_sun_more">햇빛 많은 순</string>
+    <string name="candidates_filter_bus">버스만</string>
+    <string name="candidates_filter_subway">지하철만</string>
+    <string name="candidates_filter_mixed">버스+지하철</string>
+    <string name="candidates_filtered_empty">조건에 맞는 경로가 없어요</string>
+    <string name="candidates_clear_filters">필터 해제</string>
+    <string name="candidates_highlight">지도에 경로 표시</string>
+    <string name="candidates_selected">선택됨</string>
+    <string name="candidates_view_seat">자리 보기</string>
+    <string name="candidates_calculating_sun">햇빛 계산 중…</string>
+    <string name="candidates_exposure">그늘 %1$s · 햇빛 %2$s</string>
 </resources>

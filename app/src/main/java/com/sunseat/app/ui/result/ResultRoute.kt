@@ -35,6 +35,7 @@ fun ResultRoute(
     onRestart: () -> Unit,
     modifier: Modifier = Modifier,
     onSettings: () -> Unit = {},
+    onSchedule: (java.time.LocalDateTime?, com.sunseat.app.domain.TimeMode, SunGoal) -> Unit = { _, _, _ -> },
     viewModel: ResultViewModel = viewModel(
         key = request.toString() + chosen.hashCode(),
         factory = viewModelFactory { initializer { ResultViewModel(request, chosen, settings = graph.settings.settings) } },
@@ -48,6 +49,7 @@ fun ResultRoute(
         modifier = modifier,
         actions = ResultActions(
             onSettings = onSettings,
+            onSchedule = { value, mode -> onSchedule(value, mode, state.goal) },
             onBack = onBack,
             onRestart = onRestart,
             onShare = { state.result?.let { share(context, request, it) } },
