@@ -22,6 +22,7 @@ object Spacing {
 
 /** 부품 크기 토큰. docs/DESIGN.md 4 */
 object Sizes {
+    val cabinHeight = 240.dp
     val mapHeight = 240.dp
     val mapMarker = 32.dp
     val mapRoute = 5.dp

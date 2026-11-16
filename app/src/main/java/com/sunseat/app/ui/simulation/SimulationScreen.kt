@@ -31,6 +31,7 @@ import java.time.format.DateTimeFormatter
 data class SimulationActions(
     val back: () -> Unit = {}, val seek: (Float) -> Unit = {}, val toggle: () -> Unit = {},
     val speed: (Int) -> Unit = {}, val unfollow: () -> Unit = {}, val follow: () -> Unit = {},
+    val seat: (Int,String) -> Unit = { _,_ -> }, val camera: (Boolean) -> Unit = {},
 )
 
 @Composable
@@ -45,6 +46,14 @@ fun SimulationScreen(
     fun time(value: java.time.Instant) = value.atZone(zone).format(DateTimeFormatter.ofPattern("HH:mm"))
     val currentTime = time(current)
     val sliderLabel = stringResource(R.string.simulation_slider)
+    val currentAngle=point?.sun?.let { sun -> point.heading?.let { ExposureAnalyzer.normalize(sun.azimuth-it) } }
+    val currentDirection=when {
+        currentAngle==null -> R.string.simulation_ahead
+        currentAngle<TripAdvisor.AHEAD_CONE_DEG || currentAngle>360-TripAdvisor.AHEAD_CONE_DEG -> R.string.seat_front
+        currentAngle>180-TripAdvisor.AHEAD_CONE_DEG && currentAngle<180+TripAdvisor.AHEAD_CONE_DEG -> R.string.seat_rear
+        currentAngle<180 -> R.string.common_right
+        else -> R.string.common_left
+    }
     val cursor = point?.let { p ->
         if (p.position == null || p.heading == null) null
         else MapCursor(p.position, p.heading, p.sun?.azimuth ?: 0.0, if (p.undergroundOrUnknown) -90.0 else p.sun?.altitude ?: -90.0)
@@ -56,7 +65,7 @@ fun SimulationScreen(
                 Text(stringResource(R.string.simulation_title), Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
                 if (!SunSeatTheme.reduceMotion) Text(stringResource(R.string.simulation_speed_hint, state.speed), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             }
-            Box(Modifier.fillMaxWidth().weight(3f)) {
+            Box(Modifier.fillMaxWidth().weight(1f)) {
                 SunSeatMap(MapState(routes = listOf(route), origin = request.origin, destination = request.destination,
                     cursor = cursor, followCursor = state.following, onGesture = actions.unfollow,
                     routeProgress = point?.routeProgress ?: 0f, showDecorations = false), Modifier.fillMaxSize())
@@ -64,7 +73,7 @@ fun SimulationScreen(
                     QuietButton(onClick = actions.follow) { Text(stringResource(R.string.simulation_follow)) }
                 }
             }
-            Column(Modifier.fillMaxWidth().weight(2f).verticalScroll(rememberScrollState()).padding(Spacing.screen), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+            Column(Modifier.fillMaxWidth().weight(4f).verticalScroll(rememberScrollState()).padding(Spacing.screen), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                 Text(if (point == null) currentTime else stringResource(R.string.simulation_point, currentTime, point.leg.startName.ifBlank { request.origin.name }, point.leg.endName.ifBlank { request.destination.name }), style = MaterialTheme.typography.titleSmall)
                 val noGeometry = point?.heading == null
                 val excluded = point?.undergroundOrUnknown == true || point?.leg?.mode == Mode.WALK
@@ -73,14 +82,9 @@ fun SimulationScreen(
                     point?.leg?.mode == Mode.WALK -> stringResource(R.string.result_leg_walk)
                     point?.undergroundOrUnknown == true -> stringResource(if (point.leg.groundLevel == GroundLevel.BELOW) R.string.result_leg_underground else R.string.result_leg_unknown_ground)
                     point?.sun == null || point.sun.altitude <= 0 -> stringResource(R.string.simulation_night)
-                    else -> stringResource(R.string.simulation_sun, stringResource(if (point.ahead) R.string.simulation_ahead else if (point.sunSide == Side.LEFT) R.string.common_left else R.string.common_right), point.sun.altitude.toInt())
+                    else -> stringResource(R.string.simulation_sun, stringResource(currentDirection), point.sun.altitude.toInt())
                 }, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
-                if (point != null && !excluded && !noGeometry) SeatSunDiagram(
-                    sun = if (point.ahead) DiagramSun.AHEAD else if (point.sunSide == Side.LEFT) DiagramSun.LEFT else DiagramSun.RIGHT,
-                    recommended = point.recommended, car = point.leg.mode == Mode.CAR, bus = point.leg.mode == Mode.BUS, spot = point.spot,
-                    seatSun = (Side.LEFT in point.litSides) to (Side.RIGHT in point.litSides),
-                    sunVisible = (point.sun?.altitude ?: -90.0) > 0,
-                )
+                if (point != null && point.leg.mode != Mode.WALK) CabinPanel(point, request.mode, state, actions)
                 if (result.arrival != result.modeledArrival) Text(stringResource(R.string.simulation_modeled_note, time(result.arrival)), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             }
             Surface(color = scheme.surface) {

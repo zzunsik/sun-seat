@@ -1,0 +1,15 @@
+material {
+    name : CabinBody,
+    shadingModel : lit,
+    doubleSided : true,
+    requires : [ color ]
+}
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        material.baseColor = getColor();
+        material.roughness = 1.0;
+        material.metallic = 0.0;
+        material.emissive = vec4(getColor().rgb * 0.12, 0.0);
+    }
+}

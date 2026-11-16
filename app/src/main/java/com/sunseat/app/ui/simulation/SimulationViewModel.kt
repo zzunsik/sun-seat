@@ -7,7 +7,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 
-data class SimulationUiState(val elapsedMillis: Long = 0, val playing: Boolean = false, val speed: Int = 1, val following: Boolean = true)
+data class SimulationUiState(val elapsedMillis: Long = 0, val playing: Boolean = false, val speed: Int = 1, val following: Boolean = true,
+    val seats: Map<Int,String> = emptyMap(), val interior: Boolean = false)
 
 class SimulationViewModel(val timeline: TripTimeline, private val saved: SavedStateHandle = SavedStateHandle()) : ViewModel() {
     private val duration = timeline.duration.toMillis().coerceAtLeast(0)
@@ -16,6 +17,8 @@ class SimulationViewModel(val timeline: TripTimeline, private val saved: SavedSt
         playing = saved.get<Boolean>("playing") ?: false,
         speed = (saved.get<Int>("speed") ?: 1).takeIf { it in listOf(1, 2, 4) } ?: 1,
         following = saved.get<Boolean>("following") ?: true,
+        seats = (saved.get<HashMap<String,String>>("seats") ?: hashMapOf()).mapKeys { it.key.toInt() },
+        interior = saved.get<Boolean>("interior") ?: false,
     ))
     val state = current.asStateFlow()
     fun seek(fraction: Float) { publish(current.value.copy(elapsedMillis = (duration * fraction.coerceIn(0f, 1f)).toLong(), playing = false)) }
@@ -27,6 +30,8 @@ class SimulationViewModel(val timeline: TripTimeline, private val saved: SavedSt
     fun pause() { publish(current.value.copy(playing = false)) }
     fun setSpeed(speed: Int) { require(speed in listOf(1, 2, 4)); publish(current.value.copy(speed = speed)) }
     fun follow(value: Boolean) { publish(current.value.copy(following = value)) }
+    fun seat(leg: Int,id: String) { publish(current.value.copy(seats=current.value.seats+(leg to id))) }
+    fun camera(inside: Boolean) { publish(current.value.copy(interior=inside)) }
     /** One real second represents one modeled minute at 1x. */
     fun advance(realMillis: Long) {
         val state = current.value
@@ -38,5 +43,6 @@ class SimulationViewModel(val timeline: TripTimeline, private val saved: SavedSt
         current.value = state
         saved["elapsed"] = state.elapsedMillis; saved["playing"] = state.playing
         saved["speed"] = state.speed; saved["following"] = state.following
+        saved["seats"] = HashMap(state.seats.mapKeys { it.key.toString() }); saved["interior"] = state.interior
     }
 }

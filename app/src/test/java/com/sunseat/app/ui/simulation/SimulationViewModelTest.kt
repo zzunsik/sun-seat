@@ -29,7 +29,10 @@ class SimulationViewModelTest {
         val timeline = timeline()
         val first = SimulationViewModel(timeline, saved)
         first.seek(0.5f); first.setSpeed(4); first.follow(false)
+        first.seat(0,"LEFT-2-WINDOW"); first.seat(1,"rear-RIGHT"); first.camera(true)
         val copied = SavedStateHandle(saved.keys().associateWith { saved.get<Any>(it) })
         assertEquals(first.state.value, SimulationViewModel(timeline, copied).state.value)
+        assertEquals("LEFT-2-WINDOW", first.state.value.seats[0])
+        assertEquals("rear-RIGHT", first.state.value.seats[1])
     }
 }

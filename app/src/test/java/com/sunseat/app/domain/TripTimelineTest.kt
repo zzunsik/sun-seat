@@ -6,6 +6,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class TripTimelineTest {
+    @Test fun sunTracksPlaybackInstantAndInterpolatedLocation() {
+        val movingSun=SunPositionSource { latitude,_,instant -> SunPosition(latitude, java.time.Duration.between(start,instant).seconds.toDouble()/60) }
+        val t=timeline(sun=movingSun)
+        val point=t.at(start.plusSeconds(75))!!
+        assertEquals(37.505,point.sun!!.azimuth,1e-6)
+        assertEquals(1.25,point.sun.altitude,1e-6)
+    }
     private val start = Instant.parse("2026-11-16T00:00:00Z")
     private val source = SunPositionSource { _, _, _ -> SunPosition(90.0, 15.0) }
     private fun leg(mode: Mode, minutes: Long, latitude: Double = 37.5, ground: GroundLevel = GroundLevel.ABOVE) = Leg(mode,

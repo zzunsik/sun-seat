@@ -1,4 +1,5 @@
 [versions]
+filament = "1.80.1"
 datastore = "1.3.0"
 kakaoMap = "2.15.2"
 agp = "9.5.1"
@@ -24,6 +25,7 @@ lottie = "6.7.1"
 shimmer = "1.5.0"
 
 [libraries]
+filament = { module = "com.google.android.filament:filament-android", version.ref = "filament" }
 androidx-datastore-core-okio = { module = "androidx.datastore:datastore-core-okio", version.ref = "datastore" }
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 kakao-map = { module = "com.kakao.maps.open:android", version.ref = "kakaoMap" }
