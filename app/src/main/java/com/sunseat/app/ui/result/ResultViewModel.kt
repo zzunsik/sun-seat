@@ -31,7 +31,7 @@ data class ResultUiState(
  * 결과 계산. 출발 시각이 없으면 "지금". 피하기/받기를 바꾸면 바로 다시 계산한다.
  */
 class ResultViewModel(
-    request: TripRequest,
+    private val request: TripRequest,
     private val chosen: ChosenRoute,
     private val advisor: TripAdvisor = TripAdvisor(),
     now: () -> Instant = { Instant.now() },
@@ -70,7 +70,7 @@ class ResultViewModel(
         val goal = _state.value.goal
         val preference = benchPreference
         job = viewModelScope.launch {
-            val result = withContext(compute) { advisor.advise(chosen.route, departure, goal, benchPreference = preference, totalDuration = chosen.totalDuration) }
+            val result = withContext(compute) { advisor.advise(chosen.route, departure, goal, benchPreference = preference, totalDuration = chosen.totalDuration, travelMode = request.mode) }
             _state.update { it.copy(result = result) }
         }
     }

@@ -59,7 +59,7 @@ fun SettingsScreen(settings: Settings, update: ((Settings) -> Settings) -> Unit,
             ChoiceGroup(stringResource(R.string.settings_default_goal), listOf(ChoiceOption(stringResource(R.string.input_goal_avoid)), ChoiceOption(stringResource(R.string.input_goal_seek))), settings.goal.ordinal,
                 onSelect = { index -> update { it.copy(goal = SunGoal.entries[index]) } })
             Spacer(Modifier.height(Spacing.s))
-            ChoiceGroup(stringResource(R.string.settings_default_mode), listOf(ChoiceOption(stringResource(R.string.input_mode_transit)), ChoiceOption(stringResource(R.string.common_car))), settings.mode.ordinal,
+            ChoiceGroup(stringResource(R.string.settings_default_mode), listOf(ChoiceOption(stringResource(R.string.input_mode_transit)), ChoiceOption(stringResource(R.string.common_taxi)), ChoiceOption(stringResource(R.string.common_car))), settings.mode.ordinal,
                 onSelect = { index -> update { it.copy(mode = TravelMode.entries[index]) } })
         }
         SectionCard(title = stringResource(R.string.settings_bench)) {

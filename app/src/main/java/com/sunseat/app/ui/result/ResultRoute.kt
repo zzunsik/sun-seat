@@ -80,7 +80,7 @@ internal fun shareText(context: Context, request: TripRequest, result: TripResul
     val recommendations = result.legs.mapNotNull { leg ->
         val sit = leg.advice as? LegAdvice.Sit ?: return@mapNotNull null
         val where = when {
-            request.mode == TravelMode.CAR -> sit.carSeats.label(context)
+            request.mode != TravelMode.TRANSIT -> sit.carSeats.label(context)
             leg.leg.mode == Mode.SUBWAY -> context.getString(R.string.share_bench, sit.side.word(context))
             else -> context.getString(R.string.share_window, sit.side.word(context))
         }

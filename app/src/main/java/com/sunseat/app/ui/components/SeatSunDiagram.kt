@@ -30,7 +30,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import com.sunseat.app.domain.Side
+import com.sunseat.app.domain.*
 import com.sunseat.app.ui.icons.SunSeatIcons
 import com.sunseat.app.ui.theme.CapsuleShape
 import com.sunseat.app.ui.theme.Sizes
@@ -60,15 +60,19 @@ fun SeatSunDiagram(
      */
     seatSun: Pair<Boolean, Boolean>? = null,
     sunVisible: Boolean = true,
+    bus: Boolean = false,
+    spot: SeatSpot? = null,
 ) {
     val states = if (!sunVisible) SideState.SHADE to SideState.SHADE else seatSun?.let { (l, r) -> (if (l) SideState.SUN else SideState.SHADE) to (if (r) SideState.SUN else SideState.SHADE) }
         ?.takeIf { sun != DiagramSun.AHEAD }
         ?: (sun.state(Side.LEFT) to sun.state(Side.RIGHT))
-    val desc = if (!sunVisible) stringResource(R.string.diagram_no_sun) else when (sun) {
+    val baseDesc = if (!sunVisible) stringResource(R.string.diagram_no_sun) else when (sun) {
         DiagramSun.LEFT -> stringResource(R.string.diagram_left)
         DiagramSun.RIGHT -> stringResource(R.string.diagram_right)
         DiagramSun.AHEAD -> stringResource(R.string.diagram_ahead)
     } + (recommended?.let { if (it == Side.LEFT) stringResource(R.string.diagram_recommend_left) else stringResource(R.string.diagram_recommend_right) } ?: "")
+    val desc = baseDesc + (if (bus) stringResource(R.string.seat_diagram_bus) else "") +
+        (spot?.let { stringResource(R.string.seat_diagram_spot, stringResource(if (it.side == Side.LEFT) R.string.common_left else R.string.common_right), stringResource(when (it.zone) { SeatZone.FRONT_MIDDLE -> R.string.seat_front_middle; SeatZone.MIDDLE_REAR -> R.string.seat_middle_rear; else -> R.string.common_recommend })) } ?: "")
     Row(
         modifier
             .fillMaxWidth()
@@ -78,7 +82,7 @@ fun SeatSunDiagram(
         horizontalArrangement = Arrangement.spacedBy(Spacing.m),
     ) {
         SideLabel(stringResource(R.string.common_left), states.first, recommended == Side.LEFT, alignEnd = true, modifier = Modifier.weight(1f))
-        Vehicle(sun, states, recommended, car, Modifier.width(Sizes.vehicleWidth).fillMaxHeight(), sunVisible)
+        Vehicle(sun, states, recommended, car, Modifier.width(Sizes.vehicleWidth).fillMaxHeight(), sunVisible, bus, spot)
         SideLabel(stringResource(R.string.common_right), states.second, recommended == Side.RIGHT, alignEnd = false, modifier = Modifier.weight(1f))
     }
 }
@@ -127,7 +131,7 @@ private fun SideLabel(side: String, state: SideState, recommended: Boolean, alig
 }
 
 @Composable
-private fun Vehicle(sun: DiagramSun, states: Pair<SideState, SideState>, recommended: Side?, car: Boolean, modifier: Modifier = Modifier, sunVisible: Boolean = true) {
+private fun Vehicle(sun: DiagramSun, states: Pair<SideState, SideState>, recommended: Side?, car: Boolean, modifier: Modifier = Modifier, sunVisible: Boolean = true, bus: Boolean = false, spot: SeatSpot? = null) {
     val c = SunSeatTheme.colors
     val scheme = SunSeatTheme.scheme
     Canvas(modifier) {
@@ -158,7 +162,7 @@ private fun Vehicle(sun: DiagramSun, states: Pair<SideState, SideState>, recomme
             SideState.SIMILAR -> scheme.surfaceContainerHighest
         }
         val rows = if (car) 2 else 3
-        val seatW = Sizes.diagramSeat.toPx()
+        val seatW = Sizes.diagramSeat.toPx() / (if (bus) 2f else 1f)
         val seatH = (if (car) Sizes.diagramCarSeatHeight else Sizes.diagramSeat).toPx()
         val gap = (if (car) Sizes.diagramCarSeatGap else Sizes.diagramSeatGap).toPx()
         val seatR = CornerRadius(Sizes.diagramSeatRadius.toPx())
@@ -168,7 +172,9 @@ private fun Vehicle(sun: DiagramSun, states: Pair<SideState, SideState>, recomme
         val ring = Stroke(Sizes.diagramRing.toPx())
         repeat(rows) { i ->
             val y = startY + i * (seatH + gap)
-            listOf(Side.LEFT to leftX, Side.RIGHT to rightX).forEach { (side, x) ->
+            val positions = if (bus) listOf(Triple(Side.LEFT, leftX, SeatPosition.WINDOW), Triple(Side.LEFT, leftX + seatW + Spacing.xs.toPx(), SeatPosition.AISLE), Triple(Side.RIGHT, rightX - seatW - Spacing.xs.toPx(), SeatPosition.AISLE), Triple(Side.RIGHT, rightX, SeatPosition.WINDOW))
+                else listOf(Triple(Side.LEFT, leftX, SeatPosition.WINDOW), Triple(Side.RIGHT, rightX, SeatPosition.WINDOW))
+            positions.forEach { (side, x, position) ->
                 val driver = car && i == 0 && side == Side.LEFT
                 if (driver) {
                     // 운전석: 운전대(바퀴살 3개)로 그려 추천 테두리와 구분한다(추천 대상 아님)
@@ -181,7 +187,16 @@ private fun Vehicle(sun: DiagramSun, states: Pair<SideState, SideState>, recomme
                     drawLine(scheme.onSurfaceVariant, Offset(cx, cy), Offset(cx, cy + wr), sw)
                 } else {
                     drawRoundRect(color(side), Offset(x, y), Size(seatW, seatH), seatR)
-                    if (side == recommended) {
+                    val inZone = when (spot?.zone) {
+                        SeatZone.FRONT_MIDDLE -> i <= 1
+                        SeatZone.MIDDLE_REAR -> i >= 1
+                        SeatZone.FRONT -> i == 0
+                        SeatZone.MIDDLE -> i == 1
+                        SeatZone.REAR -> i == rows - 1
+                        null -> true
+                    }
+                    val inSeat = when (spot?.carSeat) { CarSeat.PASSENGER -> i == 0 && side == Side.RIGHT; CarSeat.REAR_LEFT -> i == 1 && side == Side.LEFT; CarSeat.REAR_RIGHT -> i == 1 && side == Side.RIGHT; null -> true }
+                    if (side == recommended && inZone && inSeat && (!bus || spot?.position == null || spot.position == position)) {
                         val o = Sizes.diagramRingOffset.toPx()
                         drawRoundRect(scheme.onSurface, Offset(x - o, y - o), Size(seatW + 2 * o, seatH + 2 * o), CornerRadius(seatR.x + o), style = ring)
                     }

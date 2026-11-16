@@ -77,7 +77,7 @@ fun SimulationScreen(
                 }, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                 if (point != null && !excluded && !noGeometry) SeatSunDiagram(
                     sun = if (point.ahead) DiagramSun.AHEAD else if (point.sunSide == Side.LEFT) DiagramSun.LEFT else DiagramSun.RIGHT,
-                    recommended = point.recommended, car = point.leg.mode == Mode.CAR,
+                    recommended = point.recommended, car = point.leg.mode == Mode.CAR, bus = point.leg.mode == Mode.BUS, spot = point.spot,
                     seatSun = (Side.LEFT in point.litSides) to (Side.RIGHT in point.litSides),
                     sunVisible = (point.sun?.altitude ?: -90.0) > 0,
                 )

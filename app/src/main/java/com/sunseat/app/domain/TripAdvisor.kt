@@ -11,7 +11,12 @@ data class Span(val start: Float, val end: Float)
 /** 탑승 구간 하나의 결론. */
 sealed interface LegAdvice {
     /** [side] 쪽에 앉으며 자가용이면 [carSeats]를 함께 전달한다. */
-    data class Sit(val side: Side, val carSeats: List<CarSeat> = emptyList()) : LegAdvice
+    data class Sit(
+        val side: Side, val carSeats: List<CarSeat> = emptyList(),
+        val spot: SeatSpot = SeatSpot(side), val alternative: SeatSpot? = null,
+        val switches: List<SeatSwitch> = emptyList(), val reasons: Set<SeatReason> = emptySet(),
+        val similarSides: Boolean = false,
+    ) : LegAdvice
     data object NoDifference : LegAdvice
     data object NoSun : LegAdvice
 
@@ -40,6 +45,8 @@ data class LegResult(
     val aheadSun: Duration = Duration.ZERO,
     val leftBench: BenchTimes? = null,
     val rightBench: BenchTimes? = null,
+    val frontWindows: List<FrontSunWindow> = emptyList(),
+    val followedSun: Duration? = null,
 ) {
     fun sun(side: Side): Duration = if (side == Side.LEFT) leftSun else rightSun
     fun bench(side: Side): BenchTimes? = if (side == Side.LEFT) leftBench else rightBench
@@ -95,6 +102,10 @@ class TripAdvisor(
     private val benches: SubwayBenchRecommender = SubwayBenchRecommender(),
     /** 해가 진행 방향 ±이 각도 안(앞·뒤)이면 버스·자가용 옆 창 햇빛으로 치지 않는다. 구간 전체가 그렇다면 "차이 없음" */
     private val aheadConeDeg: Double = AHEAD_CONE_DEG,
+    val frontMaxAltitude: Double = FRONT_MAX_ALTITUDE,
+    val sideFrontMaxAngle: Double = SIDE_FRONT_MAX_ANGLE,
+    val busMaxEffectiveAltitude: Double = BUS_MAX_EFFECTIVE_ALTITUDE,
+    val switchMinDuration: Duration = Duration.ofMinutes(SWITCH_MIN_MINUTES),
 ) {
     private val minSideness = sin(Math.toRadians(aheadConeDeg))
 
@@ -127,12 +138,13 @@ class TripAdvisor(
         goal: SunGoal,
         benchPreference: BenchPreference = BenchPreference.AVOID_BACK,
         totalDuration: Duration = route.duration,
+        travelMode: TravelMode = TravelMode.TRANSIT,
     ): TripResult {
         val exposure = analyzer.analyze(route, departure)
         val seatByLeg = seats.recommend(exposure, goal).associateBy { it.legIndex }
         val benchByLeg = benches.recommend(exposure, benchPreference, goal).associateBy { it.legIndex }
 
-        val legs = exposure.legs.map { le ->
+        val baseLegs = exposure.legs.map { le ->
             var left = Duration.ZERO
             var right = Duration.ZERO
             var ahead = Duration.ZERO
@@ -176,12 +188,25 @@ class TripAdvisor(
             }
         }
 
+        val legs = baseLegs.map { result ->
+            val le = exposure.legs.first { it.legIndex == result.index }
+            val initial = result.advice as? LegAdvice.Sit
+                ?: if (result.advice == LegAdvice.NoDifference && le.leg.mode != Mode.WALK) LegAdvice.Sit(Side.RIGHT, similarSides = true) else null
+            val detailed = initial?.let { detail(le, it, goal, travelMode, benchPreference) }
+                ?.takeUnless { le.leg.mode == Mode.SUBWAY && result.advice == LegAdvice.NoDifference && it.switches.isEmpty() }
+            val followed = detailed?.let { d -> le.segments.fold(Duration.ZERO) { total, segment ->
+                val side = d.sideAt(segment.startTime)
+                if (side in illumination(le.leg, segment).first) total + segment.duration else total
+            } }
+            result.copy(advice = detailed ?: result.advice, frontWindows = frontWindows(le, detailed), followedSun = followed)
+        }
         val rides = legs.filter { it.advice !in setOf(LegAdvice.Walk, LegAdvice.Underground, LegAdvice.UnknownGround) }
         val sits = rides.mapNotNull { it.advice as? LegAdvice.Sit }
         val advice = when {
             rides.isEmpty() || rides.all { it.advice == LegAdvice.NoSun } -> TripAdvice.NoSun
             sits.isEmpty() -> TripAdvice.NoDifference
-            sits.map { it.side }.distinct().size > 1 -> TripAdvice.Mixed
+            sits.map { it.side }.distinct().size > 1 || sits.any { it.switches.isNotEmpty() } -> TripAdvice.Mixed
+            sits.all { it.similarSides } && travelMode != TravelMode.TAXI -> TripAdvice.NoDifference
             else -> sits.maxBy { s -> rides.first { it.advice == s }.leg.duration }.let { TripAdvice.Sit(it.side, it.carSeats) }
         }
 
@@ -189,7 +214,7 @@ class TripAdvisor(
         var sun = Duration.ZERO
         rides.forEach { r ->
             val side = (r.advice as? LegAdvice.Sit)?.side
-            val got = (if (side == null) minOf(r.leftSun, r.rightSun) else r.sun(side)).coerceAtMost(r.leg.duration)
+            val got = r.followedSun ?: (if (side == null) minOf(r.leftSun, r.rightSun) else r.sun(side)).coerceAtMost(r.leg.duration)
             sun += got
             shade += r.leg.duration - got
         }
@@ -212,7 +237,7 @@ class TripAdvisor(
         val walkSpans = exposure.legs.filter { it.leg.mode == Mode.WALK || (it.leg.mode == Mode.SUBWAY && it.leg.groundLevel != GroundLevel.ABOVE) }
             .map { Span(pos(it.startTime), pos(it.startTime + it.leg.duration)) }
 
-        val glare = if (route.legs.any { it.mode == Mode.CAR }) {
+        val glare = if (travelMode != TravelMode.TAXI && route.legs.any { it.mode == Mode.CAR }) {
             seats.glareIntervals(exposure).map {
                 GlareWindow(it.startTime, it.endTime, Duration.between(departure, it.startTime).toMinutes(), Duration.between(departure, it.endTime).toMinutes())
             }
@@ -238,6 +263,71 @@ class TripAdvisor(
         )
     }
 
+    /** Detailed positions share the existing illumination and ahead-cone decision. */
+    internal fun detail(le: LegExposure, initial: LegAdvice.Sit, goal: SunGoal, travel: TravelMode, preference: BenchPreference): LegAdvice.Sit {
+        val lit = le.segments.filter { it.sun.altitude > 0 }
+        fun angle(s: SegmentExposure) = minOf(s.relativeAngle, 360 - s.relativeAngle)
+        fun duration(predicate: (SegmentExposure) -> Boolean) = lit.filter(predicate).fold(Duration.ZERO) { a, s -> a + s.duration }
+        val front = duration { illumination(le.leg, it).second && angle(it) < 90 && it.sun.altitude <= frontMaxAltitude }
+        val rear = duration { illumination(le.leg, it).second && angle(it) > 90 && it.sun.altitude <= frontMaxAltitude }
+        val sideFront = duration { !illumination(le.leg, it).second && angle(it) <= sideFrontMaxAngle }
+        val sideRear = duration { !illumination(le.leg, it).second && angle(it) >= 180 - sideFrontMaxAngle }
+        val reasons = mutableSetOf<SeatReason>()
+        val frontScore = front + sideFront
+        val rearScore = rear + sideRear
+        var zone: SeatZone? = null
+        if (le.leg.mode == Mode.BUS && frontScore != rearScore) {
+            val avoidFront = (frontScore > rearScore) == (goal == SunGoal.AVOID)
+            zone = if (avoidFront) SeatZone.MIDDLE_REAR else SeatZone.FRONT_MIDDLE
+            reasons += if (frontScore > rearScore) { if (!front.isZero) SeatReason.LOW_FRONT else SeatReason.SIDE_FRONT }
+                else { if (!rear.isZero) SeatReason.LOW_REAR else SeatReason.SIDE_REAR }
+        }
+        if (le.leg.mode == Mode.CAR) {
+            if (!front.isZero) reasons += SeatReason.LOW_FRONT
+            if (!rear.isZero) reasons += SeatReason.LOW_REAR
+            if (travel == TravelMode.TAXI && initial.side == Side.LEFT) reasons += SeatReason.TAXI_RIGHT_DOOR
+        }
+        val cross = duration { illumination(le.leg, it).first.isNotEmpty() && SubwayBenchRecommender.effectiveAltitude(it) <= busMaxEffectiveAltitude }
+        if (goal == SunGoal.AVOID && le.leg.mode == Mode.BUS && !cross.isZero && cross >= le.leg.duration.dividedBy(2)) reasons += SeatReason.CROSS_CABIN
+        val carSeats = if (le.leg.mode == Mode.CAR) initial.carSeats.ifEmpty { SeatRecommender.carSeats(initial.side) }
+            .filter { it != CarSeat.PASSENGER || (travel != TravelMode.TAXI && (front.isZero || goal == SunGoal.SEEK)) } else emptyList()
+        val spot = SeatSpot(initial.side, zone, if (le.leg.mode == Mode.BUS) SeatPosition.WINDOW else null, carSeats.firstOrNull())
+        val alternative = if (le.leg.mode == Mode.BUS) SeatSpot(if (goal == SunGoal.AVOID) initial.side.opposite else initial.side, zone, SeatPosition.AISLE) else null
+        val runs = mutableListOf<Pair<Side?, MutableList<SegmentExposure>>>()
+        le.segments.forEach { segment ->
+            val sides = illumination(le.leg, segment).first
+            val preferred = if (le.leg.mode == Mode.SUBWAY) {
+                (benches.recommend(RouteExposure(listOf(le.copy(segments = listOf(segment)))), preference, goal).firstOrNull()?.advice as? BenchAdvice.Recommend)?.side
+            } else sides.singleOrNull()?.let { if (goal == SunGoal.AVOID) it.opposite else it }
+            val last = runs.lastOrNull()
+            if (last != null && last.first == preferred && last.second.lastOrNull()?.endTime == segment.startTime) last.second += segment
+            else runs += preferred to mutableListOf(segment)
+        }
+        // Start with the first sustained recommendation, avoiding a move at departure.
+        val sustained = runs.filter { it.first != null && it.second.fold(Duration.ZERO) { a, s -> a + s.duration } >= switchMinDuration }
+        val firstSide = if (le.leg.mode in setOf(Mode.BUS, Mode.SUBWAY)) sustained.firstOrNull()?.first ?: initial.side else initial.side
+        var current = firstSide
+        val switches = if (le.leg.mode !in setOf(Mode.BUS, Mode.SUBWAY)) emptyList() else sustained.mapNotNull { (side, segments) ->
+            if (side == current || side == null) null else {
+                current = side
+                SeatSwitch(segments.first().startTime, null, spot.copy(side = side))
+            }
+        }
+        return initial.copy(side = firstSide, carSeats = carSeats, spot = spot.copy(side = firstSide), alternative = alternative?.copy(side = if (goal == SunGoal.AVOID) firstSide.opposite else firstSide), reasons = reasons, switches = switches)
+    }
+
+    private fun frontWindows(le: LegExposure, advice: LegAdvice.Sit?): List<FrontSunWindow> {
+        if (le.leg.mode != Mode.SUBWAY || le.leg.groundLevel != GroundLevel.ABOVE || advice == null) return emptyList()
+        val out = mutableListOf<FrontSunWindow>()
+        le.segments.filter { advice.sideAt(it.startTime) in illumination(le.leg, it).first && it.side != advice.sideAt(it.startTime) }.forEach { s ->
+            val side = advice.sideAt(s.startTime)
+            val last = out.lastOrNull()
+            if (last?.end == s.startTime && last.side == side) out[out.lastIndex] = last.copy(end = s.endTime)
+            else out += FrontSunWindow(s.startTime, s.endTime, side)
+        }
+        return out
+    }
+
     private fun frac(d: Duration, total: Duration): Float =
         (d.toMillis().toDouble() / total.toMillis()).coerceIn(0.0, 1.0).toFloat()
 
@@ -254,5 +344,28 @@ class TripAdvisor(
 
     companion object {
         const val AHEAD_CONE_DEG = 25.0
+        const val FRONT_MAX_ALTITUDE = 25.0
+        const val SIDE_FRONT_MAX_ANGLE = 60.0
+        const val BUS_MAX_EFFECTIVE_ALTITUDE = 30.0
+        const val SWITCH_MIN_MINUTES = 5L
     }
 }
+
+/** Positions describe relative locations, never a vehicle-specific seat count. */
+enum class SeatZone { FRONT_MIDDLE, MIDDLE_REAR, FRONT, MIDDLE, REAR }
+enum class SeatPosition { WINDOW, AISLE }
+enum class SeatReason { LOW_FRONT, LOW_REAR, SIDE_FRONT, SIDE_REAR, CROSS_CABIN, TAXI_RIGHT_DOOR }
+data class SeatSpot(val side: Side, val zone: SeatZone? = null, val position: SeatPosition? = null, val carSeat: CarSeat? = null)
+data class SeatSwitch(val at: Instant, val stopName: String?, val to: SeatSpot)
+data class FrontSunWindow(val start: Instant, val end: Instant, val side: Side)
+
+fun LegAdvice.Sit.spotAt(time: Instant): SeatSpot {
+    var low = 0
+    var high = switches.size
+    while (low < high) {
+        val mid = (low + high) ushr 1
+        if (switches[mid].at <= time) low = mid + 1 else high = mid
+    }
+    return if (low == 0) spot else switches[low - 1].to
+}
+fun LegAdvice.Sit.sideAt(time: Instant): Side = spotAt(time).side

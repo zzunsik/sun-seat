@@ -103,7 +103,7 @@ private const val TICK_EDGE_MARGIN = 0.18f
 /** 결론 문장. 대중교통은 "진행 방향 왼쪽에 앉으세요"(버스 창가·지하철 벤치 모두), 자가용은 좌석 이름. */
 internal fun headlineRes(context: android.content.Context, request: TripRequest, result: TripResult): Pair<Int, String?> = when (val a = result.advice) {
     is TripAdvice.Sit ->
-        if (request.mode == TravelMode.CAR) R.string.result_sit_car to a.carSeats.label(context)
+        if (request.mode != TravelMode.TRANSIT) R.string.result_sit_car to a.carSeats.label(context)
         else R.string.result_sit_side to a.side.word(context)
     TripAdvice.Mixed -> R.string.result_mixed to null
     TripAdvice.NoDifference -> R.string.result_no_difference to null
@@ -157,10 +157,10 @@ fun ResultScreen(
                         Text(
                             if (result != null) stringResource(
                                 R.string.result_schedule,
-                                stringResource(if (request.mode == TravelMode.CAR) R.string.common_car else R.string.input_mode_transit),
+                                stringResource(when (request.mode) { TravelMode.TAXI -> R.string.common_taxi; TravelMode.CAR -> R.string.common_car; else -> R.string.input_mode_transit }),
                                 state.departure.atZone(zone).format(TimeFormat), result.arrival.atZone(zone).format(TimeFormat),
                             ) else stringResource(
-                                if (request.mode == TravelMode.CAR) R.string.result_subtitle_car else R.string.result_subtitle_transit,
+                                if (request.mode != TravelMode.TRANSIT) R.string.result_subtitle_car else R.string.result_subtitle_transit,
                                 state.departure.atZone(zone).format(TimeFormat),
                             ),
                             style = MaterialTheme.typography.bodySmall,
@@ -342,7 +342,9 @@ private fun ResultContent(
                             SunPlacement.RIGHT -> DiagramSun.RIGHT
                         },
                         recommended = sit?.side,
-                        car = request.mode == TravelMode.CAR,
+                        car = request.mode != TravelMode.TRANSIT,
+                        bus = result.legs.firstOrNull { it.advice is LegAdvice.Sit }?.leg?.mode == Mode.BUS,
+                        spot = (result.legs.firstOrNull { it.advice is LegAdvice.Sit }?.advice as? LegAdvice.Sit)?.spot,
                         seatSun = (!result.leftSeatSun.isZero) to (!result.rightSeatSun.isZero),
                     )
                 }
@@ -367,7 +369,7 @@ private fun ResultContent(
             SectionCard(title = stringResource(R.string.result_legs)) {
                 result.legs.forEachIndexed { i, leg ->
                     if (i > 0) HorizontalDivider(color = scheme.outlineVariant)
-                    LegRow(leg, request.mode, actions.onSettings)
+                    LegRow(leg, request.mode, result.departure, zone, actions.onSettings)
                 }
             }
         }
@@ -375,7 +377,7 @@ private fun ResultContent(
 }
 
 @Composable
-private fun LegRow(leg: LegResult, mode: TravelMode, onSettings: () -> Unit) {
+private fun LegRow(leg: LegResult, mode: TravelMode, departure: Instant, zone: ZoneId, onSettings: () -> Unit) {
     val scheme = SunSeatTheme.scheme
     val icon = when (leg.leg.mode) {
         Mode.SUBWAY -> R.drawable.ic_ms_directions_subway
@@ -411,12 +413,13 @@ private fun LegRow(leg: LegResult, mode: TravelMode, onSettings: () -> Unit) {
             is LegAdvice.Sit -> {
                 val subway = leg.leg.mode == Mode.SUBWAY
                 val advice = when {
-                    mode == TravelMode.CAR -> stringResource(R.string.result_leg_sit_car, a.carSeats.label())
+                    mode != TravelMode.TRANSIT -> stringResource(R.string.result_leg_sit_car, a.carSeats.label())
                     subway -> stringResource(R.string.result_leg_sit_bench, a.side.word())
                     else -> stringResource(R.string.result_leg_sit_window, a.side.word())
                 }
                 Text(advice, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurface, fontWeight = FontWeight.SemiBold)
-                val got = leg.sun(a.side)
+                SeatDetails(leg, a, mode, departure, zone)
+                val got = leg.followedSun ?: leg.sun(a.side)
                 if (got.isZero) ExposurePill(Exposure.Shade, stringResource(R.string.result_leg_shade))
                 else ExposurePill(Exposure.Sun, stringResource(R.string.result_leg_sun, formatDuration(got)))
                 if (subway) {
@@ -455,7 +458,11 @@ private fun LegRow(leg: LegResult, mode: TravelMode, onSettings: () -> Unit) {
 internal fun mixedSummary(result: TripResult): String {
     val sits = result.legs.mapNotNull { l -> (l.advice as? LegAdvice.Sit)?.let { l to it } }
     val parts = sits.mapIndexed { i, (l, a) ->
-        if (i == 0) stringResource(R.string.result_mixed_part, l.leg.endName, a.side.word())
+        if (a.switches.isNotEmpty()) {
+            (listOf(stringResource(R.string.seat_initial, a.side.word())) + a.switches.map {
+                stringResource(R.string.seat_switch, it.stopName ?: stringResource(R.string.seat_after_minutes, Duration.between(result.departure, it.at).toMinutes()), it.to.label())
+            }).joinToString(", ")
+        } else if (i == 0) stringResource(R.string.result_mixed_part, l.leg.endName, a.side.word())
         else stringResource(R.string.result_mixed_then, l.leg.startName, a.side.word())
     }
     return parts.joinToString(", ")

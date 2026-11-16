@@ -114,14 +114,14 @@ fun CandidatesScreen(
                         IconButton(onClick = actions.onBack) { Icon(painterResource(R.drawable.ic_ms_arrow_back), stringResource(R.string.common_back)) }
                         Text("${request.origin.name} → ${request.destination.name}", Modifier.weight(1f).heightIn(min = Spacing.touch).clickable(role = Role.Button, onClick = actions.onBack), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    NeutralTabs(listOf(stringResource(R.string.input_mode_transit), stringResource(R.string.common_car)), request.mode.ordinal) { actions.onRequestChange(request.copy(mode = TravelMode.entries[it])) }
+                    NeutralTabs(listOf(stringResource(R.string.input_mode_transit), stringResource(R.string.common_taxi), stringResource(R.string.common_car)), request.mode.ordinal) { actions.onRequestChange(request.copy(mode = TravelMode.entries[it])) }
                     QuietButton(onClick = { showTime = true }) { Text(scheduleLabel(request.departure, request.timeMode)); Icon(painterResource(R.drawable.ic_ms_chevron_right), null, Modifier.size(Sizes.iconSmall).rotate(90f)) }
                 }
             }
         },
         sheetContent = {
             Column(Modifier.fillMaxWidth().heightIn(max = Sizes.mapHeight * 3), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                if (options != null) {
+                if (options != null && request.mode == TravelMode.TRANSIT) {
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState(initial = if (options.sort.ordinal >= 3) Int.MAX_VALUE else 0)).padding(horizontal = Spacing.screen), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
                         CandidateSort.entries.forEach { sort -> NeutralFilterChip(options.sort == sort, sortLabel(sort, request.goal)) { actions.onSort(sort) } }
                     }
@@ -227,11 +227,12 @@ private fun CandidateCard(item: CandidateUi, selected: Boolean, request: TripReq
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
                 Text(formatDuration(item.totalDuration), style = MaterialTheme.typography.headlineSmall, color = scheme.onSurface)
                 item.arrival?.let { Text(stringResource(R.string.candidates_arrival, it.format(ArrivalFormat)), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant) }
-                item.fare?.let { Text(formatWon(it), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant) }
+                if (request.mode != TravelMode.TAXI) item.fare?.let { Text(formatWon(it), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant) }
                 if (selected) Icon(painterResource(R.drawable.ic_ms_check), stringResource(R.string.candidates_selected), Modifier.size(Sizes.iconSmall))
             }
-            RouteSegmentBar(item)
-            Text(listOf(stringResource(R.string.candidates_transfers, item.transfers), stringResource(R.string.candidates_walk, item.walkMinutes)).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+            if (request.mode == TravelMode.TAXI) item.fare?.let { Text(stringResource(R.string.candidates_taxi_fare, formatWon(it)), style = MaterialTheme.typography.bodyMedium) }
+            RouteSegmentBar(item, taxi = request.mode == TravelMode.TAXI)
+            if (request.mode == TravelMode.TRANSIT) Text(listOf(stringResource(R.string.candidates_transfers, item.transfers), stringResource(R.string.candidates_walk, item.walkMinutes)).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             val result = item.chosen.cachedResult
             if (result == null) {
                 Box(Modifier.fillMaxWidth().height(Sizes.timelineBar).background(scheme.surfaceContainerHighest))

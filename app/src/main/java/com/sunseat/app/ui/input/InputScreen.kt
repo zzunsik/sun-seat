@@ -97,7 +97,7 @@ fun InputScreen(
                 EndpointsCard(state, actions)
                 Surface(color = scheme.surface, shape = MaterialTheme.shapes.large) {
                     Column(Modifier.padding(Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                        NeutralTabs(listOf(stringResource(R.string.input_mode_transit), stringResource(R.string.common_car)), state.mode.ordinal) { actions.setMode(TravelMode.entries[it]) }
+                        NeutralTabs(listOf(stringResource(R.string.input_mode_transit), stringResource(R.string.common_taxi), stringResource(R.string.common_car)), state.mode.ordinal) { actions.setMode(TravelMode.entries[it]) }
                         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
                             QuietButton(onClick = { showTime = true }) { Text(scheduleLabel(state.departure, state.timeMode)); DropArrow() }
                             QuietButton(onClick = { showGoal = true }) { Text(stringResource(if (state.goal == SunGoal.AVOID) R.string.input_goal_chip_avoid else R.string.input_goal_chip_seek)); DropArrow() }

@@ -116,6 +116,22 @@ class KakaoTransitRouteApiTest {
     }
 
     @Test
+    fun splitsMixedGroundRouteAndPreservesDurationAndGeometry() {
+        val option = PtRoute(steps = listOf(PtStep(properties = PtStepProperties(
+            type = "SUBWAY", time = 1200.0,
+            stops = listOf("왕십리", "한양대", "뚝섬", "성수", "건대입구").map { PtStop(it) },
+            vehicles = listOf(PtVehicle("2호선")),
+        ), path = PtPath(listOf(listOf(127.0, 37.0), listOf(127.1, 37.1), listOf(127.2, 37.0)))))).toOption()!!
+        org.junit.Assert.assertTrue(option.route.legs.size > 1)
+        org.junit.Assert.assertTrue(option.route.legs.any { it.groundLevel == com.sunseat.app.domain.GroundLevel.ABOVE })
+        org.junit.Assert.assertTrue(option.route.legs.any { it.groundLevel == com.sunseat.app.domain.GroundLevel.BELOW })
+        assertEquals(Duration.ofSeconds(1200), option.route.duration)
+        assertEquals(option.route.legs.size, option.legDetails.size)
+        option.route.legs.zipWithNext().forEach { (a, b) -> assertEquals(a.path.last(), b.path.first()) }
+        org.junit.Assert.assertTrue(option.route.legs.all { it.estimatedStationTiming })
+    }
+
+    @Test
     fun noResults() = runBlocking {
         server.enqueueJson(
             """{"status":"NO_RESULTS","properties":{"total":0,"bus":0,"subway":0,"busAndSubway":0},"routes":[]}""",

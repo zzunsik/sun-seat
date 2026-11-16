@@ -21,13 +21,13 @@ import com.sunseat.app.ui.theme.SunSeatTheme
 
 /** Segment widths follow modeled leg durations; labels remain available without color. */
 @Composable
-fun RouteSegmentBar(item: CandidateUi, modifier: Modifier = Modifier) {
+fun RouteSegmentBar(item: CandidateUi, modifier: Modifier = Modifier, taxi: Boolean = false) {
     val scheme = SunSeatTheme.scheme
     val labels = item.chips.map { chip -> when (chip.mode) {
         Mode.WALK -> stringResource(R.string.candidates_walk, chip.walkMinutes)
         Mode.SUBWAY -> chip.lineName.ifBlank { stringResource(R.string.common_subway) }
         Mode.BUS -> stringResource(R.string.candidates_bus_name, chip.lineName)
-        Mode.CAR -> stringResource(R.string.common_car)
+        Mode.CAR -> stringResource(if (taxi) R.string.common_taxi else R.string.common_car)
     } }
     val weights = item.chosen.route.legs.map { it.duration.seconds.toFloat().coerceAtLeast(1f) }
     val total = weights.sum().coerceAtLeast(1f)

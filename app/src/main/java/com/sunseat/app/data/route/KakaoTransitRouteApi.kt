@@ -135,6 +135,7 @@ internal fun PtRoute.toOption(): TransitRouteOption? {
         val stopNames = p.stops.map { it.name }
         legs += Leg(
             mode = mode,
+            busType = if (mode == Mode.BUS) p.vehicles.firstOrNull()?.type else null,
             path = step.path?.points.orEmpty().mapNotNull { it.toLatLng() },
             duration = Duration.ofSeconds(p.time.roundToLong()),
             startName = stopNames.firstOrNull().orEmpty(),
@@ -150,8 +151,32 @@ internal fun PtRoute.toOption(): TransitRouteOption? {
             guidance = p.guidance,
         )
     }
+    val expandedLegs = mutableListOf<Leg>()
+    val expandedDetails = mutableListOf<TransitLegDetail>()
+    legs.zip(details).forEach { (leg, detail) ->
+        val levels = detail.stops.zipWithNext { a, b ->
+            detail.vehicles.map { com.sunseat.app.domain.SubwayGroundData.bundled.section(it.name, listOf(a, b)) }
+                .distinct().singleOrNull() ?: com.sunseat.app.domain.GroundLevel.UNKNOWN
+        }
+        // Only split mixed ground-status steps. Station times/coordinates are absent in this API;
+        // equal station-interval fractions are an explicitly labeled estimate, never exact stop times.
+        if (leg.mode == Mode.SUBWAY && levels.distinct().size > 1 && leg.path.size >= 2) {
+            levels.forEachIndexed { i, level ->
+                val from = i.toDouble() / levels.size
+                val to = (i + 1).toDouble() / levels.size
+                val startNanos = (leg.duration.toNanos() * from).toLong()
+                val endNanos = (leg.duration.toNanos() * to).toLong()
+                expandedLegs += leg.copy(path = slicePath(leg.path, from, to), duration = Duration.ofNanos(endNanos - startNanos),
+                    startName = detail.stops[i], endName = detail.stops[i + 1], groundLevel = level, estimatedStationTiming = true)
+                expandedDetails += detail.copy(stops = detail.stops.subList(i, i + 2))
+            }
+        } else {
+            expandedLegs += leg
+            expandedDetails += detail
+        }
+    }
     return TransitRouteOption(
-        route = Route(legs),
+        route = Route(expandedLegs),
         type = when (properties.type) {
             "BUS" -> TransitRouteType.BUS
             "SUBWAY" -> TransitRouteType.SUBWAY
@@ -162,10 +187,26 @@ internal fun PtRoute.toOption(): TransitRouteOption? {
         distanceMeters = properties.totalDistance.roundToInt(),
         transfers = properties.transfers,
         fare = properties.fare?.value,
-        legDetails = details,
+        legDetails = expandedDetails,
     )
 }
 
 /** 카카오 좌표 [경도, 위도] → [LatLng]. 형식이 맞지 않으면 null. */
 internal fun List<Double>.toLatLng(): LatLng? =
     if (size >= 2) LatLng(latitude = this[1], longitude = this[0]) else null
+
+/** Preserve turns while cutting an estimated station interval by traveled distance. */
+internal fun slicePath(path: List<LatLng>, from: Double, to: Double): List<LatLng> {
+    val lengths = path.zipWithNext { a, b -> com.sunseat.app.domain.ExposureAnalyzer.distanceMeters(a, b) }
+    val total = lengths.sum()
+    if (total <= 0) return listOf(path.first(), path.last())
+    val cumulative = listOf(0.0) + lengths.runningFold(0.0) { a, b -> a + b }.drop(1)
+    fun at(fraction: Double): LatLng {
+        val target = total * fraction
+        val index = lengths.indices.firstOrNull { cumulative[it + 1] >= target && lengths[it] > 0 } ?: lengths.lastIndex
+        val f = if (lengths[index] <= 0) 0.0 else ((target - cumulative[index]) / lengths[index]).coerceIn(0.0, 1.0)
+        return LatLng(path[index].latitude + (path[index + 1].latitude - path[index].latitude) * f,
+            path[index].longitude + (path[index + 1].longitude - path[index].longitude) * f)
+    }
+    return listOf(at(from)) + path.indices.filter { cumulative[it] > total * from && cumulative[it] < total * to }.map { path[it] } + at(to)
+}

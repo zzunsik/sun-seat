@@ -130,7 +130,7 @@ class CandidatesViewModel(
     private val zone: ZoneId = ZoneId.systemDefault(),
     private val preference: BenchPreference = BenchPreference.AVOID_BACK,
     private val calculate: suspend (Route, Instant, SunGoal, BenchPreference, Duration) -> TripResult = { route, departure, goal, bench, total ->
-        TripAdvisor().advise(route, departure, goal, bench, total)
+        TripAdvisor().advise(route, departure, goal, bench, total, request.mode)
     },
 ) : ViewModel() {
 
@@ -170,14 +170,21 @@ class CandidatesViewModel(
                     }
                     is ApiResult.Failure -> r.error.toState()
                 }
-                TravelMode.CAR -> when (val r = car.search(origin, destination)) {
+                TravelMode.CAR, TravelMode.TAXI -> when (val r = car.search(origin, destination)) {
                     is ApiResult.Success -> {
                         val option = r.value.option
                         if (option != null) {
                             currentCoroutineContext().ensureActive()
                             if (version != generation) return@launch
-                            _autoSelected.send(ChosenRoute(option.route, option.duration))
-                            CandidatesState.Loading(TravelMode.CAR)
+                            if (request.mode == TravelMode.TAXI) CandidatesState.Options(listOf(CandidateUi(
+                                id = 0, totalDuration = option.duration, arrival = (request.departureInstant(option.duration, base, zone) + option.duration).atZone(zone).toLocalDateTime(),
+                                transfers = 0, walkMinutes = 0, fare = option.taxiFare.takeIf { it > 0 }, fastest = false,
+                                chips = listOf(LegChip(Mode.CAR)), boardAt = request.origin.name, alightAt = request.destination.name,
+                                chosen = ChosenRoute(option.route, option.duration),
+                            )), goal = request.goal) else {
+                                _autoSelected.send(ChosenRoute(option.route, option.duration))
+                                CandidatesState.Loading(TravelMode.CAR)
+                            }
                         } else {
                             CandidatesState.NoRoute(r.value.noRouteReason.messageRes(), null, suggestCar = false)
                         }
