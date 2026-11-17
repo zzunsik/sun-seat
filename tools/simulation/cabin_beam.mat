@@ -9,6 +9,7 @@ material {
 fragment {
     void material(inout MaterialInputs material) {
         prepareMaterial(material);
+        // Vertex RGB is already premultiplied by alpha in CabinMesh.beams.
         material.baseColor = getColor();
     }
 }

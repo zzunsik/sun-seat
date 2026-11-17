@@ -183,17 +183,13 @@ internal class CabinMesh {
                 val n=if(cell.surface==SeatSurface.CUSHION) V3(0.0,1.0,0.0) else seat.facing
                 val end=cell.center+n*.006
                 val start=cell.windowPoint!!+light.towardSun*.55
-                ray(start,end,sun.copyOf().apply { this[3]=.75f },.006)
+                // Filament transparent blending expects premultiplied vertex RGB.
+                val beamColor=sun.copyOf().apply { this[3]=.65f; for(i in 0..2) this[i]*=this[3] }
+                ray(start,end,beamColor,.006)
                 val tip=cell.windowPoint-light.towardSun*.12
                 val side=light.towardSun.cross(V3(0.0,1.0,.001)).unit()*.045
                 ray(tip,tip+light.towardSun*.12+side,sun,.006)
                 ray(tip,tip+light.towardSun*.12-side,sun,.006)
-            }
-            // A weak parallel ribbon links two actual passing rays; never widen into a spotlight cone.
-            if(chosen.size>1) {
-                val a=chosen.first(); val b=chosen.last()
-                val color=sun.copyOf().apply { this[3]=.1f }
-                quad(a.windowPoint!!+light.towardSun*.55,b.windowPoint!!+light.towardSun*.55,b.center,a.center,color)
             }
         }
     }

@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.selected
@@ -123,7 +124,9 @@ private fun CabinSeat.label(): String {
 
 @Composable
 private fun CabinScene(profile: CabinProfile, light: CabinLight, selected: String, interior: Boolean, summary: String, preview: Boolean) {
-    val modifier=Modifier.fillMaxWidth().height(Sizes.cabinHeight).semantics { contentDescription=summary }
+    val configuration=LocalConfiguration.current
+    val height=if(configuration.screenWidthDp>configuration.screenHeightDp) Sizes.cabinLandscapeHeight else Sizes.cabinHeight
+    val modifier=Modifier.fillMaxWidth().height(height).semantics { contentDescription=summary }
     if(preview) {
         // Native GPU verification is separate; tests exercise controls and truthful textual fallback.
         Box(modifier) { Text(stringResource(R.string.simulation_cabin_preview)) }

@@ -8,6 +8,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.res.painterResource
@@ -41,6 +43,8 @@ fun SimulationScreen(
     point: TimelinePoint?, boundaries: List<Float>, actions: SimulationActions,
     modifier: Modifier = Modifier, zone: ZoneId = ZoneId.systemDefault(),
 ) {
+    val configuration=LocalConfiguration.current
+    val landscape=configuration.screenWidthDp>configuration.screenHeightDp
     val scheme = SunSeatTheme.scheme
     val duration = java.time.Duration.between(result.departure, result.modeledArrival).toMillis().coerceAtLeast(1)
     val current = result.departure.plusMillis(state.elapsedMillis)
@@ -66,14 +70,8 @@ fun SimulationScreen(
         if (p.position == null || p.heading == null) null
         else MapCursor(p.position, p.heading, p.sun?.azimuth ?: 0.0, if (p.undergroundOrUnknown) -90.0 else p.sun?.altitude ?: -90.0)
     }
-    Surface(modifier.fillMaxSize(), color = scheme.background, contentColor = scheme.onSurface) {
-        Column(Modifier.fillMaxSize()) {
-            Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = Spacing.s), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = actions.back) { Icon(painterResource(R.drawable.ic_ms_arrow_back), stringResource(R.string.common_back)) }
-                Text(stringResource(R.string.simulation_title), Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-                if (!SunSeatTheme.reduceMotion) Text(stringResource(R.string.simulation_speed_hint, state.speed), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
-            }
-            Box(Modifier.fillMaxWidth().weight(2f)) {
+    @Composable fun JourneyMap(mapModifier: Modifier) {
+            Box(mapModifier.clipToBounds()) {
                 SunSeatMap(MapState(routes = listOf(route), origin = request.origin, destination = request.destination,
                     cursor = cursor, followCursor = state.following, onGesture = actions.unfollow,
                     routeProgress = point?.routeProgress ?: 0f, showDecorations = false,
@@ -95,13 +93,30 @@ fun SimulationScreen(
                     QuietButton(onClick = actions.follow) { Text(stringResource(R.string.simulation_follow)) }
                 }
             }
-            Column(Modifier.fillMaxWidth().weight(3f).verticalScroll(rememberScrollState()).padding(Spacing.screen), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+    }
+    @Composable fun CabinDetails(detailModifier: Modifier) {
+            Column(detailModifier.verticalScroll(rememberScrollState()).padding(Spacing.screen), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                 if (point != null && point.leg.mode != Mode.WALK) CabinPanel(point, request.mode, state, actions)
                 if (result.arrival != result.modeledArrival) Text(stringResource(R.string.simulation_modeled_note, time(result.arrival)), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             }
+    }
+    Surface(modifier.fillMaxSize(), color = scheme.background, contentColor = scheme.onSurface) {
+        Column(Modifier.fillMaxSize()) {
+            Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = Spacing.s), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = actions.back) { Icon(painterResource(R.drawable.ic_ms_arrow_back), stringResource(R.string.common_back)) }
+                Text(stringResource(R.string.simulation_title), Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                if (!SunSeatTheme.reduceMotion) Text(stringResource(R.string.simulation_speed_hint, state.speed), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+            }
+            if(landscape) Row(Modifier.fillMaxWidth().weight(1f)) {
+                JourneyMap(Modifier.weight(1f).fillMaxHeight())
+                CabinDetails(Modifier.weight(1f).fillMaxHeight())
+            } else {
+                JourneyMap(Modifier.fillMaxWidth().weight(2f))
+                CabinDetails(Modifier.fillMaxWidth().weight(3f))
+            }
             Surface(color = scheme.surface) {
                 Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Spacing.screen, vertical = Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                    MiniTimeline(result, boundaries)
+                    if(!landscape) MiniTimeline(result, boundaries)
                     Slider(value = (state.elapsedMillis.toFloat() / duration).coerceIn(0f, 1f), onValueChange = actions.seek,
                         modifier = Modifier.fillMaxWidth().heightIn(min = Spacing.touch).semantics { contentDescription = sliderLabel; stateDescription = currentTime },
                         colors = SliderDefaults.colors(thumbColor = scheme.inverseSurface, activeTrackColor = scheme.inverseSurface))
