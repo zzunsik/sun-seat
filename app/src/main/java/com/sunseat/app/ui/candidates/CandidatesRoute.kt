@@ -26,7 +26,7 @@ fun CandidatesRoute(
     viewModel: CandidatesViewModel = viewModel(
         key = request.toString(),
         factory = viewModelFactory {
-            initializer { CandidatesViewModel(request, graph.kakao.transitRoutes, graph.kakao.carRoutes, preference = graph.settings.settings.value.benchPreference) }
+            initializer { CandidatesViewModel(request, graph.kakao.transitRoutes, graph.kakao.carRoutes, now = { java.time.LocalDateTime.now(graph.clock) }, preference = graph.settings.settings.value.benchPreference) }
         },
     ),
 ) {

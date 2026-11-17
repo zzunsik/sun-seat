@@ -10,6 +10,7 @@ import com.sunseat.app.data.route.CarRouteResult
 import com.sunseat.app.data.route.NoRouteReason
 import com.sunseat.app.data.route.TransitRouteApi
 import com.sunseat.app.data.route.TransitRoutes
+import com.sunseat.app.data.route.TransitRouteType
 import com.sunseat.app.domain.LatLng
 import com.sunseat.app.domain.Leg
 import com.sunseat.app.domain.Mode
@@ -29,6 +30,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -215,5 +217,44 @@ class CandidatesViewModelTest {
         val s = vm.state.value as CandidatesState.NoRoute
         assertEquals(R.string.candidates_car_no_start_road, s.titleRes)
         assertFalse(s.suggestCar)
+    }
+
+    @Test
+    fun sortFilterAndSelectionCombine() = runTest(dispatcher) {
+        // 0: 지하철 38분·환승 1·도보 3, 1: 버스 52분·환승 0·도보 0, 2: 버스+지하철 45분·환승 2·도보 0
+        val mixed = CandidatesFixtures.busOnly.copy(type = TransitRouteType.BUS_AND_SUBWAY, totalDuration = Duration.ofMinutes(45), transfers = 2)
+        val vm = CandidatesViewModel(transitRequest, FakeTransit(ApiResult.Success(TransitRoutes(options + mixed))), noCar, compute = dispatcher)
+        vm.setSort(CandidateSort.TIME)
+        vm.toggleFilter(TransitRouteType.BUS)
+        assertTrue(vm.state.value is CandidatesState.Loading)
+        advanceUntilIdle()
+        fun options() = vm.state.value as CandidatesState.Options
+        fun ids() = options().visible.map { it.id }
+        assertEquals(CandidateSort.RECOMMENDED, options().sort)
+
+        vm.setSort(CandidateSort.TIME)
+        assertEquals(listOf(0, 2, 1), ids())
+        vm.highlight(2)
+        vm.toggleFilter(TransitRouteType.BUS)
+        vm.toggleFilter(TransitRouteType.BUS_AND_SUBWAY)
+        assertEquals(listOf(2, 1), ids())
+        assertEquals(CandidateSort.TIME, options().sort)
+        assertNull(options().selectedId)
+
+        vm.setSort(CandidateSort.TRANSFERS)
+        assertEquals(listOf(1, 2), ids())
+        assertEquals(setOf(TransitRouteType.BUS, TransitRouteType.BUS_AND_SUBWAY), options().filters)
+        vm.highlight(1)
+        vm.setSort(CandidateSort.WALK)
+        assertEquals(1, options().selectedId)
+
+        vm.toggleFilter(TransitRouteType.BUS)
+        assertEquals(listOf(2), ids())
+        vm.toggleFilter(TransitRouteType.BUS_AND_SUBWAY)
+        assertTrue(options().filters.isEmpty())
+        vm.toggleFilter(TransitRouteType.BUS)
+        vm.clearFilters()
+        assertEquals(CandidateSort.WALK, options().sort)
+        assertEquals(listOf(1, 2, 0), ids())
     }
 }

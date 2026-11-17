@@ -63,7 +63,13 @@ android {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
-            all { it.systemProperty("robolectric.graphicsMode", "NATIVE") }
+            all {
+                it.systemProperty("robolectric.graphicsMode", "NATIVE")
+                // 기준 이미지만 바뀌어도 빌드 캐시가 이전 테스트 결과를 재사용하지 않도록 입력으로 둔다.
+                it.inputs.dir("src/test/screenshots")
+                    .withPropertyName("roborazziGoldens")
+                    .withPathSensitivity(PathSensitivity.RELATIVE)
+            }
         }
     }
 
