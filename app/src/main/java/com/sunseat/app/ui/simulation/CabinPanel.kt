@@ -9,8 +9,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.Icon
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -48,14 +50,14 @@ internal fun CabinPanel(point: TimelinePoint, mode: TravelMode, state: Simulatio
     val key=listOf(profile,point.time,point.heading,point.sun,available)
     val light=remember(key) { CabinSimulation.calculate(profile,point.sun,point.heading,available) }
     var choosing by remember(profile) { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(Spacing.s)) {
-    Text(stringResource(R.string.simulation_cabin_profile,stringResource(when(profile.kind) {
+    val profileLabel=stringResource(R.string.simulation_cabin_profile,stringResource(when(profile.kind) {
         CabinKind.BUS -> R.string.simulation_bus
         CabinKind.COACH -> R.string.simulation_coach
         CabinKind.SUBWAY -> R.string.simulation_subway
         CabinKind.TAXI -> R.string.simulation_taxi
         CabinKind.CAR -> R.string.simulation_car
-    })),style=MaterialTheme.typography.titleSmall)
+    }))
+    Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(Spacing.s)) {
     val summary=when {
         point.leg.mode==Mode.SUBWAY && point.leg.groundLevel==GroundLevel.BELOW -> stringResource(R.string.simulation_cabin_underground)
         !available -> stringResource(R.string.simulation_cabin_unavailable)
@@ -64,19 +66,11 @@ internal fun CabinPanel(point: TimelinePoint, mode: TravelMode, state: Simulatio
             stringResource(coverageText(light.lit(chosen.id,SeatSurface.CUSHION))),
             stringResource(coverageText(light.lit(chosen.id,SeatSurface.BACK))))
     }
-    Text(stringResource(R.string.simulation_selected_seat,chosen.label()),style=MaterialTheme.typography.titleSmall)
-    Text(summary,style=MaterialTheme.typography.bodySmall)
-    val description=stringResource(R.string.simulation_scene_description,chosen.label(),summary,
-        point.sun?.azimuth?.toInt() ?: 0,point.sun?.altitude?.toInt() ?: 0)
-    CabinScene(profile,light,chosen.id,state.interior,description,preview)
-    Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(Spacing.s)) {
-        NeutralFilterChip(!state.interior,stringResource(R.string.simulation_overview)) { actions.camera(false) }
-        NeutralFilterChip(state.interior,stringResource(R.string.simulation_inside)) { actions.camera(true) }
-    }
-    recommended?.let { Text(stringResource(R.string.simulation_recommended_seat,
-        if(point.leg.mode==Mode.CAR) it.label() else point.spot!!.label()),style=MaterialTheme.typography.bodySmall) }
-    val index=profile.seats.indexOf(chosen)
-    Row(horizontalArrangement=Arrangement.spacedBy(Spacing.s)) {
+    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(Spacing.s)) {
+        Column(Modifier.weight(1f)) {
+            Text(stringResource(R.string.simulation_selected_seat,chosen.label()),style=MaterialTheme.typography.titleSmall)
+            Text(profileLabel,style=MaterialTheme.typography.bodySmall,color=SunSeatTheme.scheme.onSurfaceVariant)
+        }
         Box {
             QuietButton(onClick={choosing=true}) { Text(stringResource(R.string.simulation_choose_seat)) }
             DropdownMenu(expanded=choosing,onDismissRequest={choosing=false},modifier=Modifier.heightIn(max=Sizes.cabinHeight)) {
@@ -86,8 +80,18 @@ internal fun CabinPanel(point: TimelinePoint, mode: TravelMode, state: Simulatio
                     onClick={actions.seat(point.legIndex,s.id);choosing=false}) }
             }
         }
-        QuietButton(onClick={ actions.seat(point.legIndex,profile.seats[(index+1)%profile.seats.size].id) }) { Text(stringResource(R.string.simulation_next_seat)) }
     }
+    Text(summary,style=MaterialTheme.typography.bodySmall)
+    val description=stringResource(R.string.simulation_scene_description,chosen.label(),summary,
+        point.sun?.azimuth?.toInt() ?: 0,point.sun?.altitude?.toInt() ?: 0)
+    Box {
+        CabinScene(profile,light,chosen.id,state.interior,description,preview)
+        Surface(Modifier.align(Alignment.TopEnd),color=SunSeatTheme.scheme.surface,shape=MaterialTheme.shapes.small) {
+            QuietButton(onClick={actions.camera(!state.interior)}) { Text(stringResource(if(state.interior) R.string.simulation_overview else R.string.simulation_inside)) }
+        }
+    }
+    recommended?.let { Text(stringResource(R.string.simulation_recommended_seat,
+        if(point.leg.mode==Mode.CAR) it.label() else point.spot!!.label()),style=MaterialTheme.typography.bodySmall) }
     light.cells.filter { it.seatId==chosen.id && it.window!=null }.groupBy { it.window }.forEach { (window,cells) ->
         Text(stringResource(R.string.simulation_window_angle,stringResource(when(window!!) {
             CabinWindow.LEFT -> R.string.simulation_window_left
@@ -114,7 +118,7 @@ private fun CabinSeat.label(): String {
         CarSeat.REAR_LEFT -> R.string.simulation_rear_left
         CarSeat.REAR_RIGHT -> R.string.simulation_rear_right
     }) else spot.label()
-    return stringResource(R.string.simulation_model_seat,name,id.substringAfter('-').substringBefore('-').toIntOrNull()?.plus(1) ?: 1)
+    return if(car!=null) name else stringResource(R.string.simulation_model_seat,name,id.substringAfter('-').substringBefore('-').toIntOrNull()?.plus(1) ?: 1)
 }
 
 @Composable
@@ -133,7 +137,7 @@ private fun CabinScene(profile: CabinProfile, light: CabinLight, selected: Strin
     // Post-processing is disabled: exposure overlays use display-referred token colors.
     fun Color.renderColor() = floatArrayOf(red,green,blue,alpha)
     val scheme=SunSeatTheme.scheme; val colors=SunSeatTheme.colors
-    val palette=listOf(scheme.outlineVariant.renderColor(),scheme.onSurfaceVariant.renderColor(),colors.sun.renderColor(),colors.shadeContainer.renderColor(),scheme.inverseSurface.renderColor(),scheme.background.renderColor())
+    val palette=listOf(scheme.outlineVariant.renderColor(),scheme.onSurfaceVariant.renderColor(),colors.sun.renderColor(),colors.shadeContainer.renderColor(),scheme.inverseSurface.renderColor(),scheme.background.renderColor(),scheme.inverseOnSurface.renderColor())
     key(attempt) {
         if(failed) {
             Column(modifier) {

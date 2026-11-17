@@ -21,6 +21,14 @@ class SimulationViewModel(val timeline: TripTimeline, private val saved: SavedSt
         interior = saved.get<Boolean>("interior") ?: false,
     ))
     val state = current.asStateFlow()
+    /** Start a new journey once. Saved pauses and completed journeys survive recreation. */
+    fun enter(reduceMotion: Boolean) {
+        if(reduceMotion) { saved["entered"]=true; pause(); return }
+        if(saved.get<Boolean>("entered")!=true) {
+            saved["entered"]=true
+            publish(current.value.copy(playing=duration>0 && current.value.elapsedMillis<duration,following=true))
+        }
+    }
     fun seek(fraction: Float) { publish(current.value.copy(elapsedMillis = (duration * fraction.coerceIn(0f, 1f)).toLong(), playing = false)) }
     fun toggle() {
         if (duration == 0L) return

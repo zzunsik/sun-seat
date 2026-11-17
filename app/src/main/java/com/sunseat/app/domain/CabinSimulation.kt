@@ -124,7 +124,7 @@ data class CabinProfile(val kind: CabinKind, val width: Double, val length: Doub
     }
 }
 
-data class SunCell(val seatId: String, val surface: SeatSurface, val row: Int, val column: Int, val center: V3, val window: CabinWindow?, val incidence: Double?)
+data class SunCell(val seatId: String, val surface: SeatSurface, val row: Int, val column: Int, val center: V3, val window: CabinWindow?, val incidence: Double?, val windowPoint: V3?)
 data class CabinLight(val towardSun: V3, val cells: List<SunCell>, val available: Boolean) {
     fun lit(seatId: String, surface: SeatSurface) = cells.count { it.seatId==seatId && it.surface==surface && it.window!=null }
 }
@@ -152,7 +152,7 @@ object CabinSimulation {
                     CabinWindow.LEFT -> V3(-1.0,0.0,0.0); CabinWindow.RIGHT -> V3(1.0,0.0,0.0)
                     CabinWindow.FRONT -> V3(0.0,0.0,-1.0); CabinWindow.REAR -> V3(0.0,0.0,1.0); null -> null
                 }
-                SunCell(seat.id,surface,row,column,p,window,wallNormal?.let { Math.toDegrees(acos(it.dot(direction).coerceIn(-1.0,1.0))) })
+                SunCell(seat.id,surface,row,column,p,window,wallNormal?.let { Math.toDegrees(acos(it.dot(direction).coerceIn(-1.0,1.0))) },if(window!=null) exit else null)
             } }
         } }
         return CabinLight(direction,cells,active)

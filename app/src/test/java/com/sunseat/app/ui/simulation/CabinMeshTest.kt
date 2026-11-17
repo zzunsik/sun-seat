@@ -14,11 +14,15 @@ class CabinMeshTest {
             val start=System.nanoTime()
             repeat(5) {
                 val light=CabinSimulation.calculate(p,SunPosition(90.0,20.0+it),0.0,true)
-                for(mesh in listOf(CabinMesh.body(p,neutral,neutral),CabinMesh.overlays(p,light,p.seats.first().id,neutral,neutral,neutral))) {
+                for(mesh in listOf(CabinMesh.body(p,neutral,neutral),CabinMesh.body(p,neutral,neutral,cutaway=false),CabinMesh.overlays(p,light,p.seats.first().id,neutral,neutral,neutral))) {
                     assertTrue(mesh.count>0); assertEquals(0,mesh.count%3)
                     val floats=mesh.buffer().asFloatBuffer()
                     while(floats.hasRemaining()) assertTrue(floats.get().isFinite())
                 }
+                val beams=CabinMesh.beams(p,light,p.seats.first().id,neutral)
+                assertEquals(0,beams.count%3)
+                val beamFloats=beams.buffer().asFloatBuffer()
+                while(beamFloats.hasRemaining()) assertTrue(beamFloats.get().isFinite())
             }
             println("$mode JVM geometry+mesh five iterations: ${(System.nanoTime()-start)/1_000_000.0} ms (not a device FPS measurement)")
         }

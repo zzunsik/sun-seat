@@ -34,8 +34,11 @@ internal class CabinRenderer(context: Context, val surface: SurfaceView) : UiHel
     private var colors: List<FloatArray> = emptyList()
     private var body: Part?=null
     private var overlay: Part?=null
+    private var beams: Part?=null
     private val lit: Material
     private val unlit: Material
+    private val beamMaterial: Material
+    private val ambient: IndirectLight
     private data class Part(val entity: Int,val vertices: VertexBuffer,val indices: IndexBuffer,val capacity: Int)
     init {
         try {
@@ -44,12 +47,14 @@ internal class CabinRenderer(context: Context, val surface: SurfaceView) : UiHel
             val buffer=ByteBuffer.allocateDirect(bytes.size).order(ByteOrder.nativeOrder()).put(bytes).apply { flip() }
             return Material.Builder().payload(buffer,buffer.remaining()).build(engine).also { materials+=it }
         }
-        lit=material("cabin_lit"); unlit=material("cabin_unlit")
+        lit=material("cabin_lit"); unlit=material("cabin_unlit"); beamMaterial=material("cabin_beam")
         view.scene=scene; view.camera=camera
+        ambient=IndirectLight.Builder().irradiance(1,floatArrayOf(.8f,.85f,.9f)).intensity(22000f).build(engine)
+        scene.indirectLight=ambient
         view.isPostProcessingEnabled=false
         renderer.clearOptions=Renderer.ClearOptions().apply { clear=true; clearColor=doubleArrayOf(.94,.95,.97,1.0) }
         camera.setExposure(16f,1f/125f,100f)
-        LightManager.Builder(LightManager.Type.DIRECTIONAL).color(1f,1f,1f).intensity(90000f)
+        LightManager.Builder(LightManager.Type.DIRECTIONAL).color(1f,1f,1f).intensity(35000f)
             .direction(0f,-1f,0f).castShadows(true).build(engine,lightEntity)
         scene.addEntity(lightEntity)
         helper.renderCallback=this
@@ -66,29 +71,40 @@ internal class CabinRenderer(context: Context, val surface: SurfaceView) : UiHel
         if(closed) return
         val paletteChanged=colors.size!=palette.size || colors.zip(palette).any { !it.first.contentEquals(it.second) }
         if(profile==p && light===l && selected==selection && interior==inside && !paletteChanged) return
-        if(profile!=p || paletteChanged) {
+        if(profile!=p || paletteChanged || interior!=inside) {
             body?.let(::destroyPart)
-            body=create(CabinMesh.body(p,palette[0],palette[1]),lit)
+            body=create(CabinMesh.body(p,palette[0],palette[1],cutaway=!inside),lit)
         }
         profile=p; light=l; selected=selection; interior=inside; colors=palette
         val background=palette[5]
         renderer.clearOptions=Renderer.ClearOptions().apply { clear=true; clearColor=DoubleArray(4) { background[it].toDouble() } }
-        val mesh=CabinMesh.overlays(p,l,selection,palette[2],palette[3],palette[4])
+        val mesh=CabinMesh.overlays(p,l,selection,palette[2],palette[3],palette[4],palette[6])
         val previous=overlay
         if(previous==null || previous.capacity<mesh.count) {
             previous?.let(::destroyPart)
-            overlay=create(mesh,unlit)
+            overlay=create(mesh,unlit,shadow=false)
         } else {
             previous.vertices.setBufferAt(engine,0,mesh.buffer())
             engine.renderableManager.setGeometryAt(engine.renderableManager.getInstance(previous.entity),0,
                 RenderableManager.PrimitiveType.TRIANGLES,previous.vertices,previous.indices,0,mesh.count)
         }
         val d=l.towardSun
+        val beamMesh=CabinMesh.beams(p,l,selection,palette[2])
+        val previousBeam=beams
+        if(beamMesh.count==0) {
+            previousBeam?.let(::destroyPart); beams=null
+        } else if(previousBeam==null || previousBeam.capacity<beamMesh.count) {
+            previousBeam?.let(::destroyPart); beams=create(beamMesh,beamMaterial,shadow=false)
+        } else {
+            previousBeam.vertices.setBufferAt(engine,0,beamMesh.buffer())
+            engine.renderableManager.setGeometryAt(engine.renderableManager.getInstance(previousBeam.entity),0,
+                RenderableManager.PrimitiveType.TRIANGLES,previousBeam.vertices,previousBeam.indices,0,beamMesh.count)
+        }
         engine.lightManager.setDirection(engine.lightManager.getInstance(lightEntity),-d.x.toFloat(),-d.y.toFloat(),-d.z.toFloat())
-        engine.lightManager.setIntensity(engine.lightManager.getInstance(lightEntity),if(l.available && d.y>0) 90000f else 0f)
+        engine.lightManager.setIntensity(engine.lightManager.getInstance(lightEntity),if(l.available && d.y>0) 35000f else 0f)
         setCamera(); dirty=true
     }
-    private fun create(mesh: CabinMesh,material: Material): Part {
+    private fun create(mesh: CabinMesh,material: Material,shadow: Boolean=true): Part {
         val capacity=mesh.count+128
         val vertex=VertexBuffer.Builder().vertexCount(capacity).bufferCount(1)
             .attribute(VertexBuffer.VertexAttribute.POSITION,0,VertexBuffer.AttributeType.FLOAT3,0,44)
@@ -101,7 +117,7 @@ internal class CabinRenderer(context: Context, val surface: SurfaceView) : UiHel
         val entity=EntityManager.get().create()
         RenderableManager.Builder(1).boundingBox(Box(0f,2f,0f,8f,8f,8f))
             .geometry(0,RenderableManager.PrimitiveType.TRIANGLES,vertex,index,0,mesh.count).material(0,material.defaultInstance)
-            .culling(false).castShadows(true).receiveShadows(true).build(engine,entity)
+            .culling(false).castShadows(shadow).receiveShadows(shadow).build(engine,entity)
         scene.addEntity(entity)
         return Part(entity,vertex,index,capacity).also { resources+=it }
     }
@@ -113,14 +129,15 @@ internal class CabinRenderer(context: Context, val surface: SurfaceView) : UiHel
         val p=profile ?: return
         val seat=p.seats.firstOrNull { it.id==selected } ?: p.seats.first()
         if(interior) {
-            val eye=seat.center+V3(0.0,.82,0.0)-seat.facing*.16
-            val target=seat.center+seat.facing*.65
+            val raw=seat.center+seat.facing*.9+seat.right*.55+V3(0.0,.75,0.0)
+            val eye=V3(raw.x.coerceIn(-p.width/2+.08,p.width/2-.08),raw.y,raw.z.coerceIn(-p.length/2+.1,p.length/2-.1))
+            val target=seat.center+V3(0.0,.18,0.0)
             camera.lookAt(eye.x,eye.y,eye.z,target.x,target.y,target.z,0.0,1.0,0.0)
-            camera.setProjection(68.0,width.toDouble()/height,.03,40.0,Camera.Fov.VERTICAL)
+            camera.setProjection(52.0,width.toDouble()/height,.03,40.0,Camera.Fov.VERTICAL)
         } else {
-            val size=p.length
-            camera.lookAt(size*.65,size*1.3,size*.7,0.0,.65,0.0,0.0,1.0,0.0)
-            camera.setProjection(48.0,width.toDouble()/height,.05,80.0,Camera.Fov.VERTICAL)
+            val size=p.length+if(p.kind in listOf(CabinKind.CAR,CabinKind.TAXI)) .65 else 0.0
+            camera.lookAt(size*.7,size*1.05,-size*.95,0.0,.55,0.0,0.0,1.0,0.0)
+            camera.setProjection(42.0,width.toDouble()/height,.05,80.0,Camera.Fov.VERTICAL)
         }
     }
     private val frame=object: Choreographer.FrameCallback {
@@ -151,6 +168,7 @@ internal class CabinRenderer(context: Context, val surface: SurfaceView) : UiHel
         active(false); helper.detach(); resources.toList().forEach(::destroyPart)
         engine.destroyEntity(lightEntity); EntityManager.get().destroy(lightEntity)
         engine.destroyView(view); engine.destroyRenderer(renderer); engine.destroyScene(scene)
+        engine.destroyIndirectLight(ambient)
         engine.destroyCameraComponent(cameraEntity); EntityManager.get().destroy(cameraEntity)
         materials.forEach { engine.destroyMaterial(it) }; engine.destroy(); closed=true
     }

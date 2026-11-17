@@ -11,6 +11,7 @@ Compile materials with **Filament 1.80.1**, matching the Maven runtime:
 ```powershell
 matc.exe -a opengl -p mobile -o app/src/main/assets/simulation/cabin_lit.filamat tools/simulation/cabin_lit.mat
 matc.exe -a opengl -p mobile -o app/src/main/assets/simulation/cabin_unlit.filamat tools/simulation/cabin_unlit.mat
+matc.exe -a opengl -p mobile -o app/src/main/assets/simulation/cabin_beam.filamat tools/simulation/cabin_beam.mat
 ```
 
 Download matching tools from https://github.com/google/filament/releases/tag/v1.80.1.
@@ -31,6 +32,13 @@ adb shell am start -S -W -n com.sunseat.app/.SimulationFixtureActivity --es mode
 ```
 
 Add `--ez underground true` or `--ez night true` for excluded sunlight states.
+Use `--es mode COACH` for a standard coach. `--ez unknown true` selects unknown
+subway ground level. For a fixed instant use `--ef altitude 42 --ef azimuth 90
+--es seat rear-RIGHT --ez inside true`; fixed solar fixtures pause initially.
+Normal entry automatically plays the journey once. `--ez playing false` explicitly
+pauses a fixture; saved manual pauses survive recreation. `--el elapsed 1200000`
+selects an initial instant in milliseconds. Never interpret synthetic route fixtures
+as real navigable roads; production uses the selected route API geometry.
 Capture GPU output with adb screencap. Roborazzi checks controls, text and fallback;
 its 3D placeholder does not verify GPU rendering.
 
@@ -42,6 +50,13 @@ instant. #55 remains the source of recommendations and seat-switch policy.
 The shell exit must be inside a window and no blocking primitive may precede it.
 The roof remains a calculation blocker even in a cutaway view. Incidence angle is
 between the outward window normal and the direction toward the sun (normal = 0°).
+Overview uses a front/right view with the near walls cut away; close-up restores
+the walls. Rounded seat borders are visual trim around the flat tested contact
+planes. Windshield apertures remain vertical in this standard model; no angled
+glass is added to the picture without changing the calculation geometry.
+Parallel explanatory rays use each passing sample's actual window intersection.
+The small sky icon and current altitude are shown above the map; no oversized sun
+is placed next to the car. Translucent guide ribbons are not atmospheric simulation.
 
 Filament draws structure and unlit token-colored patches of the CPU direct-light
 verdict. Camera position, display brightness and ambient shading never determine

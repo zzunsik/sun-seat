@@ -24,6 +24,7 @@ import com.sunseat.app.ui.map.*
 import com.sunseat.app.ui.theme.Sizes
 import com.sunseat.app.ui.theme.Spacing
 import com.sunseat.app.ui.theme.SunSeatTheme
+import com.sunseat.app.ui.icons.SunSeatIcons
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -54,6 +55,13 @@ fun SimulationScreen(
         currentAngle<180 -> R.string.common_right
         else -> R.string.common_left
     }
+    val sunLabel=when {
+        point?.heading==null -> stringResource(R.string.simulation_no_geometry)
+        point.leg.mode==Mode.WALK -> stringResource(R.string.result_leg_walk)
+        point.undergroundOrUnknown -> stringResource(if(point.leg.groundLevel==GroundLevel.BELOW) R.string.result_leg_underground else R.string.result_leg_unknown_ground)
+        point.sun==null || point.sun.altitude<=0 -> stringResource(R.string.simulation_night)
+        else -> stringResource(R.string.simulation_map_sun,stringResource(currentDirection),point.sun.altitude.toInt())
+    }
     val cursor = point?.let { p ->
         if (p.position == null || p.heading == null) null
         else MapCursor(p.position, p.heading, p.sun?.azimuth ?: 0.0, if (p.undergroundOrUnknown) -90.0 else p.sun?.altitude ?: -90.0)
@@ -65,25 +73,29 @@ fun SimulationScreen(
                 Text(stringResource(R.string.simulation_title), Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
                 if (!SunSeatTheme.reduceMotion) Text(stringResource(R.string.simulation_speed_hint, state.speed), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             }
-            Box(Modifier.fillMaxWidth().weight(1f)) {
+            Box(Modifier.fillMaxWidth().weight(2f)) {
                 SunSeatMap(MapState(routes = listOf(route), origin = request.origin, destination = request.destination,
                     cursor = cursor, followCursor = state.following, onGesture = actions.unfollow,
-                    routeProgress = point?.routeProgress ?: 0f, showDecorations = false), Modifier.fillMaxSize())
+                    routeProgress = point?.routeProgress ?: 0f, showDecorations = false,
+                    padding=MapPadding(top=Sizes.simulationMapInfo,bottom=Spacing.s)), Modifier.fillMaxSize())
+                Surface(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(Spacing.s),color=scheme.surface,shape=MaterialTheme.shapes.medium) {
+                    Column(Modifier.padding(horizontal=Spacing.m,vertical=Spacing.s),verticalArrangement=Arrangement.spacedBy(Spacing.xs)) {
+                        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
+                            Text(stringResource(if(state.elapsedMillis>=duration) R.string.simulation_arrived_time else if(state.playing) R.string.simulation_moving_time else R.string.simulation_paused_time,currentTime),style=MaterialTheme.typography.titleSmall)
+                            Text(stringResource(R.string.simulation_progress,(point?.routeProgress?.times(100) ?: 0f).toInt()),style=MaterialTheme.typography.labelSmall)
+                        }
+                        Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(Spacing.s)) {
+                            Icon(SunSeatIcons.Sun,null,Modifier.size(Sizes.iconMedium),tint=scheme.onSurfaceVariant)
+                            Text(sunLabel,style=MaterialTheme.typography.bodySmall)
+                        }
+                        Text(stringResource(R.string.simulation_route_overview,request.origin.name,request.destination.name),style=MaterialTheme.typography.labelSmall,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    }
+                }
                 if (!state.following) Surface(Modifier.align(Alignment.BottomEnd).padding(Spacing.s), color = scheme.surface, shape = MaterialTheme.shapes.large) {
                     QuietButton(onClick = actions.follow) { Text(stringResource(R.string.simulation_follow)) }
                 }
             }
-            Column(Modifier.fillMaxWidth().weight(4f).verticalScroll(rememberScrollState()).padding(Spacing.screen), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                Text(if (point == null) currentTime else stringResource(R.string.simulation_point, currentTime, point.leg.startName.ifBlank { request.origin.name }, point.leg.endName.ifBlank { request.destination.name }), style = MaterialTheme.typography.titleSmall)
-                val noGeometry = point?.heading == null
-                val excluded = point?.undergroundOrUnknown == true || point?.leg?.mode == Mode.WALK
-                Text(when {
-                    noGeometry -> stringResource(R.string.simulation_no_geometry)
-                    point?.leg?.mode == Mode.WALK -> stringResource(R.string.result_leg_walk)
-                    point?.undergroundOrUnknown == true -> stringResource(if (point.leg.groundLevel == GroundLevel.BELOW) R.string.result_leg_underground else R.string.result_leg_unknown_ground)
-                    point?.sun == null || point.sun.altitude <= 0 -> stringResource(R.string.simulation_night)
-                    else -> stringResource(R.string.simulation_sun, stringResource(currentDirection), point.sun.altitude.toInt())
-                }, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+            Column(Modifier.fillMaxWidth().weight(3f).verticalScroll(rememberScrollState()).padding(Spacing.screen), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                 if (point != null && point.leg.mode != Mode.WALK) CabinPanel(point, request.mode, state, actions)
                 if (result.arrival != result.modeledArrival) Text(stringResource(R.string.simulation_modeled_note, time(result.arrival)), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             }

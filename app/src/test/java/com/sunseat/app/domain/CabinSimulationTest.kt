@@ -23,6 +23,14 @@ class CabinSimulationTest {
         val high=CabinSimulation.calculate(profile,SunPosition(90.0,89.9),0.0,true)
         assertTrue(high.cells.none { it.window!=null })
         low.cells.filter { it.window!=null }.forEach { assertTrue(it.incidence!! in 0.0..90.0) }
+        low.cells.filter { it.window!=null }.forEach { cell ->
+            assertEquals(cell.window,profile.windowAt(cell.windowPoint!!))
+            val seat=profile.seats.first { it.id==cell.seatId }
+            val normal=if(cell.surface==SeatSurface.CUSHION) V3(0.0,1.0,0.0) else seat.facing
+            val delta=cell.windowPoint-(cell.center+normal*.006)
+            val cross=delta.cross(low.towardSun)
+            assertEquals(0.0,cross.dot(cross),1e-10)
+        }
     }
     @Test fun `night underground unknown and missing geometry never invent sunlight`() {
         for ((sun,heading,available) in listOf(Triple(SunPosition(90.0,0.0),0.0,true),Triple(SunPosition(90.0,-10.0),0.0,true),Triple(SunPosition(90.0,20.0),0.0,false),Triple(null,null,true))) {

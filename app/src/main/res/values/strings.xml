@@ -289,7 +289,7 @@
     <string name="simulation_taxi">택시</string>
     <string name="simulation_car">자가용</string>
     <string name="simulation_overview">전체 보기</string>
-    <string name="simulation_inside">좌석에서 보기</string>
+    <string name="simulation_inside">내 자리 확대</string>
     <string name="simulation_selected_seat">내 자리: %1$s</string>
     <string name="simulation_recommended_seat">추천: %1$s</string>
     <string name="simulation_previous_seat">이전 자리</string>
@@ -302,7 +302,7 @@
     <string name="simulation_window_right">오른쪽 창</string>
     <string name="simulation_window_front">앞유리</string>
     <string name="simulation_window_rear">뒷유리</string>
-    <string name="simulation_cabin_note">표준 차량의 예상 범위예요. 지붕은 보기에서만 생략해요. 건물·커튼·선팅·승객 가림은 반영하지 않아요. 추천은 구간 전체의 근사 기준이며 현재 3D 범위와 다를 수 있어요.</string>
+    <string name="simulation_cabin_note">표준 차량의 예상 범위예요. 지붕과 가까운 차체는 보기에서만 생략해요. 빛줄기는 방향 안내예요. 건물·커튼·선팅·승객 가림은 반영하지 않아요. 추천은 구간 전체의 근사 기준이며 현재 3D 범위와 다를 수 있어요.</string>
     <string name="simulation_cabin_preview">3D 장면은 기기에서 확인해요.</string>
     <string name="simulation_cabin_error">3D 화면을 열지 못했어요. 아래 글로 햇빛 범위를 확인할 수 있어요.</string>
     <string name="simulation_retry">다시 열기</string>
@@ -316,4 +316,10 @@
     <string name="simulation_choose_seat">자리 고르기</string>
     <string name="simulation_scene_description">3D 차량, 내 자리 %1$s. %2$s. 태양 방위각 %3$d°, 고도 %4$d°.</string>
     <string name="simulation_surface_full">전체에 닿음</string>
+    <string name="simulation_map_sun">%1$s에서 햇빛 · 고도 %2$d°</string>
+    <string name="simulation_moving_time">%1$s · 이동 중</string>
+    <string name="simulation_paused_time">%1$s · 일시정지</string>
+    <string name="simulation_arrived_time">%1$s · 도착</string>
+    <string name="simulation_progress">이동 %1$d%%</string>
+    <string name="simulation_route_overview">출발 %1$s → 도착 %2$s</string>
 </resources>

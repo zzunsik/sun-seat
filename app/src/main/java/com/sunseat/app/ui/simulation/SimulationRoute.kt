@@ -27,6 +27,7 @@ fun SimulationRoute(
     val state by vm.state.collectAsStateWithLifecycle()
     val owner = LocalLifecycleOwner.current
     val reduce = SunSeatTheme.reduceMotion
+    LaunchedEffect(vm,reduce) { vm.enter(reduce) }
     LaunchedEffect(state.playing, state.speed, reduce, owner) {
         if (reduce) vm.pause()
         else if (state.playing) owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
