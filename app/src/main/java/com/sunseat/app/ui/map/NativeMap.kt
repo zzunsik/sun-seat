@@ -65,9 +65,9 @@ internal fun NativeMap(state: MapState, modifier: Modifier = Modifier, keyAvaila
     val ink = scheme.onSurface.toArgb()
     val surface = scheme.surface.toArgb()
     val muted = scheme.outline.toArgb()
-    val sun = com.sunseat.app.ui.theme.LightSunSeatColors.onSunContainer.toArgb()
+    val sun = com.sunseat.app.ui.theme.LightSunSeatColors.sun.toArgb()
     val latest by rememberUpdatedState(state)
-    val metrics = with(density) { MapMetrics(Sizes.mapMarker.toPx(), Sizes.mapRoute.toPx(), Sizes.mapWalk.toPx(), Sizes.mapSubway.toPx(), Sizes.mapInset.toPx(), Sizes.mapSunRay.toPx()) }
+    val metrics = with(density) { MapMetrics(Sizes.mapMarker.toPx(), Sizes.mapRoute.toPx(), Sizes.mapWalk.toPx(), Sizes.mapSubway.toPx(), Sizes.mapInset.toPx(), (if(state.routeProgress!=null) Sizes.simulationSunRay else Sizes.mapSunRay).toPx()) }
     val session = remember(context, lifecycle, ink, surface, muted, sun, metrics) { MapSession(context, ink, surface, muted, sun, metrics) }
     var ready by remember(session) { mutableStateOf(false) }
     var failed by remember(session) { mutableStateOf(false) }
@@ -115,6 +115,8 @@ internal fun MapNotice(message: Int, modifier: Modifier = Modifier) {
 }
 
 private data class MapMetrics(val marker: Float, val route: Float, val walk: Float, val subway: Float, val inset: Float, val ray: Float)
+/** Playback icons rotate around the current route coordinate. */
+internal fun playbackLabelStyle(bitmap: Bitmap): LabelStyle = LabelStyle.from(bitmap).setApplyDpScale(false).setAnchorPoint(.5f,.5f)
 private fun LatLng.sdk(): com.kakao.vectormap.LatLng = com.kakao.vectormap.LatLng.from(latitude, longitude)
 
 /** 네이티브 객체의 소유권과 갱신을 한 곳에서 관리한다. */
@@ -133,6 +135,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
     private val progressLines = mutableListOf<com.kakao.vectormap.route.RouteLine>()
     private var lastProgress: Float? = null
     private var lastRayAltitude: Double? = null
+    private var lastVehicleLight: Int? = null
     private var gesture: () -> Unit = {}
     private val startIcon = marker(0, ink)
     private val endIcon = marker(1, ink)
@@ -176,7 +179,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
                 }
             }
             target.labelManager?.layer?.let { layer ->
-                layer.removeAll(); cursor = null; ray = null; lastCursor = null; lastRayAltitude = null
+                layer.removeAll(); cursor = null; ray = null; lastCursor = null; lastRayAltitude = null; lastVehicleLight=null
                 state.origin?.let { layer.addLabel(LabelOptions.from(it.location.sdk()).setStyles(LabelStyle.from(startIcon).setApplyDpScale(false))) }
                 state.destination?.let { layer.addLabel(LabelOptions.from(it.location.sdk()).setStyles(LabelStyle.from(endIcon).setApplyDpScale(false))) }
             }
@@ -195,19 +198,23 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         if (position == null) { cursor?.hide(); ray?.hide() }
         else {
             val layer = target.labelManager?.layer ?: return
-            if (cursor == null) cursor = layer.addLabel(LabelOptions.from(position.position.sdk()).setStyles(LabelStyle.from(vehicleIcon).setApplyDpScale(false)).setTransform(TransformMethod.AbsoluteRotation))
-            if (ray == null) ray = layer.addLabel(LabelOptions.from(position.position.sdk()).setStyles(LabelStyle.from(rayIcon).setApplyDpScale(false).setAnchorPoint(0.5f, 1f)).setTransform(TransformMethod.AbsoluteRotation))
+            if (cursor == null) cursor = layer.addLabel(LabelOptions.from(position.position.sdk()).setStyles(playbackLabelStyle(vehicleIcon)).setTransform(TransformMethod.AbsoluteRotation))
+            if (ray == null) ray = layer.addLabel(LabelOptions.from(position.position.sdk()).setStyles(playbackLabelStyle(rayIcon)).setTransform(TransformMethod.AbsoluteRotation))
             cursor?.show()
             if (position != lastCursor) {
                 cursor?.moveTo(position.position.sdk()); cursor?.rotateTo(Math.toRadians(position.heading).toFloat())
                 ray?.moveTo(position.position.sdk()); ray?.rotateTo(Math.toRadians(position.sunAzimuth).toFloat())
-                ray?.scaleTo(1f, (1 - position.sunAltitude.coerceIn(0.0, 90.0) / 120).toFloat())
             }
-            if (position.sunAltitude != lastRayAltitude) {
-                val rayColor = androidx.core.graphics.ColorUtils.setAlphaComponent(sun, (255 * sunRayOpacity(position.sunAltitude)).toInt())
-                ray?.setStyles(LabelStyle.from(marker(3, rayColor)).setApplyDpScale(false).setAnchorPoint(0.5f, 1f))
-                lastRayAltitude = position.sunAltitude
+            val altitudeBucket=position.sunAltitude.toInt().toDouble()
+            if (altitudeBucket != lastRayAltitude) {
+                ray?.setStyles(playbackLabelStyle(marker(3, sun,altitude=position.sunAltitude)))
+                ray?.invalidate(false)
+                ray?.rotateTo(Math.toRadians(position.sunAzimuth).toFloat())
+                lastRayAltitude = altitudeBucket
             }
+            val relative=com.sunseat.app.domain.ExposureAnalyzer.normalize(position.sunAzimuth-position.heading)
+            val lightSide=when {position.sunAltitude<=0 -> 0;relative<25 || relative>335 -> 1;relative>155 && relative<205 -> 2;relative<180 -> 3;else -> 4}
+            if(lightSide!=lastVehicleLight) { cursor?.setStyles(playbackLabelStyle(marker(2,ink,lightSide)));cursor?.invalidate(false);cursor?.rotateTo(Math.toRadians(position.heading).toFloat());lastVehicleLight=lightSide }
             if (position.sunAltitude > 0) ray?.show() else ray?.hide()
             if (state.followCursor && (position != lastCursor || !following)) target.moveCamera(CameraUpdateFactory.newCenterPosition(position.position.sdk()))
         }
@@ -216,9 +223,9 @@ private class MapSession(context: Context, private val ink: Int, private val sur
     }
 
     /** 직접 만든 원·사각·차량 화살표와 짧은 해 방향 선. */
-    private fun marker(kind: Int, color: Int): Bitmap {
-        val width = metrics.marker.toInt().coerceAtLeast(1)
-        val height = if (kind == 3) metrics.ray.toInt().coerceAtLeast(1) else width
+    private fun marker(kind: Int, color: Int, lightSide: Int=0,altitude: Double=20.0): Bitmap {
+        val width = (if(kind==3) metrics.ray*2 else metrics.marker).toInt().coerceAtLeast(1)
+        val height = width
         return createBitmap(width, height).also { bitmap ->
             val canvas = Canvas(bitmap)
             val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = color; strokeWidth = metrics.walk; strokeCap = Paint.Cap.ROUND }
@@ -226,9 +233,36 @@ private class MapSession(context: Context, private val ink: Int, private val sur
             val radius = width / 3f
             when (kind) {
                 0 -> { paint.color = surface; canvas.drawCircle(mid, mid, radius, paint); paint.color = color; paint.style = Paint.Style.STROKE; canvas.drawCircle(mid, mid, radius, paint) }
-                1 -> canvas.drawRect(mid - radius, mid - radius, mid + radius, mid + radius, paint)
-                2 -> canvas.drawPath(Path().apply { moveTo(mid, 0f); lineTo(width.toFloat(), height.toFloat()); lineTo(mid, height * 0.7f); lineTo(0f, height.toFloat()); close() }, paint)
-                3 -> { canvas.drawLine(mid, height.toFloat(), mid, radius, paint); canvas.drawLine(mid, radius, mid - radius / 2, radius * 2, paint); canvas.drawLine(mid, radius, mid + radius / 2, radius * 2, paint) }
+                1 -> { canvas.drawLine(mid,mid-radius,mid,mid+radius,paint);canvas.drawRect(mid,mid-radius,mid+radius*.8f,mid,paint) }
+                2 -> {
+                    val body=Path().apply { addRoundRect(width*.24f,height*.14f,width*.76f,height*.92f,width*.12f,width*.12f,Path.Direction.CW) }
+                    paint.color=surface;canvas.drawPath(body,paint)
+                    if(lightSide!=0) {
+                        canvas.save();canvas.clipPath(body);paint.color=sun
+                        when(lightSide) {
+                            1 -> canvas.drawRect(0f,0f,width.toFloat(),height*.4f,paint)
+                            2 -> canvas.drawRect(0f,height*.64f,width.toFloat(),height.toFloat(),paint)
+                            3 -> canvas.drawRect(mid,0f,width.toFloat(),height.toFloat(),paint)
+                            4 -> canvas.drawRect(0f,0f,mid,height.toFloat(),paint)
+                        };canvas.restore()
+                    }
+                    paint.color=ink;paint.style=Paint.Style.STROKE;paint.strokeWidth=metrics.walk*.65f;canvas.drawPath(body,paint)
+                    canvas.drawLine(width*.31f,height*.36f,width*.69f,height*.36f,paint)
+                    canvas.drawLine(mid,height*.02f,width*.4f,height*.1f,paint);canvas.drawLine(mid,height*.02f,width*.6f,height*.1f,paint)
+                }
+                3 -> {
+                    val length=metrics.ray*(1-.3*altitude.coerceIn(0.0,90.0)/90).toFloat()
+                    val top=mid-length*.82f;val r=metrics.marker*.16f
+                    paint.color=sun;paint.alpha=80;paint.strokeWidth=metrics.marker*.24f
+                    canvas.drawLine(mid,top+r,mid,mid-metrics.marker*.55f,paint)
+                    paint.alpha=255;paint.strokeWidth=metrics.walk*.65f;paint.color=ink
+                    val tip=mid-metrics.marker*.55f
+                    canvas.drawLine(mid,tip-r,mid,tip,paint)
+                    canvas.drawLine(mid,tip,mid-r*.45f,tip-r*.6f,paint);canvas.drawLine(mid,tip,mid+r*.45f,tip-r*.6f,paint)
+                    paint.color=sun;canvas.drawCircle(mid,top,r,paint)
+                    paint.style=Paint.Style.STROKE;paint.color=ink;canvas.drawCircle(mid,top,r,paint)
+                    for(i in 0 until 8) { val a=i*Math.PI/4;canvas.drawLine(mid+kotlin.math.cos(a).toFloat()*r*1.35f,top+kotlin.math.sin(a).toFloat()*r*1.35f,mid+kotlin.math.cos(a).toFloat()*r*1.7f,top+kotlin.math.sin(a).toFloat()*r*1.7f,paint) }
+                }
             }
         }
     }

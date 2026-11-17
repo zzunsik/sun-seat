@@ -1,0 +1,15 @@
+material {
+    name : SunlightGuide,
+    shadingModel : unlit,
+    doubleSided : true,
+    blending : transparent,
+    depthWrite : false,
+    requires : [ color ]
+}
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        // Vertex RGB is already premultiplied by alpha in CabinMesh.beams.
+        material.baseColor = getColor();
+    }
+}

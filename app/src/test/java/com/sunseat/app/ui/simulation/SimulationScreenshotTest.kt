@@ -8,6 +8,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.sunseat.app.domain.*
+import com.sunseat.app.R
 import com.sunseat.app.ui.map.*
 import com.sunseat.app.ui.theme.SunSeatTheme
 import java.time.Duration
@@ -64,7 +65,17 @@ class SimulationScreenshotTest {
     @Test fun endLight() { render(23, false); shot("simulation_end_light") }
     @Test fun endDark() { render(23, true); shot("simulation_end_dark") }
     @Config(qualifiers = "w844dp-h390dp-xxhdpi")
-    @Test fun landscapeLight() { render(6, false); shot("simulation_landscape_light") }
+    @Test fun landscapeLight() {
+        render(6, false)
+        val app=org.robolectric.RuntimeEnvironment.getApplication()
+        val map=compose.onNodeWithContentDescription(app.getString(R.string.map_description,"숲 입구","공원")).fetchSemanticsNode().boundsInRoot
+        val detail=compose.onNodeWithText(app.getString(R.string.simulation_cabin_profile,app.getString(R.string.simulation_bus))).fetchSemanticsNode().boundsInRoot
+        assertTrue("landscape must place map beside details, not squeeze it above",map.right<=detail.left)
+        assertTrue(map.height>0)
+        val scene=compose.onNode(hasContentDescription("3D 차량",substring=true)).fetchSemanticsNode().boundsInRoot
+        assertTrue("landscape must show the whole 3D viewport above playback controls",scene.height>=com.sunseat.app.ui.theme.Sizes.cabinLandscapeHeight.value*compose.density.density-1)
+        shot("simulation_landscape_light")
+    }
     @Test fun nightDark() { render(6, true, -10.0); shot("simulation_night_dark") }
     @Test fun undergroundLight() { render(6, false, route = route.copy(legs = route.legs.map { it.copy(mode = Mode.SUBWAY, groundLevel = GroundLevel.BELOW) })); shot("simulation_underground_light") }
 

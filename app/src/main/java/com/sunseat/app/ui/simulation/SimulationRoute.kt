@@ -27,6 +27,7 @@ fun SimulationRoute(
     val state by vm.state.collectAsStateWithLifecycle()
     val owner = LocalLifecycleOwner.current
     val reduce = SunSeatTheme.reduceMotion
+    LaunchedEffect(vm,reduce) { vm.enter(reduce) }
     LaunchedEffect(state.playing, state.speed, reduce, owner) {
         if (reduce) vm.pause()
         else if (state.playing) owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -40,5 +41,5 @@ fun SimulationRoute(
     }
     val point = remember(state.elapsedMillis, timeline) { timeline.at(result.departure.plusMillis(state.elapsedMillis)) }
     SimulationScreen(request, route, result, state, point, timeline.boundaries,
-        SimulationActions(onBack, vm::seek, vm::toggle, vm::setSpeed, { vm.follow(false) }, { vm.follow(true) }), modifier)
+        SimulationActions(onBack, vm::seek, vm::toggle, vm::setSpeed, { vm.follow(false) }, { vm.follow(true) }, vm::seat, vm::camera), modifier)
 }

@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -105,15 +106,36 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
             val p = position(cursor.position)
             if (cursor.sunAltitude > 0) {
                 val angle = Math.toRadians(cursor.sunAzimuth)
-                val length = Sizes.mapSunRay.toPx() * (1 - cursor.sunAltitude.coerceIn(0.0, 90.0) / 120).toFloat()
+                val length = (if(state.routeProgress!=null) Sizes.simulationSunRay else Sizes.mapSunRay).toPx() * (1 - cursor.sunAltitude.coerceIn(0.0, 90.0) / 120).toFloat()
                 val end = p + Offset(sin(angle).toFloat(), -cos(angle).toFloat()) * length
                 drawLine(sun.copy(alpha = sunRayOpacity(cursor.sunAltitude)), p, end, Sizes.mapRoute.toPx(), StrokeCap.Round)
-                drawCircle(sun.copy(alpha = sunRayOpacity(cursor.sunAltitude)), Sizes.mapWalk.toPx(), end)
+                drawCircle(com.sunseat.app.ui.theme.LightSunSeatColors.sun,Sizes.mapMarker.toPx()*.16f,end)
+                drawCircle(scheme.onSurface,Sizes.mapMarker.toPx()*.16f,end,style=Stroke(Sizes.hairline.toPx()))
+                val inward=(p-end)*.2f
+                val tip=p+(end-p)*.3f
+                val side=Offset(-inward.y,inward.x)*.3f
+                drawLine(scheme.onSurface,tip,tip-inward+side,Sizes.hairline.toPx())
+                drawLine(scheme.onSurface,tip,tip-inward-side,Sizes.hairline.toPx())
             }
             rotate(cursor.heading.toFloat(), p) {
-                val radius = Sizes.mapMarker.toPx() / 2
-                val arrow = Path().apply { moveTo(p.x, p.y - radius); lineTo(p.x + radius / 2, p.y + radius); lineTo(p.x, p.y + radius / 2); lineTo(p.x - radius / 2, p.y + radius); close() }
-                drawPath(arrow, scheme.onSurface)
+                val h=Sizes.mapMarker.toPx()
+                val rect=androidx.compose.ui.geometry.Rect(p.x-h*.26f,p.y-h*.36f,p.x+h*.26f,p.y+h*.42f)
+                val body=Path().apply { addRoundRect(androidx.compose.ui.geometry.RoundRect(rect,androidx.compose.ui.geometry.CornerRadius(h*.12f))) }
+                drawPath(body,scheme.surface)
+                if(cursor.sunAltitude>0) {
+                    val relative=com.sunseat.app.domain.ExposureAnalyzer.normalize(cursor.sunAzimuth-cursor.heading)
+                    val bounds=when {
+                        relative<25 || relative>335 -> androidx.compose.ui.geometry.Rect(rect.left,rect.top,rect.right,p.y-h*.1f)
+                        relative>155 && relative<205 -> androidx.compose.ui.geometry.Rect(rect.left,p.y+h*.16f,rect.right,rect.bottom)
+                        relative<180 -> androidx.compose.ui.geometry.Rect(p.x,rect.top,rect.right,rect.bottom)
+                        else -> androidx.compose.ui.geometry.Rect(rect.left,rect.top,p.x,rect.bottom)
+                    }
+                    clipPath(body) { drawRect(com.sunseat.app.ui.theme.LightSunSeatColors.sun,bounds.topLeft,bounds.size) }
+                }
+                drawPath(body,scheme.onSurface,style=Stroke(Sizes.hairline.toPx()))
+                drawLine(scheme.onSurface,Offset(rect.left+h*.06f,p.y-h*.14f),Offset(rect.right-h*.06f,p.y-h*.14f),Sizes.hairline.toPx())
+                drawLine(scheme.onSurface,Offset(p.x,p.y-h*.48f),Offset(p.x-h*.1f,p.y-h*.4f),Sizes.hairline.toPx())
+                drawLine(scheme.onSurface,Offset(p.x,p.y-h*.48f),Offset(p.x+h*.1f,p.y-h*.4f),Sizes.hairline.toPx())
             }
         }
     }

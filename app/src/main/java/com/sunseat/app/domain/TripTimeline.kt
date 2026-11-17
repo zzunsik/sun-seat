@@ -16,7 +16,7 @@ data class TimelinePoint(
 /** Index built once. Each lookup is O(log n), with constant-time interpolation afterward. */
 class TripTimeline(
     route: Route, val result: TripResult,
-    source: SunPositionSource = SunCalculator,
+    private val source: SunPositionSource = SunCalculator,
     private val advisor: TripAdvisor = TripAdvisor(),
 ) {
     private data class Frame(val start: Instant, val end: Instant, val leg: Leg, val index: Int, val exposure: SegmentExposure?, val distanceStart: Double, val distance: Double)
@@ -62,7 +62,8 @@ class TripTimeline(
         val segment = frame.exposure
         val position = segment?.let { LatLng(it.from.latitude + (it.to.latitude - it.from.latitude) * fraction, it.from.longitude + (it.to.longitude - it.from.longitude) * fraction) } ?: frame.leg.path.firstOrNull()
         val illumination = segment?.let { advisor.illumination(frame.leg, it) } ?: (emptySet<Side>() to false)
-        return TimelinePoint(clamped, position, segment?.heading, segment?.sun, illumination.first, illumination.second, frame.index, frame.leg,
+        val currentSun = position?.let { source.positionAt(it.latitude,it.longitude,clamped) }
+        return TimelinePoint(clamped, position, segment?.heading, currentSun, illumination.first, illumination.second, frame.index, frame.leg,
             (result.legs.getOrNull(frame.index)?.advice as? LegAdvice.Sit)?.sideAt(clamped),
             if (distance > 0) ((frame.distanceStart + frame.distance * fraction) / distance).toFloat().coerceIn(0f, 1f) else 0f, segment?.side, (result.legs.getOrNull(frame.index)?.advice as? LegAdvice.Sit)?.spotAt(clamped))
     }

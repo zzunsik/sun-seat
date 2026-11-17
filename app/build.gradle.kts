@@ -86,6 +86,7 @@ kotlin {
 }
 
 dependencies {
+    implementation(libs.filament)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kakao.map)
     implementation(libs.androidx.core.ktx)

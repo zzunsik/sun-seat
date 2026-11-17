@@ -8,8 +8,8 @@ import androidx.compose.ui.unit.IntOffset
 
 /** 움직임 토큰. docs/DESIGN.md 7 */
 object Motion {
-    /** Maximum map playback update cadence, about 29fps. */
-    const val SIMULATION_FRAME_MS = 34L
+    /** About 30fps; 33ms avoids waiting a third 60Hz vsync for a 34ms threshold. */
+    const val SIMULATION_FRAME_MS = 33L
     /** 결과 카드 순차 등장 간격(ms) */
     const val STAGGER_STEP_MS = 70
 
