@@ -115,6 +115,8 @@ internal fun MapNotice(message: Int, modifier: Modifier = Modifier) {
 }
 
 private data class MapMetrics(val marker: Float, val route: Float, val walk: Float, val subway: Float, val inset: Float, val ray: Float)
+/** Playback icons rotate around the current route coordinate. */
+internal fun playbackLabelStyle(bitmap: Bitmap): LabelStyle = LabelStyle.from(bitmap).setApplyDpScale(false).setAnchorPoint(.5f,.5f)
 private fun LatLng.sdk(): com.kakao.vectormap.LatLng = com.kakao.vectormap.LatLng.from(latitude, longitude)
 
 /** 네이티브 객체의 소유권과 갱신을 한 곳에서 관리한다. */
@@ -196,8 +198,8 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         if (position == null) { cursor?.hide(); ray?.hide() }
         else {
             val layer = target.labelManager?.layer ?: return
-            if (cursor == null) cursor = layer.addLabel(LabelOptions.from(position.position.sdk()).setStyles(LabelStyle.from(vehicleIcon).setApplyDpScale(false)).setTransform(TransformMethod.AbsoluteRotation))
-            if (ray == null) ray = layer.addLabel(LabelOptions.from(position.position.sdk()).setStyles(LabelStyle.from(rayIcon).setApplyDpScale(false)).setTransform(TransformMethod.AbsoluteRotation))
+            if (cursor == null) cursor = layer.addLabel(LabelOptions.from(position.position.sdk()).setStyles(playbackLabelStyle(vehicleIcon)).setTransform(TransformMethod.AbsoluteRotation))
+            if (ray == null) ray = layer.addLabel(LabelOptions.from(position.position.sdk()).setStyles(playbackLabelStyle(rayIcon)).setTransform(TransformMethod.AbsoluteRotation))
             cursor?.show()
             if (position != lastCursor) {
                 cursor?.moveTo(position.position.sdk()); cursor?.rotateTo(Math.toRadians(position.heading).toFloat())
@@ -205,14 +207,14 @@ private class MapSession(context: Context, private val ink: Int, private val sur
             }
             val altitudeBucket=position.sunAltitude.toInt().toDouble()
             if (altitudeBucket != lastRayAltitude) {
-                ray?.setStyles(LabelStyle.from(marker(3, sun,altitude=position.sunAltitude)).setApplyDpScale(false))
+                ray?.setStyles(playbackLabelStyle(marker(3, sun,altitude=position.sunAltitude)))
                 ray?.invalidate(false)
                 ray?.rotateTo(Math.toRadians(position.sunAzimuth).toFloat())
                 lastRayAltitude = altitudeBucket
             }
             val relative=com.sunseat.app.domain.ExposureAnalyzer.normalize(position.sunAzimuth-position.heading)
             val lightSide=when {position.sunAltitude<=0 -> 0;relative<25 || relative>335 -> 1;relative>155 && relative<205 -> 2;relative<180 -> 3;else -> 4}
-            if(lightSide!=lastVehicleLight) { cursor?.setStyles(LabelStyle.from(marker(2,ink,lightSide)).setApplyDpScale(false));cursor?.invalidate(false);cursor?.rotateTo(Math.toRadians(position.heading).toFloat());lastVehicleLight=lightSide }
+            if(lightSide!=lastVehicleLight) { cursor?.setStyles(playbackLabelStyle(marker(2,ink,lightSide)));cursor?.invalidate(false);cursor?.rotateTo(Math.toRadians(position.heading).toFloat());lastVehicleLight=lightSide }
             if (position.sunAltitude > 0) ray?.show() else ray?.hide()
             if (state.followCursor && (position != lastCursor || !following)) target.moveCamera(CameraUpdateFactory.newCenterPosition(position.position.sdk()))
         }

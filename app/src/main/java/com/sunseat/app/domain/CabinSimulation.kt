@@ -51,6 +51,7 @@ data class CabinSeat(val id: String, val spot: SeatSpot, val center: V3, val fac
 
 /** Standard illustrative profile v1, intentionally independent of actual fleet layouts. */
 data class CabinProfile(val kind: CabinKind, val width: Double, val length: Double, val height: Double, val sill: Double, val windowTop: Double, val seats: List<CabinSeat>) {
+    val wallHalfThickness: Double get() = .045
     val shell = CabinBox(V3(-width/2,0.0,-length/2), V3(width/2,height,length/2))
     // All visible pillars are also calculation blockers. Roof is implicit in the closed shell.
     val pillars: List<CabinBox> = buildList {
@@ -109,7 +110,7 @@ data class CabinProfile(val kind: CabinKind, val width: Double, val length: Doub
                     add(CabinSeat("passenger",SeatSpot(Side.RIGHT,carSeat=CarSeat.PASSENGER),V3(.43,.48,-.65),V3(0.0,0.0,-1.0)))
                     for (s in Side.entries) add(CabinSeat("rear-${s.name}",SeatSpot(s,carSeat=if(s==Side.LEFT) CarSeat.REAR_LEFT else CarSeat.REAR_RIGHT),V3(if(s==Side.LEFT) -.43 else .43,.48,.65),V3(0.0,0.0,-1.0)))
                 } else if (kind == CabinKind.SUBWAY) {
-                    for (s in Side.entries) for (row in 0..5) add(CabinSeat("${s.name}-$row",SeatSpot(s),V3(if(s==Side.LEFT) -1.0 else 1.0,.5,-2.0+row*.8),V3(if(s==Side.LEFT) 1.0 else -1.0,0.0,0.0)))
+                    for (s in Side.entries) for (row in 0..5) add(CabinSeat("${s.name}-$row",SeatSpot(s),V3(if(s==Side.LEFT) -.88 else .88,.5,-2.0+row*.8),V3(if(s==Side.LEFT) 1.0 else -1.0,0.0,0.0)))
                 } else {
                     for (row in 0..5) for (s in Side.entries) for (pos in SeatPosition.entries) {
                         // Illustrative city bus: left single seats, right pairs. Coach: pairs on both sides.

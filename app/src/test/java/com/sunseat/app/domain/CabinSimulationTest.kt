@@ -5,6 +5,13 @@ import org.junit.Test
 import java.time.Duration
 
 class CabinSimulationTest {
+    @Test fun subwayBackrestsStayInsideTheSolidSideWalls() {
+        val p=CabinProfile.forLeg(leg(Mode.SUBWAY),TravelMode.TRANSIT)!!
+        for(seat in p.seats) {
+            assertTrue("bench backrest must not disappear into left wall",seat.backBox.min.x> -p.width/2+p.wallHalfThickness)
+            assertTrue("bench backrest must not disappear into right wall",seat.backBox.max.x< p.width/2-p.wallHalfThickness)
+        }
+    }
     private fun leg(mode: Mode)=Leg(mode,listOf(LatLng(37.0,127.0),LatLng(37.01,127.0)),Duration.ofMinutes(30),"A","B",GroundLevel.ABOVE)
     private val profile=CabinProfile.forLeg(leg(Mode.CAR),TravelMode.CAR)!!
     @Test fun `world and vehicle bearings use right up and forward correctly`() {

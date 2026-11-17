@@ -110,7 +110,7 @@ internal class CabinMesh {
             box(CabinBox(V3(-w,-.12,-l),V3(w,0.0,l)),neutral)
             for(x in listOf(-w,w)) {
                 // Camera-facing wall is visually cut away; the closed calculation shell stays intact.
-                bevelBox(CabinBox(V3(x-.045,0.0,-l),V3(x+.045,if(cutaway && x>0) .16 else p.sill,l)),neutral)
+                bevelBox(CabinBox(V3(x-p.wallHalfThickness,0.0,-l),V3(x+p.wallHalfThickness,if(cutaway && x>0) .16 else p.sill,l)),neutral)
                 if(x<0 || !cutaway) box(CabinBox(V3(x-.018,p.windowTop,-l),V3(x+.018,p.windowTop+.035,l)),neutral)
             }
             for(z in listOf(-l,l)) {

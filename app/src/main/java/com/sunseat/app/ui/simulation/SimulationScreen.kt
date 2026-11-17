@@ -95,7 +95,7 @@ fun SimulationScreen(
             }
     }
     @Composable fun CabinDetails(detailModifier: Modifier) {
-            Column(detailModifier.verticalScroll(rememberScrollState()).padding(Spacing.screen), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+            Column(detailModifier.verticalScroll(rememberScrollState()).padding(horizontal=Spacing.screen,vertical=if(landscape) Spacing.s else Spacing.screen), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                 if (point != null && point.leg.mode != Mode.WALK) CabinPanel(point, request.mode, state, actions)
                 if (result.arrival != result.modeledArrival) Text(stringResource(R.string.simulation_modeled_note, time(result.arrival)), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             }
@@ -115,7 +115,22 @@ fun SimulationScreen(
                 CabinDetails(Modifier.fillMaxWidth().weight(3f))
             }
             Surface(color = scheme.surface) {
-                Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Spacing.screen, vertical = Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                if(landscape) Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal=Spacing.screen,vertical=Spacing.s),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(Spacing.l)) {
+                    Column(Modifier.weight(1f)) {
+                        Slider(value=(state.elapsedMillis.toFloat()/duration).coerceIn(0f,1f),onValueChange=actions.seek,
+                            modifier=Modifier.fillMaxWidth().heightIn(min=Spacing.touch).semantics { contentDescription=sliderLabel;stateDescription=currentTime },
+                            colors=SliderDefaults.colors(thumbColor=scheme.inverseSurface,activeTrackColor=scheme.inverseSurface))
+                        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
+                            Text(time(result.departure),style=MaterialTheme.typography.labelSmall)
+                            Text(stringResource(R.string.simulation_scrub_time,currentTime),style=MaterialTheme.typography.labelSmall)
+                            Text(time(result.modeledArrival),style=MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                    if(!SunSeatTheme.reduceMotion) Row(horizontalArrangement=Arrangement.spacedBy(Spacing.s),verticalAlignment=Alignment.CenterVertically) {
+                        PrimaryButton(onClick=actions.toggle,modifier=Modifier.width(Sizes.simulationCompactPlay),enabled=point!=null) { Text(stringResource(if(state.playing) R.string.simulation_pause else R.string.simulation_play)) }
+                        listOf(1,2,4).forEach { speed -> NeutralFilterChip(state.speed==speed,stringResource(R.string.simulation_speed,speed)) { actions.speed(speed) } }
+                    }
+                } else Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Spacing.screen, vertical = Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     if(!landscape) MiniTimeline(result, boundaries)
                     Slider(value = (state.elapsedMillis.toFloat() / duration).coerceIn(0f, 1f), onValueChange = actions.seek,
                         modifier = Modifier.fillMaxWidth().heightIn(min = Spacing.touch).semantics { contentDescription = sliderLabel; stateDescription = currentTime },

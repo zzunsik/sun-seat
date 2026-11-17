@@ -23,6 +23,7 @@ class SimulationFixtureActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); recreate() }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if(intent.getBooleanExtra("landscape",false)) requestedOrientation=android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         enableEdgeToEdge()
         val dark=intent.getBooleanExtra("dark",false)
         WindowCompat.getInsetsController(window,window.decorView).apply {

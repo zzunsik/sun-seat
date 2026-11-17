@@ -23,7 +23,8 @@ object Spacing {
 /** 부품 크기 토큰. docs/DESIGN.md 4 */
 object Sizes {
     val cabinHeight = 208.dp
-    val cabinLandscapeHeight = 128.dp
+    val cabinLandscapeHeight = 112.dp
+    val simulationCompactPlay = 112.dp
     val simulationMapInfo = 84.dp
     val simulationSunRay = 56.dp
     val mapHeight = 240.dp
