@@ -86,8 +86,8 @@ class SunSeatFlowTest {
 
     private fun clickText(value: String) = compose.onNode(hasClickAction() and hasText(value)).tap()
 
-    private fun scrubLabel(): String = compose.onNode(hasText(text(R.string.simulation_scrub_time, ""), substring = true))
-        .fetchSemanticsNode().config[SemanticsProperties.Text].joinToString()
+    private fun scrubLabel(): String = compose.onNodeWithContentDescription(text(R.string.simulation_slider))
+        .fetchSemanticsNode().config[SemanticsProperties.StateDescription]
 
     private fun back() {
         compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
@@ -125,14 +125,18 @@ class SunSeatFlowTest {
         // 결과 → 햇빛 따라가기
         val ride = text(R.string.simulation_title)
         waitForText(text(R.string.result_legs))
-        clickText(ride)
-        waitForText(text(R.string.simulation_play))
-        // 재생 중에는 일시정지로 바뀌고 시각이 흐른다(프레임 시계를 직접 넘긴다)
-        val before = scrubLabel()
         compose.mainClock.autoAdvance = false
-        clickText(text(R.string.simulation_play))
+        compose.onNode(hasClickAction() and hasText(ride)).performSemanticsAction(SemanticsActions.OnClick)
+        compose.waitUntil(10_000) {
+            compose.mainClock.advanceTimeByFrame()
+            compose.onAllNodesWithText(text(R.string.simulation_pause)).fetchSemanticsNodes().isNotEmpty()
+        }
+        // #56: 진입하면 자동으로 이동한다. 자동 시계를 멈춘 채 프레임을 직접 넘긴다.
+        compose.onNode(hasClickAction() and hasText(text(R.string.simulation_pause))).assertExists()
+        val before = scrubLabel()
         compose.mainClock.advanceTimeBy(2_000)
-        clickText(text(R.string.simulation_pause))
+        compose.onNode(hasClickAction() and hasText(text(R.string.simulation_pause))).performSemanticsAction(SemanticsActions.OnClick)
+        compose.mainClock.advanceTimeByFrame()
         compose.mainClock.autoAdvance = true
         compose.onNode(hasClickAction() and hasText(text(R.string.simulation_play))).assertExists()
         assertNotEquals(before, scrubLabel())
