@@ -1,6 +1,5 @@
 package com.sunseat.app.ui.input
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -8,6 +7,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import com.sunseat.app.R
@@ -32,34 +34,71 @@ fun TimeSheet(
 ) {
     var selectedMode by rememberSaveable { mutableStateOf(mode.name) }
     var day by rememberSaveable { mutableLongStateOf((value ?: now).toLocalDate().toEpochDay()) }
-    val time = rememberTimePickerState((value ?: now).hour, (value ?: now).minute, is24Hour = true)
+    var hour by rememberSaveable { mutableIntStateOf((value ?: now).hour) }
+    var minute by rememberSaveable { mutableIntStateOf((value ?: now).minute) }
+    val dates = (listOf(java.time.LocalDate.ofEpochDay(day)) + listOfNotNull(value?.toLocalDate()) + (0L..2L).map { now.toLocalDate().plusDays(it) }).distinct().sorted()
+    val dateLabels = dates.map { date ->
+        when (date) {
+            now.toLocalDate() -> stringResource(R.string.input_today)
+            now.toLocalDate().plusDays(1) -> stringResource(R.string.input_tomorrow)
+            now.toLocalDate().plusDays(2) -> stringResource(R.string.input_after_tomorrow)
+            else -> date.format(DateTimeFormatter.ofPattern("M월 d일"))
+        }
+    }
     ModalBottomSheet(modifier = modifier, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), onDismissRequest = onDismiss, containerColor = SunSeatTheme.scheme.surface) {
         Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.screen), verticalArrangement = Arrangement.spacedBy(Spacing.m)) {
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Spacing.m)) {
             Text(stringResource(R.string.input_time_title), style = MaterialTheme.typography.titleLarge)
             NeutralTabs(listOf(stringResource(R.string.input_depart_tab), stringResource(R.string.input_arrive_tab)), TimeMode.valueOf(selectedMode).ordinal) { selectedMode = TimeMode.entries[it].name }
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                listOf(R.string.input_today, R.string.input_tomorrow, R.string.input_after_tomorrow).forEachIndexed { index, label ->
-                    NeutralFilterChip(day == now.toLocalDate().plusDays(index.toLong()).toEpochDay(), stringResource(label)) { day = now.toLocalDate().plusDays(index.toLong()).toEpochDay() }
-                }
-            }
+            ScheduleDropdown(stringResource(R.string.input_date), dateLabels, dates.indexOf(java.time.LocalDate.ofEpochDay(day)),
+                onSelect = { day = dates[it].toEpochDay() }, modifier = Modifier.fillMaxWidth(), tag = "schedule_date")
             Text(java.time.LocalDate.ofEpochDay(day).format(DateTimeFormatter.ofPattern("M월 d일")), style = MaterialTheme.typography.bodyMedium)
-            Box(Modifier.fillMaxWidth(), contentAlignment = androidx.compose.ui.Alignment.Center) { TimePicker(time, colors = TimePickerDefaults.colors(
-                selectorColor = SunSeatTheme.scheme.inverseSurface,
-                clockDialSelectedContentColor = SunSeatTheme.scheme.inverseOnSurface,
-                timeSelectorSelectedContainerColor = SunSeatTheme.scheme.inverseSurface,
-                timeSelectorSelectedContentColor = SunSeatTheme.scheme.inverseOnSurface,
-            )) }
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.m)) {
+                ScheduleDropdown(stringResource(R.string.input_hour), (0..23).map { stringResource(R.string.input_hour_value, it) }, hour,
+                    onSelect = { hour = it }, modifier = Modifier.weight(1f), tag = "schedule_hour")
+                ScheduleDropdown(stringResource(R.string.input_minute), (0..59).map { stringResource(R.string.input_minute_value, it) }, minute,
+                    onSelect = { minute = it }, modifier = Modifier.weight(1f), tag = "schedule_minute")
+            }
             if (travelMode == TravelMode.TRANSIT) Text(stringResource(R.string.input_time_note), style = MaterialTheme.typography.bodySmall, color = SunSeatTheme.scheme.onSurfaceVariant)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.m)) {
                 QuietButton(onClick = { onApply(null, TimeMode.DEPART); onDismiss() }) { Text(stringResource(R.string.input_time_now)) }
                 PrimaryButton(onClick = {
-                    onApply(java.time.LocalDate.ofEpochDay(day).atTime(time.hour, time.minute), TimeMode.valueOf(selectedMode))
+                    onApply(java.time.LocalDate.ofEpochDay(day).atTime(hour, minute), TimeMode.valueOf(selectedMode))
                     onDismiss()
                 }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.input_time_apply)) }
             }
             Spacer(Modifier.height(Spacing.l))
+        }
+    }
+}
+
+/** Read-only anchored fields keep time selection out of the keyboard and clock dial. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ScheduleDropdown(label: String, options: List<String>, selected: Int, onSelect: (Int) -> Unit, tag: String, modifier: Modifier = Modifier) {
+    var expanded by remember { mutableStateOf(false) }
+    val scroll = rememberScrollState()
+    val rowPixels = with(androidx.compose.ui.platform.LocalDensity.current) { Spacing.touch.roundToPx() }
+    LaunchedEffect(expanded) { if (expanded) scroll.scrollTo(selected.coerceAtLeast(0) * rowPixels) }
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }, modifier = modifier) {
+        OutlinedTextField(
+            value = options.getOrElse(selected) { "" }, onValueChange = {}, readOnly = true,
+            label = { Text(label) }, singleLine = true,
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = SunSeatTheme.scheme.onSurface, focusedLabelColor = SunSeatTheme.scheme.onSurface),
+            modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).testTag(tag),
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, scrollState = scroll,
+            containerColor = SunSeatTheme.scheme.surface) {
+            options.forEachIndexed { index, option ->
+                DropdownMenuItem(
+                    text = { Text(option) },
+                    trailingIcon = if (index == selected) { { Icon(painterResource(R.drawable.ic_ms_check), null, Modifier.size(Sizes.iconSmall)) } } else null,
+                    modifier = Modifier.heightIn(min = Spacing.touch).semantics { this.selected = index == selected },
+                    onClick = { onSelect(index); expanded = false },
+                )
+            }
         }
     }
 }

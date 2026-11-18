@@ -9,6 +9,7 @@ import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performSemanticsAction
 import com.sunseat.app.domain.TimeMode
 import com.sunseat.app.domain.TravelMode
@@ -46,11 +47,58 @@ class TimeSheetTest {
         compose.waitForIdle()
     }
 
+    @Test fun dropdownSelectionPreservesDraftUntilConfirmation() {
+        show()
+        compose.onNodeWithTag("schedule_hour").performSemanticsAction(SemanticsActions.OnClick)
+        tap("23시")
+        compose.onNodeWithTag("schedule_minute").performSemanticsAction(SemanticsActions.OnClick)
+        tap("59분")
+        assertNull(applied)
+        tap("적용")
+        assertEquals(now.withHour(23).withMinute(59) to TimeMode.DEPART, applied)
+    }
+
+    @Test fun midnightCanBeSelectedWithoutRounding() {
+        show(now.withHour(23).withMinute(59), TimeMode.ARRIVE)
+        compose.onNodeWithTag("schedule_hour").performSemanticsAction(SemanticsActions.OnClick)
+        tap("00시")
+        compose.onNodeWithTag("schedule_minute").performSemanticsAction(SemanticsActions.OnClick)
+        tap("00분")
+        tap("적용")
+        assertEquals(now.toLocalDate().atStartOfDay() to TimeMode.ARRIVE, applied)
+    }
+
+    @Test fun savedDateOutsideQuickChoicesAndArbitraryMinuteSurviveModeChange() {
+        val saved = now.minusDays(8).withHour(12).withMinute(37)
+        show(saved, TimeMode.ARRIVE)
+        compose.onNodeWithText("12시").assertExists()
+        compose.onNodeWithText("37분").assertExists()
+        tap("출발 시각")
+        tap("적용")
+        assertEquals(saved to TimeMode.DEPART, applied)
+    }
+
+    @Test fun dismissingSheetDoesNotApplyDraft() {
+        compose.setContent {
+            SunSeatTheme { TimeSheet(now, TimeMode.DEPART, TravelMode.CAR,
+                onDismiss = { dismissed = true }, onApply = { v, m -> applied = v to m }, now = now) }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag("schedule_hour").performSemanticsAction(SemanticsActions.OnClick)
+        tap("23시")
+        compose.onNode(androidx.compose.ui.test.SemanticsMatcher.keyIsDefined(SemanticsActions.Dismiss))
+            .performSemanticsAction(SemanticsActions.Dismiss)
+        compose.waitForIdle()
+        assertNull(applied)
+        assertTrue(dismissed)
+    }
+
     @Test fun switchingToArrivalAndTomorrowAppliesOnlyOnConfirm() {
         show()
         compose.onNodeWithText("출발 시각").assertIsSelected()
-        compose.onNodeWithText("오늘").assertIsSelected()
+        compose.onNodeWithText("오늘").assertExists()
         tap("도착 시각")
+        compose.onNodeWithTag("schedule_date").performSemanticsAction(SemanticsActions.OnClick)
         tap("내일")
         compose.onNodeWithText("도착 시각").assertIsSelected()
         compose.onNodeWithText("출발 시각").assertIsNotSelected()
@@ -65,7 +113,7 @@ class TimeSheetTest {
     @Test fun savedArrivalOpensOnArrivalAndCanSwitchBackToDeparture() {
         show(LocalDateTime.of(2026, 11, 18, 19, 5), TimeMode.ARRIVE)
         compose.onNodeWithText("도착 시각").assertIsSelected()
-        compose.onNodeWithText("모레").assertIsSelected()
+        compose.onNodeWithText("모레").assertExists()
         tap("출발 시각")
         tap("적용")
         assertEquals(LocalDateTime.of(2026, 11, 18, 19, 5) to TimeMode.DEPART, applied)
