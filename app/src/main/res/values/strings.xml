@@ -194,6 +194,11 @@
     <string name="timeline_excluded_description">%1$s 햇빛 %2$d퍼센트, 그늘 %3$d퍼센트, 추천 제외 %4$d퍼센트</string>
     <string name="result_find_route">경로 다시 찾기</string>
     <string name="input_time_title">이동 시각</string>
+    <string name="input_date">날짜</string>
+    <string name="input_hour">시</string>
+    <string name="input_minute">분</string>
+    <string name="input_hour_value">%1$02d시</string>
+    <string name="input_minute_value">%1$02d분</string>
     <string name="input_depart_tab">출발 시각</string>
     <string name="input_arrive_tab">도착 시각</string>
     <string name="input_today">오늘</string>

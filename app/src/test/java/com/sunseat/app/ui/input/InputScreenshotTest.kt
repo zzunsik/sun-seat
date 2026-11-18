@@ -4,6 +4,8 @@ import androidx.compose.ui.test.junit4.accessibility.enableAccessibilityChecks
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.isPopup
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.performClick
@@ -78,6 +80,35 @@ class InputScreenshotTest {
     @Test fun arriveLight() = timeSheet(false, com.sunseat.app.domain.TimeMode.ARRIVE)
     @Test fun arriveDark() = timeSheet(true, com.sunseat.app.domain.TimeMode.ARRIVE)
 
+    private fun minuteMenu(dark: Boolean) {
+        compose.enableAccessibilityChecks()
+        compose.setContent { SunSeatTheme(darkTheme = dark) {
+            TimeSheet(filled.departure!!.withMinute(37), com.sunseat.app.domain.TimeMode.DEPART, TravelMode.TRANSIT, {}, { _, _ -> }, now = filled.departure!!)
+        } }
+        compose.waitForIdle()
+        compose.onNodeWithTag("schedule_minute").performClick()
+        compose.onNode(isPopup()).tryPerformAccessibilityChecks()
+        compose.onNode(isPopup()).captureRoboImage("src/test/screenshots/input_time_minutes_${if (dark) "dark" else "light"}.png")
+    }
+    @Test fun minuteMenuLight() = minuteMenu(false)
+    @Test fun minuteMenuDark() = minuteMenu(true)
+
+    @Test
+    @Config(qualifiers = "w320dp-h640dp-xxhdpi")
+    fun timeLargeTextSmallScreen() {
+        compose.enableAccessibilityChecks()
+        compose.setContent {
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, 1.5f)) {
+                SunSeatTheme { TimeSheet(filled.departure, com.sunseat.app.domain.TimeMode.ARRIVE, TravelMode.TRANSIT, {}, { _, _ -> }, now = filled.departure!!) }
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithText("적용").assertIsDisplayed()
+        compose.onRoot().tryPerformAccessibilityChecks()
+        shot("input_time_large_text_small")
+    }
+
     @Test fun emptyLight() { render(InputUiState(), false); shot("input_empty_light") }
     @Test fun filledLight() { render(filled, false); shot("input_filled_light") }
     @Test fun filledDark() { render(filled, true); shot("input_filled_dark") }
@@ -114,6 +145,7 @@ class InputScreenshotTest {
         compose.setContent { SunSeatTheme { TimeSheet(null, com.sunseat.app.domain.TimeMode.DEPART, TravelMode.TRANSIT, {}, { value, mode -> applied = value to mode }, now = filled.departure!!) } }
         compose.onNodeWithText("적용").assertIsDisplayed()
         compose.onNodeWithText("도착 시각").performClick()
+        compose.onNodeWithTag("schedule_date").performClick()
         compose.onNodeWithText("내일").performClick()
         org.junit.Assert.assertNull(applied)
         compose.onNodeWithText("적용").performClick()
