@@ -357,6 +357,25 @@ class SunSeatFlowTest {
         assertEquals(1, graph.server.carRequests)
     }
 
+    @Test fun confirmingNowAgainUsesFreshClockInsteadOfAnEarlierResult() {
+        val graph = launch()
+        enterTrip()
+        waitForText("30분")
+        clickText(text(R.string.candidates_filter_subway))
+        clickText(text(R.string.candidates_view_seat))
+        waitForText(text(R.string.result_legs))
+        compose.onNodeWithContentDescription(text(R.string.input_time_title)).tap()
+        clickText(text(R.string.input_time_now))
+        waitForText(text(R.string.result_legs))
+        val next = graph.clock.instant().plusSeconds(3600)
+        graph.clock = java.time.Clock.fixed(next, graph.clock.zone)
+        compose.onNodeWithContentDescription(text(R.string.input_time_title)).tap()
+        clickText(text(R.string.input_time_now))
+        val departure = next.atZone(graph.clock.zone).format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("$departure 출발", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        assertEquals(1, graph.server.transitRequests)
+    }
+
     private companion object {
         const val ORIGIN = "예시역 1호선"
         const val DESTINATION = "견본 카페"
