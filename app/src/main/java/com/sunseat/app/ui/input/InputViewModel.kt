@@ -129,9 +129,14 @@ class InputViewModel(
     private var searchJob: Job? = null
     private var locationJob: Job? = null
     private var locationPurpose = LocationPurpose.ORIGIN
+    private var pendingLocationPermission = false
     private var mapFocusSequence = 0L
 
-    fun prepareLocation(purpose: LocationPurpose) { locationPurpose = purpose }
+    fun prepareLocation(purpose: LocationPurpose) { locationPurpose = purpose; pendingLocationPermission = true }
+
+    fun onLocationPermissionAvailable() {
+        if (pendingLocationPermission) retryLocation() else locateInitialOrigin()
+    }
 
     fun locateInitialOrigin() {
         if (locationPurpose == LocationPurpose.ORIGIN && _state.value.origin == null && !_state.value.locating) fetchCurrentLocation()
@@ -223,7 +228,7 @@ class InputViewModel(
 
     fun choosePlace(place: Place) {
         val field = _state.value.search?.field ?: return
-        if (field == EndpointField.ORIGIN) locationJob?.cancel()
+        if (field == EndpointField.ORIGIN) { locationJob?.cancel(); pendingLocationPermission = false }
         val endpoint = Endpoint(NamedPlace(place.name, place.location))
         _state.update {
             when (field) {
@@ -244,6 +249,7 @@ class InputViewModel(
             }
             fetchCurrentLocation(locationPurpose)
         } else {
+            pendingLocationPermission = true
             _state.update { it.copy(locationMessageRes = status.messageRes(), locationAction = status.action(), search = if (locationPurpose == LocationPurpose.ORIGIN) null else it.search) }
         }
     }
@@ -251,6 +257,7 @@ class InputViewModel(
     /** 권한이 이미 있을 때 현재 위치를 출발지로 정한다. */
     fun fetchCurrentLocation(purpose: LocationPurpose = LocationPurpose.ORIGIN) {
         locationPurpose = purpose
+        pendingLocationPermission = false
         locationJob?.cancel()
         _state.update { it.copy(locating = purpose == LocationPurpose.ORIGIN, mapLocating = purpose == LocationPurpose.MAP,
             search = if (purpose == LocationPurpose.ORIGIN) null else it.search) }
@@ -279,6 +286,7 @@ class InputViewModel(
 
     fun swap() {
         locationJob?.cancel()
+        pendingLocationPermission = false
         _state.update { it.copy(origin = it.destination, destination = it.origin, locating = false, mapLocating = false) }
     }
 

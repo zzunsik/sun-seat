@@ -290,6 +290,23 @@ class InputViewModelTest {
         assertTrue(vm.state.value.origin!!.isCurrentLocation)
     }
 
+    @Test fun grantingPermissionInSettingsResumesMapRequestOnce() = runTest(dispatcher) {
+        var calls = 0
+        val vm = vm(location = LocationProvider { calls++; LocationResult.Success(37.5, 127.0, 20f, false) })
+        vm.prepareLocation(LocationPurpose.MAP)
+        vm.onLocationPermission(LocationPermissionStatus.PermanentlyDenied)
+        // ON_RESUME refresh changes permission.status without delivering a request callback.
+        vm.onLocationPermissionAvailable()
+        advanceUntilIdle()
+        assertEquals(1, calls)
+        assertNull(vm.state.value.origin)
+        assertEquals(LatLng(37.5, 127.0), vm.state.value.mapFocus!!.location)
+        assertNull(vm.state.value.locationMessageRes)
+        vm.onLocationPermissionAvailable()
+        advanceUntilIdle()
+        assertEquals(1, calls)
+    }
+
     @Test
     fun deniedPermissionShowsGuidanceWithoutCrash() = runTest(dispatcher) {
         val vm = vm()

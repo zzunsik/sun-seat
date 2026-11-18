@@ -39,7 +39,7 @@ fun InputRoute(
         viewModel.automaticRequest()?.let(onSubmit)
     }
     LaunchedEffect(permission.status) {
-        if (permission.status.isGranted) viewModel.locateInitialOrigin()
+        if (permission.status.isGranted) viewModel.onLocationPermissionAvailable()
     }
 
     InputScreen(
