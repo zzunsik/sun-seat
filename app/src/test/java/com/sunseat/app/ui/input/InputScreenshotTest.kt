@@ -204,5 +204,28 @@ class InputScreenshotTest {
     @Test fun mapFocusedLight() = mapFocused(false)
     @Test fun mapFocusedDark() = mapFocused(true)
 
+    private fun largeModeTabs(dark: Boolean, mode: TravelMode) {
+        compose.enableAccessibilityChecks()
+        compose.setContent {
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            androidx.compose.runtime.CompositionLocalProvider(
+                com.sunseat.app.ui.map.LocalMapRenderer provides com.sunseat.app.ui.map.MapRenderer.PREVIEW,
+                androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, 1.5f),
+            ) {
+                SunSeatTheme(darkTheme = dark) { InputScreen(filled.copy(mode = mode), InputActions()) }
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithText(if (mode == TravelMode.CAR) "자가용" else "대중교통").assertIsDisplayed()
+        compose.onRoot().tryPerformAccessibilityChecks()
+        shot("input_tabs_large_${mode.name.lowercase()}_${if (dark) "dark" else "light"}")
+    }
+    @Test @Config(qualifiers = "w320dp-h640dp-xxhdpi")
+    fun transitTabsLargeLight() = largeModeTabs(false, TravelMode.TRANSIT)
+    @Test @Config(qualifiers = "w320dp-h640dp-xxhdpi")
+    fun transitTabsLargeDark() = largeModeTabs(true, TravelMode.TRANSIT)
+    @Test @Config(qualifiers = "w320dp-h640dp-xxhdpi")
+    fun carTabsLargeDark() = largeModeTabs(true, TravelMode.CAR)
+
     private fun shot(name: String) = compose.onRoot().captureRoboImage("src/test/screenshots/$name.png")
 }
