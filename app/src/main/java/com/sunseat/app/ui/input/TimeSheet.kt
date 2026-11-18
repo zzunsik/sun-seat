@@ -1,5 +1,6 @@
 package com.sunseat.app.ui.input
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -8,6 +9,9 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.painterResource
@@ -106,14 +110,34 @@ private fun ScheduleDropdown(label: String, options: List<String>, selected: Int
 @Composable
 fun NeutralTabs(labels: List<String>, selected: Int, modifier: Modifier = Modifier, onSelect: (Int) -> Unit) {
     val scheme = SunSeatTheme.scheme
-    Row(modifier.fillMaxWidth().heightIn(min = Spacing.touch)) {
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val style = MaterialTheme.typography.labelLarge
+    val minimumWidths = labels.map { label ->
+        with(density) { measurer.measure(label, style = style, softWrap = false).size.width.toDp() } +
+            Sizes.iconSmall + Spacing.s + Spacing.l * 2 // M3 Tab's horizontal content padding.
+    }
+    val scroll = rememberScrollState()
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        val total = minimumWidths.sumOf { it.value.toDouble() }.toFloat().dp
+        val scrollable = total > maxWidth
+        val equalWidth = (minimumWidths.maxOrNull() ?: 0.dp) * labels.size <= maxWidth
+        LaunchedEffect(selected, minimumWidths, scrollable, maxWidth) {
+            val offset = with(density) { minimumWidths.take(selected).sumOf { it.roundToPx() } }
+            scroll.scrollTo(if (scrollable) offset else 0)
+        }
+        Row(Modifier.fillMaxWidth().heightIn(min = Spacing.touch)
+            .then(if (scrollable) Modifier.horizontalScroll(scroll) else Modifier)) {
         labels.forEachIndexed { index, label ->
-            Surface(color = if (index == selected) scheme.inverseSurface else scheme.surface, contentColor = if (index == selected) scheme.inverseOnSurface else scheme.onSurface, modifier = Modifier.weight(1f)) {
+            val width = minimumWidths[index]
+            val tabModifier = if (scrollable) Modifier.width(width) else Modifier.weight(if (equalWidth) 1f else width.value)
+            Surface(color = if (index == selected) scheme.inverseSurface else scheme.surface, contentColor = if (index == selected) scheme.inverseOnSurface else scheme.onSurface, modifier = tabModifier) {
                 androidx.compose.material3.Tab(selected = index == selected, onClick = { onSelect(index) }, text = { Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                     if (index == selected) Icon(painterResource(R.drawable.ic_ms_check), null, Modifier.size(Sizes.iconSmall))
-                    Text(label, style = MaterialTheme.typography.labelLarge)
+                    Text(label, style = style, maxLines = 1, softWrap = false)
                 } }, selectedContentColor = scheme.inverseOnSurface, unselectedContentColor = scheme.onSurface)
             }
+        }
         }
     }
 }
