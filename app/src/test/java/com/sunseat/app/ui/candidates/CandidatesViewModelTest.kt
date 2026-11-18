@@ -70,6 +70,56 @@ class CandidatesViewModelTest {
         assertTrue(sit == null || com.sunseat.app.domain.CarSeat.PASSENGER !in sit.carSeats)
     }
 
+    @Test fun scheduleUpdateReusesRoutesAndKeepsSelectionSortAndFilter() = runTest(dispatcher) {
+        val transit = FakeTransit(ApiResult.Success(TransitRoutes(options)))
+        var clock = java.time.LocalDateTime.of(2026, 11, 18, 9, 0)
+        val vm = CandidatesViewModel(transitRequest, transit, noCar, now = { clock }, compute = dispatcher)
+        advanceUntilIdle()
+        vm.setSort(CandidateSort.WALK)
+        vm.toggleFilter(TransitRouteType.SUBWAY)
+        vm.highlight(0)
+        val arrival = clock.withHour(23).withMinute(37)
+        vm.updateRequest(transitRequest.copy(departure = arrival, timeMode = com.sunseat.app.domain.TimeMode.ARRIVE), 1)
+        assertTrue((vm.state.value as CandidatesState.Options).items.all { it.chosen.cachedResult == null })
+        advanceUntilIdle()
+        val state = vm.state.value as CandidatesState.Options
+        assertEquals(1, transit.calls)
+        assertEquals(CandidateSort.WALK, state.sort)
+        assertEquals(setOf(TransitRouteType.SUBWAY), state.filters)
+        assertEquals(0, state.selectedId)
+        assertTrue(state.items.all { it.arrival == arrival })
+        clock = clock.plusHours(1)
+        vm.updateRequest(transitRequest, 2)
+        advanceUntilIdle()
+        assertTrue((vm.state.value as CandidatesState.Options).items.all {
+            it.chosen.cachedResult!!.departure == clock.atZone(java.time.ZoneId.systemDefault()).toInstant()
+        })
+        // A fresh 'now' confirmation must not reuse the original calculation just because fields match.
+        clock = clock.plusHours(1)
+        vm.updateRequest(transitRequest, 3)
+        advanceUntilIdle()
+        assertEquals(1, transit.calls)
+        assertTrue((vm.state.value as CandidatesState.Options).items.all {
+            it.chosen.cachedResult!!.departure == clock.atZone(java.time.ZoneId.systemDefault()).toInstant()
+        })
+    }
+
+    @Test fun timeUpdateDuringNetworkLoadUsesLatestScheduleWithoutAnotherCall() = runTest(dispatcher) {
+        val response = kotlinx.coroutines.CompletableDeferred<ApiResult<TransitRoutes>>()
+        var calls = 0
+        val transit = object : TransitRouteApi {
+            override suspend fun search(origin: LatLng, destination: LatLng): ApiResult<TransitRoutes> { calls++; return response.await() }
+        }
+        val vm = CandidatesViewModel(transitRequest, transit, noCar, compute = dispatcher)
+        runCurrent()
+        val arrival = java.time.LocalDateTime.of(2026, 11, 19, 12, 37)
+        vm.updateRequest(transitRequest.copy(departure = arrival, timeMode = com.sunseat.app.domain.TimeMode.ARRIVE), 1)
+        response.complete(ApiResult.Success(TransitRoutes(options)))
+        advanceUntilIdle()
+        assertEquals(1, calls)
+        assertTrue((vm.state.value as CandidatesState.Options).items.all { it.arrival == arrival })
+    }
+
     @Test
     fun transitOptionsMapToCards() = runTest(dispatcher) {
         val vm = CandidatesViewModel(transitRequest, FakeTransit(ApiResult.Success(TransitRoutes(options))), noCar, now = { java.time.LocalDateTime.of(2026, 11, 15, 9, 0) }, compute = dispatcher)

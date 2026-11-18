@@ -122,7 +122,7 @@ internal fun List<TransitRouteOption>.toUi(now: LocalDateTime?): List<CandidateU
  * 경로 후보를 찾는다. 대중교통은 목록을, 자가용은 경로 하나를 찾자마자 [autoSelected]로 결과 화면에 넘긴다.
  */
 class CandidatesViewModel(
-    private val request: TripRequest,
+    private var request: TripRequest,
     private val transit: TransitRouteApi,
     private val car: CarRouteApi,
     private val now: () -> LocalDateTime = { LocalDateTime.now() },
@@ -141,8 +141,29 @@ class CandidatesViewModel(
     val autoSelected = _autoSelected.receiveAsFlow()
 
     private var loadJob: Job? = null
+    private var sunJob: Job? = null
     private var generation = 0
+    private var revision = 0L
     init { load() }
+
+    /** Schedule changes reuse network routes, but discard calculations for the old departure. */
+    fun updateRequest(value: TripRequest, revision: Long = 0) {
+        if (value == request && revision == this.revision) return
+        val routeChanged = value.origin != request.origin || value.destination != request.destination || value.mode != request.mode
+        request = value
+        this.revision = revision
+        if (routeChanged) { load(); return }
+        val options = _state.value as? CandidatesState.Options ?: return
+        sunJob?.cancel()
+        val version = ++generation
+        val base = now().atZone(zone).toInstant()
+        val refreshed = options.copy(goal = value.goal, items = options.items.map { item ->
+            item.copy(arrival = (value.departureInstant(item.totalDuration, base, zone) + item.totalDuration).atZone(zone).toLocalDateTime(),
+                chosen = item.chosen.copy(cachedResult = null))
+        })
+        _state.value = refreshed
+        calculateSun(refreshed, base, version)
+    }
     fun setSort(sort: CandidateSort) { _state.update { if (it is CandidatesState.Options) it.copy(sort = sort) else it } }
     fun toggleFilter(type: TransitRouteType) { _state.update {
         if (it is CandidatesState.Options) it.copy(filters = if (type in it.filters) it.filters - type else it.filters + type, selectedId = null) else it
@@ -152,6 +173,7 @@ class CandidatesViewModel(
 
     fun load() {
         loadJob?.cancel()
+        sunJob?.cancel()
         val version = ++generation
         _state.value = CandidatesState.Loading(request.mode)
         loadJob = viewModelScope.launch {
@@ -196,9 +218,16 @@ class CandidatesViewModel(
             if (version != generation) return@launch
             _state.value = loaded
             val options = loaded as? CandidatesState.Options ?: return@launch
+            calculateSun(options, base, version)
+        }
+    }
+
+    private fun calculateSun(options: CandidatesState.Options, base: Instant, version: Int) {
+        val activeRequest = request
+        sunJob = viewModelScope.launch {
             coroutineScope {
                 options.items.map { item -> async(compute) {
-                    val result = calculate(item.chosen.route, request.departureInstant(item.totalDuration, base, zone), request.goal, preference, item.totalDuration)
+                    val result = calculate(item.chosen.route, activeRequest.departureInstant(item.totalDuration, base, zone), activeRequest.goal, preference, item.totalDuration)
                     currentCoroutineContext().ensureActive()
                     if (version == generation) _state.update { current ->
                         if (current is CandidatesState.Options) current.copy(items = current.items.map {

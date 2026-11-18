@@ -23,14 +23,16 @@ fun CandidatesRoute(
     onSearchByCar: () -> Unit,
     modifier: Modifier = Modifier,
     onRequestChange: (TripRequest) -> Unit = {},
+    requestRevision: Long = 0,
     viewModel: CandidatesViewModel = viewModel(
-        key = request.toString(),
+        key = request.copy(departure = null, timeMode = com.sunseat.app.domain.TimeMode.DEPART, goal = com.sunseat.app.domain.SunGoal.AVOID).toString(),
         factory = viewModelFactory {
             initializer { CandidatesViewModel(request, graph.kakao.transitRoutes, graph.kakao.carRoutes, now = { java.time.LocalDateTime.now(graph.clock) }, preference = graph.settings.settings.value.benchPreference) }
         },
     ),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    LaunchedEffect(viewModel, request, requestRevision) { viewModel.updateRequest(request, requestRevision) }
     LaunchedEffect(viewModel) { viewModel.autoSelected.collect(onAutoSelect) }
     CandidatesScreen(
         request = request,

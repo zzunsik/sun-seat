@@ -119,6 +119,19 @@ class InputViewModelTest {
         assertEquals(com.sunseat.app.domain.TimeMode.DEPART, vm.state.value.timeMode)
     }
 
+    @Test fun acceptedDownstreamRequestDoesNotAutomaticallySubmitOnReturn() = runTest(dispatcher) {
+        val vm = vm()
+        vm.openSearch(EndpointField.ORIGIN); vm.choosePlace(seoul)
+        vm.openSearch(EndpointField.DESTINATION); vm.choosePlace(busan)
+        val changed = vm.automaticRequest()!!.copy(mode = TravelMode.TAXI, departure = fixedNow, timeMode = com.sunseat.app.domain.TimeMode.ARRIVE)
+        vm.acceptRequest(changed)
+        assertEquals(changed, vm.buildRequest())
+        assertNull(vm.automaticRequest())
+        vm.setSchedule(fixedNow.plusHours(1), com.sunseat.app.domain.TimeMode.ARRIVE)
+        assertEquals(fixedNow.plusHours(1), vm.automaticRequest()!!.departure)
+        assertNull(vm.automaticRequest())
+    }
+
     @Test
     fun blankQueryDoesNotSearch() = runTest(dispatcher) {
         val places = FakePlaces()

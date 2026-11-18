@@ -37,8 +37,9 @@ fun ResultRoute(
     onSettings: () -> Unit = {},
     onSimulation: (TripResult) -> Unit = {},
     onSchedule: (java.time.LocalDateTime?, com.sunseat.app.domain.TimeMode, SunGoal) -> Unit = { _, _, _ -> },
+    calculationRevision: Long = 0,
     viewModel: ResultViewModel = viewModel(
-        key = request.toString() + chosen.hashCode(),
+        key = request.toString() + chosen.hashCode() + ":" + calculationRevision,
         factory = viewModelFactory { initializer { ResultViewModel(request, chosen, now = { graph.clock.instant() }, settings = graph.settings.settings) } },
     ),
 ) {

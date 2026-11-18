@@ -17,6 +17,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
@@ -295,6 +296,65 @@ class SunSeatFlowTest {
         compose.onNodeWithText(DESTINATION).assertExists()
         compose.onNodeWithText("30분").assertDoesNotExist()
         assertEquals(routeCalls, graph.server.transitRequests)
+    }
+
+    @Test fun candidateTimeChangeSurvivesBackWithoutRefetch() {
+        val graph = launch()
+        enterTrip()
+        waitForText("30분")
+        val routeCalls = graph.server.transitRequests
+        clickText(text(R.string.input_now_depart))
+        clickText(text(R.string.input_arrive_tab))
+        clickText(text(R.string.input_time_apply))
+        waitForText("30분")
+        back()
+        compose.onNodeWithText(" 도착", substring = true).assertExists()
+        compose.onNodeWithText(text(R.string.input_now_depart)).assertDoesNotExist()
+        assertEquals(routeCalls, graph.server.transitRequests)
+    }
+
+    @Test fun resultTimeChangeUpdatesCandidatesAndInputWithoutRefetch() {
+        val graph = launch()
+        enterTrip()
+        waitForText("30분")
+        clickText(text(R.string.candidates_sort_walk))
+        clickText(text(R.string.candidates_filter_subway))
+        compose.onNode(hasClickAction() and hasText("30분")).tap()
+        clickText(text(R.string.candidates_view_seat))
+        waitForText(text(R.string.result_legs))
+        val routeCalls = graph.server.transitRequests
+        compose.onNodeWithContentDescription(text(R.string.input_time_title)).tap()
+        clickText(text(R.string.input_arrive_tab))
+        compose.onNodeWithTag("schedule_hour").tap()
+        clickText("23시")
+        compose.onNodeWithTag("schedule_minute").tap()
+        clickText("37분")
+        clickText(text(R.string.input_time_apply))
+        waitForText(text(R.string.result_legs))
+        back()
+        waitForText("30분")
+        compose.onNode(hasText("23:37 도착", substring = true) and !hasText("30분", substring = true)).assertExists()
+        compose.onNodeWithText(text(R.string.candidates_sort_walk)).assertIsSelected()
+        compose.onNodeWithText(text(R.string.candidates_filter_subway)).assertIsSelected()
+        compose.onNode(hasClickAction() and hasText("30분")).assertIsSelected()
+        back()
+        compose.onNode(hasText("23:37 도착", substring = true) and !hasText("30분", substring = true)).assertExists()
+        assertEquals(routeCalls, graph.server.transitRequests)
+    }
+
+    @Test fun taxiSelectionSurvivesBackAndDoesNotAutomaticallyReenter() {
+        val graph = launch()
+        enterTrip()
+        waitForText("30분")
+        clickText(text(R.string.common_taxi))
+        compose.waitUntil(10_000) { graph.server.carRequests == 1 }
+        compose.onNodeWithText(text(R.string.common_taxi)).assertIsSelected()
+        back()
+        compose.onNodeWithText(text(R.string.common_taxi)).assertIsSelected()
+        compose.onNodeWithText(ORIGIN).assertExists()
+        compose.onNodeWithText(DESTINATION).assertExists()
+        assertEquals(1, graph.server.transitRequests)
+        assertEquals(1, graph.server.carRequests)
     }
 
     private companion object {
