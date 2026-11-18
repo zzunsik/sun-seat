@@ -182,5 +182,27 @@ class InputScreenshotTest {
     @Test fun recentLight() = recentPlaces(false)
     @Test fun recentDark() = recentPlaces(true)
 
+    @Test fun mapLocationButtonDoesNotSelectAnOrigin() {
+        var originSelections = 0
+        var mapMoves = 0
+        compose.setContent {
+            androidx.compose.runtime.CompositionLocalProvider(com.sunseat.app.ui.map.LocalMapRenderer provides com.sunseat.app.ui.map.MapRenderer.PREVIEW) {
+                SunSeatTheme { InputScreen(filled, InputActions(useCurrentLocation = { originSelections++ }, showCurrentLocationOnMap = { mapMoves++ })) }
+            }
+        }
+        compose.onNodeWithContentDescription(androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>().getString(R.string.location_use_current)).performClick()
+        org.junit.Assert.assertEquals(0, originSelections)
+        org.junit.Assert.assertEquals(1, mapMoves)
+    }
+
+    private fun mapFocused(dark: Boolean) {
+        compose.enableAccessibilityChecks()
+        render(filled.copy(mapFocus = com.sunseat.app.ui.map.MapFocus(com.sunseat.app.domain.LatLng(37.59, 127.04), 1)), dark)
+        compose.onRoot().tryPerformAccessibilityChecks()
+        shot("input_map_focused_${if (dark) "dark" else "light"}")
+    }
+    @Test fun mapFocusedLight() = mapFocused(false)
+    @Test fun mapFocusedDark() = mapFocused(true)
+
     private fun shot(name: String) = compose.onRoot().captureRoboImage("src/test/screenshots/$name.png")
 }

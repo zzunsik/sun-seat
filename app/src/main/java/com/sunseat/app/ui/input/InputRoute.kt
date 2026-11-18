@@ -39,7 +39,7 @@ fun InputRoute(
         viewModel.automaticRequest()?.let(onSubmit)
     }
     LaunchedEffect(permission.status) {
-        if (permission.status.isGranted && state.origin == null && !state.locating) viewModel.fetchCurrentLocation()
+        if (permission.status.isGranted) viewModel.locateInitialOrigin()
     }
 
     InputScreen(
@@ -59,7 +59,12 @@ fun InputRoute(
             searchNow = viewModel::searchNow,
             choosePlace = viewModel::choosePlace,
             useCurrentLocation = {
+                viewModel.prepareLocation(LocationPurpose.ORIGIN)
                 if (permission.status.isGranted) viewModel.fetchCurrentLocation() else permission.request()
+            },
+            showCurrentLocationOnMap = {
+                viewModel.prepareLocation(LocationPurpose.MAP)
+                if (permission.status.isGranted) viewModel.fetchCurrentLocation(LocationPurpose.MAP) else permission.request()
             },
             onLocationAction = { action ->
                 when (action) {
@@ -67,7 +72,7 @@ fun InputRoute(
                     LocationAction.OpenAppSettings -> permission.openAppSettings()
                     LocationAction.OpenLocationSettings ->
                         context.startActivity(locationSettingsIntent().addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                    LocationAction.Retry -> viewModel.fetchCurrentLocation()
+                    LocationAction.Retry -> viewModel.retryLocation()
                 }
             },
             dismissLocationMessage = viewModel::dismissLocationMessage,
