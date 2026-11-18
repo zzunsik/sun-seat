@@ -19,7 +19,11 @@ data class MapState(
     val onGesture: () -> Unit = {},
     val routeProgress: Float? = null,
     val showDecorations: Boolean = true,
+    val focus: MapFocus? = null,
 )
+
+/** A new sequence requests one camera move, even when the coordinate is unchanged. */
+data class MapFocus(val location: LatLng, val sequence: Long)
 data class MapCursor(val position: LatLng, val heading: Double, val sunAzimuth: Double, val sunAltitude: Double)
 data class MapPadding(val top: Dp = 0.dp, val bottom: Dp = 0.dp)
 

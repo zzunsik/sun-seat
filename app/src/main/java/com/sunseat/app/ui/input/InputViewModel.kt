@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 
 enum class EndpointField { ORIGIN, DESTINATION }
+enum class LocationPurpose { ORIGIN, MAP }
 
 /** 출발지·도착지 하나. [isCurrentLocation]이면 이름 대신 "현재 위치"로 보여 준다. */
 data class Endpoint(val place: NamedPlace, val isCurrentLocation: Boolean = false)
@@ -55,6 +56,8 @@ data class InputUiState(
     val goal: SunGoal = SunGoal.AVOID,
     val search: SearchState? = null,
     val locating: Boolean = false,
+    val mapLocating: Boolean = false,
+    val mapFocus: com.sunseat.app.ui.map.MapFocus? = null,
     @param:StringRes val locationMessageRes: Int? = null,
     val locationAction: LocationAction? = null,
     val recent: List<com.sunseat.app.data.recent.RecentPlace> = emptyList(),
@@ -125,6 +128,21 @@ class InputViewModel(
 
     private var searchJob: Job? = null
     private var locationJob: Job? = null
+    private var locationPurpose = LocationPurpose.ORIGIN
+    private var pendingLocationPermission = false
+    private var mapFocusSequence = 0L
+
+    fun prepareLocation(purpose: LocationPurpose) { locationPurpose = purpose; pendingLocationPermission = true }
+
+    fun onLocationPermissionAvailable() {
+        if (pendingLocationPermission) retryLocation() else locateInitialOrigin()
+    }
+
+    fun locateInitialOrigin() {
+        if (locationPurpose == LocationPurpose.ORIGIN && _state.value.origin == null && !_state.value.locating) fetchCurrentLocation()
+    }
+
+    fun retryLocation() = fetchCurrentLocation(locationPurpose)
 
     fun openSearch(field: EndpointField) {
         _state.update { it.copy(search = SearchState(field), favoriteMessageRes = null) }
@@ -210,11 +228,11 @@ class InputViewModel(
 
     fun choosePlace(place: Place) {
         val field = _state.value.search?.field ?: return
-        if (field == EndpointField.ORIGIN) locationJob?.cancel()
+        if (field == EndpointField.ORIGIN) { locationJob?.cancel(); pendingLocationPermission = false }
         val endpoint = Endpoint(NamedPlace(place.name, place.location))
         _state.update {
             when (field) {
-                EndpointField.ORIGIN -> it.copy(origin = endpoint, locating = false, locationMessageRes = null, locationAction = null)
+                EndpointField.ORIGIN -> it.copy(origin = endpoint, locating = false, mapLocating = false, locationMessageRes = null, locationAction = null)
                 EndpointField.DESTINATION -> it.copy(destination = endpoint)
             }.copy(search = null)
         }
@@ -229,27 +247,34 @@ class InputViewModel(
             if (status == LocationPermissionStatus.ApproximateOnly) {
                 _state.update { it.copy(locationMessageRes = status.messageRes(), locationAction = null) }
             }
-            fetchCurrentLocation()
+            fetchCurrentLocation(locationPurpose)
         } else {
-            _state.update { it.copy(locationMessageRes = status.messageRes(), locationAction = status.action(), search = null) }
+            pendingLocationPermission = true
+            _state.update { it.copy(locationMessageRes = status.messageRes(), locationAction = status.action(), search = if (locationPurpose == LocationPurpose.ORIGIN) null else it.search) }
         }
     }
 
     /** 권한이 이미 있을 때 현재 위치를 출발지로 정한다. */
-    fun fetchCurrentLocation() {
+    fun fetchCurrentLocation(purpose: LocationPurpose = LocationPurpose.ORIGIN) {
+        locationPurpose = purpose
+        pendingLocationPermission = false
         locationJob?.cancel()
-        _state.update { it.copy(locating = true, search = null) }
+        _state.update { it.copy(locating = purpose == LocationPurpose.ORIGIN, mapLocating = purpose == LocationPurpose.MAP,
+            search = if (purpose == LocationPurpose.ORIGIN) null else it.search) }
         locationJob = viewModelScope.launch {
             val result = locationProvider.currentLocation()
+            val focus = if (purpose == LocationPurpose.MAP && result is LocationResult.Success)
+                com.sunseat.app.ui.map.MapFocus(com.sunseat.app.domain.LatLng(result.latitude, result.longitude), ++mapFocusSequence) else null
             _state.update {
                 when (result) {
                     is LocationResult.Success -> it.copy(
-                        origin = Endpoint(NamedPlace(currentLocationName, com.sunseat.app.domain.LatLng(result.latitude, result.longitude)), isCurrentLocation = true),
-                        locating = false,
+                        origin = if (purpose == LocationPurpose.ORIGIN) Endpoint(NamedPlace(currentLocationName, com.sunseat.app.domain.LatLng(result.latitude, result.longitude)), isCurrentLocation = true) else it.origin,
+                        mapFocus = focus ?: it.mapFocus,
+                        locating = false, mapLocating = false,
                         locationMessageRes = if (result.isApproximate) R.string.location_approximate_only else null,
                         locationAction = null,
                     )
-                    else -> it.copy(locating = false, locationMessageRes = result.messageRes(), locationAction = result.action())
+                    else -> it.copy(locating = false, mapLocating = false, locationMessageRes = result.messageRes(), locationAction = result.action())
                 }
             }
         }
@@ -261,7 +286,8 @@ class InputViewModel(
 
     fun swap() {
         locationJob?.cancel()
-        _state.update { it.copy(origin = it.destination, destination = it.origin, locating = false) }
+        pendingLocationPermission = false
+        _state.update { it.copy(origin = it.destination, destination = it.origin, locating = false, mapLocating = false) }
     }
 
     fun setMode(mode: TravelMode) { modeChosen = true; _state.update { it.copy(mode = mode) } }

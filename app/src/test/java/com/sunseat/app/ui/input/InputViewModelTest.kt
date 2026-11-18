@@ -242,6 +242,71 @@ class InputViewModelTest {
         assertTrue(vm.state.value.origin!!.isCurrentLocation)
     }
 
+    @Test fun mapLocationPreservesTripAndDoesNotEmitAnotherRequest() = runTest(dispatcher) {
+        val vm = vm(location = LocationProvider { LocationResult.Success(37.5, 127.0, 20f, isApproximate = false) })
+        vm.openSearch(EndpointField.ORIGIN); vm.choosePlace(seoul)
+        vm.openSearch(EndpointField.DESTINATION); vm.choosePlace(busan)
+        vm.setSchedule(fixedNow, com.sunseat.app.domain.TimeMode.ARRIVE)
+        vm.setMode(TravelMode.TAXI)
+        val request = vm.automaticRequest()!!
+        vm.fetchCurrentLocation(LocationPurpose.MAP)
+        assertFalse(vm.state.value.locating)
+        assertTrue(vm.state.value.mapLocating)
+        advanceUntilIdle()
+        assertEquals(request, vm.buildRequest())
+        assertNull(vm.automaticRequest())
+        val focus = vm.state.value.mapFocus!!
+        assertEquals(LatLng(37.5, 127.0), focus.location)
+        vm.fetchCurrentLocation(LocationPurpose.MAP)
+        advanceUntilIdle()
+        assertTrue(vm.state.value.mapFocus!!.sequence > focus.sequence)
+        assertFalse(vm.state.value.mapLocating)
+        assertEquals(request, vm.buildRequest())
+        assertNull(vm.automaticRequest())
+    }
+
+    @Test fun mapPermissionAndRetryNeverFillAnEmptyOrigin() = runTest(dispatcher) {
+        var result: LocationResult = LocationResult.Timeout
+        val vm = vm(location = LocationProvider { result })
+        vm.prepareLocation(LocationPurpose.MAP)
+        vm.onLocationPermission(LocationPermissionStatus.PermanentlyDenied)
+        assertNull(vm.state.value.origin)
+        vm.onLocationPermission(LocationPermissionStatus.ApproximateOnly)
+        advanceUntilIdle()
+        assertNull(vm.state.value.origin)
+        assertFalse(vm.state.value.mapLocating)
+        result = LocationResult.Success(37.5, 127.0, 2000f, isApproximate = true)
+        vm.retryLocation()
+        advanceUntilIdle()
+        vm.locateInitialOrigin()
+        advanceUntilIdle()
+        assertNull(vm.state.value.origin)
+        assertEquals(LatLng(37.5, 127.0), vm.state.value.mapFocus!!.location)
+        assertEquals(R.string.location_approximate_only, vm.state.value.locationMessageRes)
+        // Explicit selection remains independent of the map request.
+        vm.prepareLocation(LocationPurpose.ORIGIN)
+        vm.onLocationPermission(LocationPermissionStatus.Precise)
+        advanceUntilIdle()
+        assertTrue(vm.state.value.origin!!.isCurrentLocation)
+    }
+
+    @Test fun grantingPermissionInSettingsResumesMapRequestOnce() = runTest(dispatcher) {
+        var calls = 0
+        val vm = vm(location = LocationProvider { calls++; LocationResult.Success(37.5, 127.0, 20f, false) })
+        vm.prepareLocation(LocationPurpose.MAP)
+        vm.onLocationPermission(LocationPermissionStatus.PermanentlyDenied)
+        // ON_RESUME refresh changes permission.status without delivering a request callback.
+        vm.onLocationPermissionAvailable()
+        advanceUntilIdle()
+        assertEquals(1, calls)
+        assertNull(vm.state.value.origin)
+        assertEquals(LatLng(37.5, 127.0), vm.state.value.mapFocus!!.location)
+        assertNull(vm.state.value.locationMessageRes)
+        vm.onLocationPermissionAvailable()
+        advanceUntilIdle()
+        assertEquals(1, calls)
+    }
+
     @Test
     fun deniedPermissionShowsGuidanceWithoutCrash() = runTest(dispatcher) {
         val vm = vm()

@@ -64,6 +64,7 @@ data class InputActions(
     val searchNow: () -> Unit = {},
     val choosePlace: (Place) -> Unit = {},
     val useCurrentLocation: () -> Unit = {},
+    val showCurrentLocationOnMap: () -> Unit = {},
     val onLocationAction: (LocationAction) -> Unit = {},
     val dismissLocationMessage: () -> Unit = {},
     val swap: () -> Unit = {},
@@ -91,6 +92,7 @@ fun InputScreen(
                 origin = state.origin?.place, destination = state.destination?.place,
                 padding = com.sunseat.app.ui.map.MapPadding(top = Sizes.mapHeight),
                 showDecorations = false,
+                focus = state.mapFocus,
             ), Modifier.fillMaxSize())
             Column(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing)
                 .padding(Spacing.screen), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
@@ -110,7 +112,7 @@ fun InputScreen(
                 }
             }
             Surface(Modifier.align(Alignment.BottomEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(Spacing.l), shape = androidx.compose.foundation.shape.CircleShape, color = scheme.surface) {
-                IconButton(onClick = actions.useCurrentLocation, modifier = Modifier.size(Spacing.touch)) {
+                IconButton(onClick = actions.showCurrentLocationOnMap, enabled = !state.mapLocating, modifier = Modifier.size(Spacing.touch)) {
                     Icon(painterResource(R.drawable.ic_ms_my_location), stringResource(R.string.location_use_current), tint = scheme.onSurface)
                 }
             }

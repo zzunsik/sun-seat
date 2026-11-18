@@ -61,8 +61,8 @@ class SunSeatFlowTest {
 
     private fun text(id: Int, vararg args: Any): String = compose.activity.getString(id, *args)
 
-    private fun launch(settings: Settings = Settings.DEFAULT, now: Instant = Instant.parse("2026-11-17T01:00:00Z"), server: FakeKakaoServer = FakeKakaoServer()): FlowTestGraph {
-        val created = FlowTestGraph(ApplicationProvider.getApplicationContext(), temporary.newFolder(), server, InMemorySettings(settings), now)
+    private fun launch(settings: Settings = Settings.DEFAULT, now: Instant = Instant.parse("2026-11-17T01:00:00Z"), server: FakeKakaoServer = FakeKakaoServer(), location: com.sunseat.app.location.LocationProvider = com.sunseat.app.location.LocationProvider { com.sunseat.app.location.LocationResult.Unavailable }): FlowTestGraph {
+        val created = FlowTestGraph(ApplicationProvider.getApplicationContext(), temporary.newFolder(), server, InMemorySettings(settings), now, location)
         graph = created
         compose.setContent {
             CompositionLocalProvider(LocalMapRenderer provides MapRenderer.PREVIEW) {
@@ -278,6 +278,23 @@ class SunSeatFlowTest {
         compose.onNodeWithText(text(R.string.location_request_permission)).assertExists()
         clickText(text(R.string.input_search_manually))
         compose.onNodeWithText(text(R.string.input_search_hint_origin)).assertExists()
+    }
+
+    @Test fun mapLocationKeepsManualEndpointsWithoutSearchingAgain() {
+        shadowOf(compose.activity.application).grantPermissions(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+        val graph = launch(location = com.sunseat.app.location.LocationProvider { com.sunseat.app.location.LocationResult.Success(37.5, 127.0, 20f, false) })
+        waitForText(text(R.string.location_use_current))
+        search(text(R.string.location_use_current), "예시", ORIGIN)
+        search(text(R.string.input_destination_placeholder), "견본", DESTINATION)
+        waitForText("30분")
+        back()
+        val routeCalls = graph.server.transitRequests
+        compose.onNodeWithContentDescription(text(R.string.location_use_current)).tap()
+        compose.waitForIdle()
+        compose.onNodeWithText(ORIGIN).assertExists()
+        compose.onNodeWithText(DESTINATION).assertExists()
+        compose.onNodeWithText("30분").assertDoesNotExist()
+        assertEquals(routeCalls, graph.server.transitRequests)
     }
 
     private companion object {

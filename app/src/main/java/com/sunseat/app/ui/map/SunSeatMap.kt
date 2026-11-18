@@ -37,7 +37,8 @@ val LocalMapRenderer = staticCompositionLocalOf { MapRenderer.SDK }
 
 @Composable
 fun SunSeatMap(state: MapState, modifier: Modifier = Modifier) {
-    val description = stringResource(R.string.map_description, state.origin?.name.orEmpty(), state.destination?.name.orEmpty())
+    val description = stringResource(R.string.map_description, state.origin?.name.orEmpty(), state.destination?.name.orEmpty()) +
+        if (state.focus != null) " · " + stringResource(R.string.location_use_current) else ""
     Box(modifier.semantics { contentDescription = description }) {
         if (LocalMapRenderer.current == MapRenderer.PREVIEW) MapPlaceholder(state, Modifier.fillMaxSize())
         else NativeMap(state, Modifier.fillMaxSize())
@@ -66,7 +67,7 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
     Canvas(Modifier.fillMaxSize().background(scheme.surfaceContainer)) {
         val top = state.padding.top.toPx()
         val bottom = state.padding.bottom.toPx()
-        val projection = MapProjection(state.points(), size.width, (size.height - top - bottom).coerceAtLeast(1f), Sizes.mapInset.toPx())
+        val projection = MapProjection(state.focus?.let { listOf(it.location) } ?: state.points(), size.width, (size.height - top - bottom).coerceAtLeast(1f), Sizes.mapInset.toPx())
         fun position(point: com.sunseat.app.domain.LatLng): Offset = projection.project(point).let { Offset(it.first, it.second + top) }
         val grid = Sizes.mapInset.toPx()
         var x = 0f
@@ -102,6 +103,7 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
         }
         state.origin?.let { drawCircle(scheme.surface, Sizes.mapMarker.toPx() / 3, position(it.location)); drawCircle(scheme.onSurface, Sizes.mapMarker.toPx() / 3, position(it.location), style = Stroke(Sizes.mapWalk.toPx())) }
         state.destination?.let { val p = position(it.location); val radius = Sizes.mapMarker.toPx() / 3; drawRect(scheme.onSurface, p - Offset(radius, radius), androidx.compose.ui.geometry.Size(radius * 2, radius * 2)) }
+        state.focus?.let { val p = position(it.location); val radius = Sizes.mapMarker.toPx() / 3; drawCircle(scheme.surface, radius, p); drawCircle(scheme.onSurface, radius, p, style = Stroke(Sizes.mapWalk.toPx())); drawCircle(scheme.onSurface, radius / 3, p) }
         state.cursor?.let { cursor ->
             val p = position(cursor.position)
             if (cursor.sunAltitude > 0) {

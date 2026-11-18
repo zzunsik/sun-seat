@@ -129,6 +129,8 @@ private class MapSession(context: Context, private val ink: Int, private val sur
     private var padding: MapPadding? = null
     private var cursor: Label? = null
     private var ray: Label? = null
+    private var myLocation: Label? = null
+    private var lastFocus: MapFocus? = null
     private var lastCursor: MapCursor? = null
     private var following = false
     private var playbackMode = false
@@ -141,6 +143,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
     private val endIcon = marker(1, ink)
     private val vehicleIcon = marker(2, ink)
     private val rayIcon = marker(3, sun)
+    private val myLocationIcon = marker(4, ink)
 
     fun close() { if (!closed) { closed = true; map = null; view.pause(); view.finish() } }
 
@@ -179,7 +182,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
                 }
             }
             target.labelManager?.layer?.let { layer ->
-                layer.removeAll(); cursor = null; ray = null; lastCursor = null; lastRayAltitude = null; lastVehicleLight=null
+                layer.removeAll(); cursor = null; ray = null; myLocation = null; lastCursor = null; lastRayAltitude = null; lastVehicleLight=null
                 state.origin?.let { layer.addLabel(LabelOptions.from(it.location.sdk()).setStyles(LabelStyle.from(startIcon).setApplyDpScale(false))) }
                 state.destination?.let { layer.addLabel(LabelOptions.from(it.location.sdk()).setStyles(LabelStyle.from(endIcon).setApplyDpScale(false))) }
             }
@@ -189,6 +192,15 @@ private class MapSession(context: Context, private val ink: Int, private val sur
             target.setPadding(0, (state.padding.top.value * density).toInt(), 0, (state.padding.bottom.value * density).toInt())
             val points = state.points()
             if (points.isNotEmpty()) target.moveCamera(CameraUpdateFactory.fitMapPoints(points.map { it.sdk() }.toTypedArray(), metrics.inset.toInt(), 17))
+        }
+        state.focus?.let { focus ->
+            val layer = target.labelManager?.layer
+            if (myLocation == null) myLocation = layer?.addLabel(LabelOptions.from(focus.location.sdk()).setStyles(LabelStyle.from(myLocationIcon).setApplyDpScale(false)))
+            else myLocation?.moveTo(focus.location.sdk())
+            if (focus != lastFocus) {
+                target.moveCamera(CameraUpdateFactory.newCenterPosition(focus.location.sdk()))
+                lastFocus = focus
+            }
         }
         if (state.routeProgress != lastProgress) {
             state.routeProgress?.let { progress -> progressLines.forEach { it.setProgress(progress.coerceIn(0f, 1f) - 1f) } }
@@ -232,6 +244,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
             val mid = width / 2f
             val radius = width / 3f
             when (kind) {
+                4 -> { paint.color = surface; canvas.drawCircle(mid, mid, radius, paint); paint.color = color; paint.style = Paint.Style.STROKE; canvas.drawCircle(mid, mid, radius, paint); paint.style = Paint.Style.FILL; canvas.drawCircle(mid, mid, radius / 3, paint) }
                 0 -> { paint.color = surface; canvas.drawCircle(mid, mid, radius, paint); paint.color = color; paint.style = Paint.Style.STROKE; canvas.drawCircle(mid, mid, radius, paint) }
                 1 -> { canvas.drawLine(mid,mid-radius,mid,mid+radius,paint);canvas.drawRect(mid,mid-radius,mid+radius*.8f,mid,paint) }
                 2 -> {

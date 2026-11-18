@@ -48,6 +48,8 @@ class InMemorySettings(initial: Settings = Settings.DEFAULT) : SettingsRepositor
 class FakeKakaoServer : AutoCloseable {
     private val server = MockWebServer()
     @Volatile var placeRequests = 0
+    @Volatile var transitRequests = 0
+    @Volatile var carRequests = 0
     @Volatile var places: () -> MockResponse = { json(fixture("kakao/place_keyword.json")) }
     @Volatile var transit: () -> MockResponse = { json(fixture("kakao/transit_routes.json")) }
     @Volatile var car: () -> MockResponse = { json(fixture("kakao/car_directions.json")) }
@@ -56,8 +58,8 @@ class FakeKakaoServer : AutoCloseable {
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse = when (request.url.encodedPath) {
                 "/v2/local/search/keyword.json" -> { placeRequests++; places() }
-                "/v2/routing/publictraffic" -> transit()
-                "/v1/directions" -> car()
+                "/v2/routing/publictraffic" -> { transitRequests++; transit() }
+                "/v1/directions" -> { carRequests++; car() }
                 else -> MockResponse.Builder().code(404).build()
             }
         }
