@@ -102,7 +102,7 @@ class FlowTestGraph(
     override val favorites: FavoritesRepository = DataStoreFavoritesRepository(store("favorites"), scope)
     override val recent: RecentPlacesRepository = DataStoreRecentPlacesRepository(store("recent"), scope)
     override val kakao: KakaoApis get() = server.apis
-    override val clock: Clock = Clock.fixed(now, ZoneId.systemDefault())
+    override var clock: Clock = Clock.fixed(now, ZoneId.systemDefault())
 
     override fun close() {
         scope.cancel()

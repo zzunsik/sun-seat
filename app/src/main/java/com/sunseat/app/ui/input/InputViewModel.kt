@@ -114,6 +114,17 @@ class InputViewModel(
         }
     }
     private var lastAutomaticRequest: TripRequest? = null
+    /** Downstream confirmation is already handled; returning to input must not submit it again. */
+    fun acceptRequest(request: TripRequest) {
+        lastAutomaticRequest = request
+        modeChosen = true
+        goalChosen = true
+        _state.update { state -> state.copy(
+            origin = state.origin?.takeIf { it.place == request.origin } ?: Endpoint(request.origin),
+            destination = state.destination?.takeIf { it.place == request.destination } ?: Endpoint(request.destination),
+            mode = request.mode, departure = request.departure, timeMode = request.timeMode, goal = request.goal,
+        ) }
+    }
     fun automaticRequest(): TripRequest? {
         if (_state.value.search != null) return null
         val request = buildRequest() ?: return null
