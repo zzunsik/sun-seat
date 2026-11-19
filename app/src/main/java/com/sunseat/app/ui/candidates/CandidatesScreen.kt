@@ -269,7 +269,7 @@ fun CandidatesScreen(
                 when (state) {
                     is CandidatesState.Loading -> Loading(content, state.mode, animateLoader)
                     is CandidatesState.Options -> if (state.visible.isEmpty()) Message(content, R.drawable.ic_ms_search, stringResource(R.string.candidates_filtered_empty), null, stringResource(R.string.candidates_clear_filters) to actions.onClearFilters, stringResource(R.string.candidates_edit_input) to actions.onBack)
-                        else OptionList(state.visible, state.selectedId, request, content, actions.copy(onHighlight = {
+                        else OptionList(state.visible, state.selectedId, request, content, if (request.mode == TravelMode.TRANSIT) stringResource(if (state.sort == CandidateSort.WALK) R.string.candidates_walk_scope_sort else R.string.candidates_walk_scope) else null, actions.copy(onHighlight = {
                             userMoved = false
                             showPreview = true
                             actions.onHighlight(it)
@@ -380,9 +380,16 @@ private fun Bar(width: Dp, height: Dp, shape: androidx.compose.ui.graphics.Shape
 }
 
 @Composable
-private fun OptionList(items: List<CandidateUi>, selectedId: Int?, request: TripRequest, content: PaddingValues, actions: CandidatesActions, listState: LazyListState) {
+private fun OptionList(items: List<CandidateUi>, selectedId: Int?, request: TripRequest, content: PaddingValues, scopeNotice: String?, actions: CandidatesActions, listState: LazyListState) {
     val haptics = rememberSunSeatHaptics()
     LazyColumn(Modifier.fillMaxSize().testTag("candidate_list"), state = listState, contentPadding = content, verticalArrangement = Arrangement.spacedBy(Spacing.m)) {
+        // 카드마다 반복하지 않고 목록에 한 번만 도보·막대의 데이터 범위를 알린다(#105).
+        if (scopeNotice != null) item(key = "walk_scope") {
+            Row(Modifier.fillMaxWidth().testTag("walk_scope_notice"), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
+                Icon(painterResource(R.drawable.ic_ms_directions_walk), contentDescription = null, tint = SunSeatTheme.scheme.onSurfaceVariant, modifier = Modifier.size(Sizes.iconSmall))
+                Text(scopeNotice, style = MaterialTheme.typography.bodySmall, color = SunSeatTheme.scheme.onSurfaceVariant)
+            }
+        }
         items(items, key = { it.id }) { item ->
             CandidateCard(item, item.id == selectedId, request, onClick = { haptics.selectionChanged(); actions.onHighlight(item) }, onView = { haptics.press(); actions.onSelect(item) })
         }
@@ -409,9 +416,12 @@ internal fun CandidateCard(item: CandidateUi, selected: Boolean, request: TripRe
             item.fare?.let { Text(if (request.mode == TravelMode.TAXI) stringResource(R.string.candidates_taxi_fare, formatWon(it)) else formatWon(it), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant) }
             RouteSegmentBar(item, taxi = request.mode == TravelMode.TAXI)
             if (request.mode == TravelMode.TRANSIT) {
-                val walking = item.chosen.route.legs.filter { it.mode == com.sunseat.app.domain.Mode.WALK }.fold(java.time.Duration.ZERO) { sum, leg -> sum.plus(leg.duration) }
-                val walkLabel = if (!walking.isZero && walking < java.time.Duration.ofMinutes(1)) stringResource(R.string.candidates_walk_under_minute) else stringResource(R.string.candidates_walk, walking.toMinutes())
-                Text(listOf(stringResource(R.string.candidates_transfers, item.transfers), walkLabel).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                // 응답의 도보는 환승 구간뿐이다(#105). 도보 구간이 없으면 '도보 0분'으로 단정하지 않고 생략한다.
+                val walkLabel = item.providedWalk?.let { walking ->
+                    if (!walking.isZero && walking < java.time.Duration.ofMinutes(1)) stringResource(R.string.candidates_transfer_walk_under_minute)
+                    else stringResource(R.string.candidates_transfer_walk, walking.toMinutes())
+                }
+                Text(listOfNotNull(stringResource(R.string.candidates_transfers, item.transfers), walkLabel).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             }
             RouteLegSummary(item, taxi = request.mode == TravelMode.TAXI)
             val result = item.chosen.cachedResult
