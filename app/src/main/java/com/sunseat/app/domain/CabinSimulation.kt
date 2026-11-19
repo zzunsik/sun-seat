@@ -42,6 +42,11 @@ data class CabinSeat(val id: String, val spot: SeatSpot, val center: V3, val fac
         SeatSurface.CUSHION -> center + right * ((u-.5)*width) + facing*((v-.5)*depth)
         SeatSurface.BACK -> center + facing*(-depth/2) + right*((u-.5)*width) + V3(0.0, v*.53, 0.0)
     }
+    /** Head restraint blocker (coach/car seats). */
+    val headrestBox: CabinBox get() {
+        val head = center + facing * (-depth/2) + V3(0.0, .66, 0.0)
+        return CabinBox(head - V3(.15, .1, .06), head + V3(.15, .1, .06))
+    }
     val backBox: CabinBox get() {
         val p = center + facing * (-depth/2-.04)
         return if (abs(facing.z) > .5) CabinBox(p+V3(-width/2, -.04, -.04), p+V3(width/2,.55,.04))
@@ -61,10 +66,7 @@ data class CabinProfile(val kind: CabinKind, val width: Double, val length: Doub
     val furniture: List<CabinBox> = buildList {
         val w=width/2; val l=length/2
         add(CabinBox(V3(-w+.06,.35,-l+.04),V3(w-.06,sill-.06,-l+.3)))
-        if(kind in listOf(CabinKind.CAR,CabinKind.TAXI,CabinKind.COACH)) seats.forEach { s ->
-            val head=s.center+s.facing*(-s.depth/2)+V3(0.0,.66,0.0)
-            add(CabinBox(head-V3(.15,.1,.06),head+V3(.15,.1,.06)))
-        }
+        if(kind in listOf(CabinKind.CAR,CabinKind.TAXI,CabinKind.COACH)) seats.forEach { add(it.headrestBox) }
         if(kind in listOf(CabinKind.CAR,CabinKind.TAXI)) {
             // Driver's chair is a blocker but never a selectable passenger seat.
             val driver=CabinSeat("driver",SeatSpot(Side.LEFT),V3(-.43,.48,-.65),V3(0.0,0.0,-1.0))
