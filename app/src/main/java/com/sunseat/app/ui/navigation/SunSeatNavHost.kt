@@ -1,6 +1,9 @@
 package com.sunseat.app.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -52,6 +55,10 @@ fun SunSeatNavHost(graph: AppGraph, modifier: Modifier = Modifier, navigation: S
         backStack = backStack,
         modifier = modifier,
         onBack = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) },
+        // Native map surfaces must not fade beneath an outgoing screen or scale like a snapshot.
+        // NavDisplay still owns predictive-back cancellation and the single committed pop.
+        popTransitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
+        predictivePopTransitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
         entryDecorators = listOf(
             rememberSaveableStateHolderNavEntryDecorator(),
             rememberViewModelStoreNavEntryDecorator(),

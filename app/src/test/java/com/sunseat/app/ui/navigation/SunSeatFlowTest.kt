@@ -110,6 +110,44 @@ class SunSeatFlowTest {
         search(text(R.string.input_destination_placeholder), "견본", DESTINATION)
     }
 
+    @Test fun backRemovesOutgoingSettingsWithinFourFrames() {
+        launch()
+        compose.onNodeWithContentDescription(text(R.string.settings_title)).tap()
+        compose.onNodeWithText(text(R.string.settings_title)).assertExists()
+        compose.mainClock.autoAdvance = false
+        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        compose.waitForIdle()
+        repeat(4) {
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+        }
+        compose.onNodeWithText(text(R.string.settings_title)).assertDoesNotExist()
+        compose.mainClock.autoAdvance = true
+        compose.onNodeWithText(text(R.string.input_destination_placeholder)).assertExists()
+    }
+
+    @Test fun predictiveBackCancelPreservesSettingsAndCommitPopsOnlyOnce() {
+        launch()
+        compose.onNodeWithContentDescription(text(R.string.settings_title)).tap()
+        val dispatcher = compose.activity.onBackPressedDispatcher
+        fun gesture(progress: Float) = androidx.activity.BackEventCompat(0f, 200f, progress, androidx.activity.BackEventCompat.EDGE_LEFT)
+        compose.runOnUiThread {
+            dispatcher.dispatchOnBackStarted(gesture(0f))
+            dispatcher.dispatchOnBackProgressed(gesture(0.5f))
+            dispatcher.dispatchOnBackCancelled()
+        }
+        compose.waitForIdle()
+        compose.onNodeWithText(text(R.string.settings_title)).assertExists()
+        compose.runOnUiThread {
+            dispatcher.dispatchOnBackStarted(gesture(0f))
+            dispatcher.dispatchOnBackProgressed(gesture(0.8f))
+            dispatcher.onBackPressed()
+        }
+        compose.waitForIdle()
+        compose.onNodeWithText(text(R.string.settings_title)).assertDoesNotExist()
+        compose.onNodeWithText(text(R.string.input_destination_placeholder)).assertExists()
+    }
+
     @Test fun inputCandidatesResultSimulationAndBackKeepEachScreenState() {
         launch()
         enterTrip()
