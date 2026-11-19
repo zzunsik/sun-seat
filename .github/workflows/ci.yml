@@ -6,7 +6,7 @@ on:
     # ci-passed 하나가 현재 커밋의 모든 job 결과를 대신하므로 이때도 build를 포함한 전체 CI를 다시 돌린다.
     types: [opened, synchronize, reopened, edited, labeled, unlabeled]
   push:
-    branches: [main]
+    branches: [develop, main]
 
 # 공개 저장소다. 워크플로는 읽기 권한만 쓰고 시크릿을 쓰지 않는다.
 permissions:
@@ -90,6 +90,7 @@ jobs:
 
   # 기존 테스트를 지우거나 약하게 바꾼 PR을 막는다(#117, AGENTS.md "테스트"). 판정은 scripts/test-guard.sh.
   # PR 본문·라벨은 env로만 넘긴다(스크립트 주입 방지). push에서는 자체 테스트만 돌고 판정은 건너뛴다.
+  # 릴리스 PR(이 저장소의 develop → main)은 각 작업 PR이 develop에 들어올 때 이미 판정을 받았으므로 건너뛴다.
   test-guard:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -103,7 +104,10 @@ jobs:
         run: bash scripts/test-guard-test.sh
 
       - name: 기존 테스트 삭제·약화 검사
-        if: github.event_name == 'pull_request'
+        if: >-
+          github.event_name == 'pull_request' &&
+          !(github.base_ref == 'main' && github.head_ref == 'develop' &&
+            github.event.pull_request.head.repo.full_name == github.repository)
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -111,7 +115,7 @@ jobs:
           PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: bash scripts/test-guard.sh "$BASE_SHA" "$HEAD_SHA"
 
-  # 머지 판단용 단일 검사. main ruleset이 이 검사 하나를 필수로 건다(AGENTS.md "저장소 설정").
+  # 머지 판단용 단일 검사. develop·main ruleset이 이 검사 하나를 필수로 건다(AGENTS.md "저장소 설정").
   # job을 추가하면 needs에 함께 넣는다.
   ci-passed:
     if: always()
