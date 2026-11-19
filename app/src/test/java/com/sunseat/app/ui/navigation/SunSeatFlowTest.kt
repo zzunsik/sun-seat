@@ -408,17 +408,39 @@ class SunSeatFlowTest {
         assertEquals(routeCalls, graph.server.transitRequests)
     }
 
+    @Test fun inputTimeChangeAfterBackKeepsInputAndDoesNotRefetch() {
+        val graph = launch()
+        enterTrip()
+        waitForText("30분")
+        back()
+        clickText(text(R.string.input_now_depart))
+        compose.onNodeWithTag("schedule_minute").performSemanticsAction(SemanticsActions.ScrollToIndex) { it(37) }
+        compose.waitForIdle()
+        clickText(text(R.string.input_time_apply))
+        compose.onNodeWithText("30분").assertDoesNotExist()
+        compose.onNodeWithText(ORIGIN).assertExists()
+        compose.onNodeWithText(DESTINATION).assertExists()
+        compose.onNodeWithText("10:37 출발", substring = true).assertExists()
+        assertEquals(1, graph.server.transitRequests)
+        compose.onNode(hasClickAction() and hasText("10:37 출발", substring = true)).tap()
+        compose.onNodeWithTag("schedule_minute").assertExists()
+        back()
+        compose.onNodeWithText("10:37 출발", substring = true).assertExists()
+        assertEquals(1, graph.server.transitRequests)
+    }
+
     @Test fun candidateTimeChangeSurvivesBackWithoutRefetch() {
         val graph = launch()
         enterTrip()
         waitForText("30분")
         val routeCalls = graph.server.transitRequests
         clickText(text(R.string.input_now_depart))
-        clickText(text(R.string.input_arrive_tab))
+        compose.onNodeWithTag("schedule_date").performSemanticsAction(SemanticsActions.ScrollToIndex) { it(1) }
+        compose.waitForIdle()
         clickText(text(R.string.input_time_apply))
         waitForText("30분")
         back()
-        compose.onNodeWithText(" 도착", substring = true).assertExists()
+        compose.onNodeWithText(" 출발", substring = true).assertExists()
         compose.onNodeWithText(text(R.string.input_now_depart)).assertDoesNotExist()
         assertEquals(routeCalls, graph.server.transitRequests)
     }
@@ -434,21 +456,20 @@ class SunSeatFlowTest {
         waitForText(text(R.string.result_legs))
         val routeCalls = graph.server.transitRequests
         compose.onNodeWithContentDescription(text(R.string.input_time_title)).tap()
-        clickText(text(R.string.input_arrive_tab))
-        compose.onNodeWithTag("schedule_hour").tap()
-        compose.onNode(hasText("23시") and androidx.compose.ui.test.SemanticsMatcher.keyIsDefined(SemanticsProperties.Selected)).tap()
-        compose.onNodeWithTag("schedule_minute").tap()
-        compose.onNode(hasText("37분") and androidx.compose.ui.test.SemanticsMatcher.keyIsDefined(SemanticsProperties.Selected)).tap()
+        listOf("schedule_period" to 1, "schedule_hour" to 10, "schedule_minute" to 37).forEach { (tag, index) ->
+            compose.onNodeWithTag(tag).performSemanticsAction(SemanticsActions.ScrollToIndex) { it(index) }
+            compose.waitForIdle()
+        }
         clickText(text(R.string.input_time_apply))
         waitForText(text(R.string.result_legs))
         back()
         waitForText("30분")
-        compose.onNode(hasText("23:37 도착", substring = true) and !hasText("30분", substring = true)).assertExists()
+        compose.onNode(hasText("23:37 출발", substring = true) and !hasText("30분", substring = true)).assertExists()
         compose.onNodeWithText(text(R.string.candidates_sort_walk)).assertIsSelected()
         compose.onNodeWithText(text(R.string.candidates_filter_subway)).assertIsSelected()
         compose.onNode(hasClickAction() and hasText("30분")).assertIsSelected()
         back()
-        compose.onNode(hasText("23:37 도착", substring = true) and !hasText("30분", substring = true)).assertExists()
+        compose.onNode(hasText("23:37 출발", substring = true) and !hasText("30분", substring = true)).assertExists()
         assertEquals(routeCalls, graph.server.transitRequests)
     }
 

@@ -211,22 +211,22 @@ class InputViewModelTest {
         assertNull(vm.automaticRequest())
         vm.openSearch(EndpointField.DESTINATION); vm.choosePlace(busan)
         assertNull(vm.automaticRequest())
-        vm.setSchedule(fixedNow.plusDays(1), com.sunseat.app.domain.TimeMode.ARRIVE)
-        assertEquals(com.sunseat.app.domain.TimeMode.ARRIVE, vm.automaticRequest()!!.timeMode)
+        vm.setSchedule(fixedNow.plusDays(1))
+        assertEquals(fixedNow.plusDays(1), vm.automaticRequest()!!.departure)
         assertNull(vm.automaticRequest())
-        vm.setSchedule(null, com.sunseat.app.domain.TimeMode.ARRIVE)
-        assertEquals(com.sunseat.app.domain.TimeMode.DEPART, vm.state.value.timeMode)
+        vm.setSchedule(null)
+        assertNull(vm.state.value.departure)
     }
 
     @Test fun acceptedDownstreamRequestDoesNotAutomaticallySubmitOnReturn() = runTest(dispatcher) {
         val vm = vm()
         vm.openSearch(EndpointField.ORIGIN); vm.choosePlace(seoul)
         vm.openSearch(EndpointField.DESTINATION); vm.choosePlace(busan)
-        val changed = vm.automaticRequest()!!.copy(mode = TravelMode.TAXI, departure = fixedNow, timeMode = com.sunseat.app.domain.TimeMode.ARRIVE)
+        val changed = vm.automaticRequest()!!.copy(mode = TravelMode.TAXI, departure = fixedNow)
         vm.acceptRequest(changed)
         assertEquals(changed, vm.buildRequest())
         assertNull(vm.automaticRequest())
-        vm.setSchedule(fixedNow.plusHours(1), com.sunseat.app.domain.TimeMode.ARRIVE)
+        vm.setSchedule(fixedNow.plusHours(1))
         assertEquals(fixedNow.plusHours(1), vm.automaticRequest()!!.departure)
         assertNull(vm.automaticRequest())
     }
@@ -358,7 +358,7 @@ class InputViewModelTest {
         val vm = vm(location = LocationProvider { LocationResult.Success(37.5, 127.0, 20f, isApproximate = false) })
         vm.openSearch(EndpointField.ORIGIN); vm.choosePlace(seoul)
         vm.openSearch(EndpointField.DESTINATION); vm.choosePlace(busan)
-        vm.setSchedule(fixedNow, com.sunseat.app.domain.TimeMode.ARRIVE)
+        vm.setSchedule(fixedNow)
         vm.setMode(TravelMode.TAXI)
         val request = vm.automaticRequest()!!
         vm.fetchCurrentLocation(LocationPurpose.MAP)

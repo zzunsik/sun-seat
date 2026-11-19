@@ -114,6 +114,7 @@ fun CandidatesScreen(
     state: CandidatesState,
     actions: CandidatesActions,
     modifier: Modifier = Modifier,
+    now: java.time.LocalDateTime = java.time.LocalDateTime.now(),
     animateLoader: Boolean = true,
     scaffoldState: BottomSheetScaffoldState = rememberBottomSheetScaffoldState(),
 ) {
@@ -183,7 +184,7 @@ fun CandidatesScreen(
                         }
                     }
                     NeutralTabs(listOf(stringResource(R.string.input_mode_transit), stringResource(R.string.common_taxi), stringResource(R.string.common_car)), request.mode.ordinal) { actions.onRequestChange(request.copy(mode = TravelMode.entries[it])) }
-                    QuietButton(onClick = { showTime = true }) { Text(scheduleLabel(request.departure, request.timeMode)); Icon(painterResource(R.drawable.ic_ms_chevron_right), null, Modifier.size(Sizes.iconSmall).rotate(90f)) }
+                    QuietButton(onClick = { showTime = true }) { Text(scheduleLabel(request.departure, now)); Icon(painterResource(R.drawable.ic_ms_chevron_right), null, Modifier.size(Sizes.iconSmall).rotate(90f)) }
                 }
             }
         },
@@ -248,7 +249,7 @@ fun CandidatesScreen(
         }
     }
     }
-    if (showTime) TimeSheet(request.departure, request.timeMode, request.mode, { showTime = false }, { value, mode -> actions.onRequestChange(request.copy(departure = value, timeMode = mode)) })
+    if (showTime) TimeSheet(request.departure, request.mode, { showTime = false }, { value -> actions.onRequestChange(request.copy(departure = value)) }, now = now)
 }
 
 @Composable private fun sortLabel(sort: CandidateSort, goal: SunGoal): String = stringResource(when (sort) {

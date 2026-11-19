@@ -86,7 +86,7 @@ import java.time.temporal.ChronoUnit
 
 data class ResultActions(
     val onSimulation: () -> Unit = {},
-    val onSchedule: (java.time.LocalDateTime?, com.sunseat.app.domain.TimeMode) -> Unit = { _, _ -> },
+    val onSchedule: (java.time.LocalDateTime?) -> Unit = {},
     val onSettings: () -> Unit = {},
     val onBack: () -> Unit = {},
     val onRestart: () -> Unit = {},
@@ -120,6 +120,7 @@ fun ResultScreen(
     state: ResultUiState,
     actions: ResultActions,
     modifier: Modifier = Modifier,
+    now: java.time.LocalDateTime = java.time.LocalDateTime.now(),
     animateIn: Boolean = true,
     zone: ZoneId = ZoneId.systemDefault(),
 ) {
@@ -127,7 +128,7 @@ fun ResultScreen(
     val insets = WindowInsets.safeDrawing.asPaddingValues()
     var showSchedule by rememberSaveable { mutableStateOf(false) }
     val result = state.result
-    if (showSchedule) com.sunseat.app.ui.input.TimeSheet(request.departure, request.timeMode, request.mode, { showSchedule = false }, actions.onSchedule)
+    if (showSchedule) com.sunseat.app.ui.input.TimeSheet(request.departure, request.mode, { showSchedule = false }, actions.onSchedule, now = now)
     Surface(modifier.fillMaxSize(), color = scheme.background, contentColor = scheme.onSurface) {
         Box(Modifier.fillMaxSize()) {
             if (result == null) {

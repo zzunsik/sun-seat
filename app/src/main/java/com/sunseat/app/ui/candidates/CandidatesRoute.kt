@@ -38,6 +38,7 @@ fun CandidatesRoute(
     val currentAutoSelect by androidx.compose.runtime.rememberUpdatedState(onAutoSelect)
     LaunchedEffect(viewModel) { viewModel.autoSelected.collect { currentAutoSelect(it) } }
     CandidatesScreen(
+        now = java.time.LocalDateTime.now(graph.clock),
         request = request,
         state = state,
         modifier = modifier,
