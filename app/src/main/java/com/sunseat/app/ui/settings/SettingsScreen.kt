@@ -4,7 +4,6 @@ import android.content.Intent
 import androidx.core.net.toUri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -13,7 +12,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -28,14 +26,12 @@ import com.sunseat.app.data.settings.ThemeMode
 import com.sunseat.app.domain.BenchPreference
 import com.sunseat.app.domain.SunGoal
 import com.sunseat.app.domain.TravelMode
-import com.sunseat.app.ui.components.ChoiceGroup
 import com.sunseat.app.ui.components.ChoiceOption
 import com.sunseat.app.ui.components.QuietButton
 import com.sunseat.app.ui.components.SectionCard
 import com.sunseat.app.ui.theme.Sizes
 import com.sunseat.app.ui.theme.Spacing
 import com.sunseat.app.ui.theme.SunSeatTheme
-import com.sunseat.app.ui.theme.rememberSunSeatHaptics
 
 @Composable
 fun SettingsRoute(repository: SettingsRepository, onBack: () -> Unit, onLicenses: () -> Unit, modifier: Modifier = Modifier, onFavorites: () -> Unit = {},
@@ -48,32 +44,23 @@ fun SettingsRoute(repository: SettingsRepository, onBack: () -> Unit, onLicenses
 
 @Composable
 fun SettingsScreen(settings: Settings, update: ((Settings) -> Settings) -> Unit, onBack: () -> Unit, onLicenses: () -> Unit, modifier: Modifier = Modifier, saveError: Boolean = false, onFavorites: () -> Unit = {}) {
-    val haptics = rememberSunSeatHaptics()
     SettingsPage(stringResource(R.string.settings_title), onBack, modifier) {
         if (saveError) Text(stringResource(R.string.settings_save_error), color = SunSeatTheme.scheme.error)
         SectionCard {
-            ChoiceGroup(stringResource(R.string.settings_theme), listOf(ChoiceOption(stringResource(R.string.settings_system)), ChoiceOption(stringResource(R.string.settings_light)), ChoiceOption(stringResource(R.string.settings_dark))), settings.theme.ordinal,
+            SettingsChoice(stringResource(R.string.settings_theme), listOf(ChoiceOption(stringResource(R.string.settings_system)), ChoiceOption(stringResource(R.string.settings_light)), ChoiceOption(stringResource(R.string.settings_dark))), settings.theme.ordinal,
                 onSelect = { index -> update { it.copy(theme = ThemeMode.entries[index]) } })
         }
         SectionCard(title = stringResource(R.string.settings_defaults)) {
-            ChoiceGroup(stringResource(R.string.settings_default_goal), listOf(ChoiceOption(stringResource(R.string.input_goal_avoid)), ChoiceOption(stringResource(R.string.input_goal_seek))), settings.goal.ordinal,
+            SettingsChoice(stringResource(R.string.settings_default_goal), listOf(ChoiceOption(stringResource(R.string.input_goal_avoid)), ChoiceOption(stringResource(R.string.input_goal_seek))), settings.goal.ordinal,
                 onSelect = { index -> update { it.copy(goal = SunGoal.entries[index]) } })
             Spacer(Modifier.height(Spacing.s))
-            ChoiceGroup(stringResource(R.string.settings_default_mode), listOf(ChoiceOption(stringResource(R.string.input_mode_transit)), ChoiceOption(stringResource(R.string.common_taxi)), ChoiceOption(stringResource(R.string.common_car))), settings.mode.ordinal,
+            SettingsChoice(stringResource(R.string.settings_default_mode), listOf(ChoiceOption(stringResource(R.string.input_mode_transit)), ChoiceOption(stringResource(R.string.common_taxi)), ChoiceOption(stringResource(R.string.common_car))), settings.mode.ordinal,
                 onSelect = { index -> update { it.copy(mode = TravelMode.entries[index]) } })
         }
         SectionCard(title = stringResource(R.string.settings_bench)) {
             Text(stringResource(R.string.settings_bench_detail), style = MaterialTheme.typography.bodySmall, color = SunSeatTheme.scheme.onSurfaceVariant)
-            val labels = listOf(R.string.settings_avoid_back, R.string.settings_avoid_front, R.string.settings_min_total)
-            BenchPreference.entries.forEachIndexed { index, option ->
-                val checked = settings.benchPreference == option
-                Row(Modifier.fillMaxWidth().heightIn(min = Spacing.touch).selectable(selected = checked, role = Role.RadioButton, onClick = {
-                    if (!checked) { haptics.selectionChanged(); update { it.copy(benchPreference = option) } }
-                }).padding(vertical = Spacing.s), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.m)) {
-                    RadioButton(checked, onClick = null, colors = RadioButtonDefaults.colors(selectedColor = SunSeatTheme.scheme.onSurface, unselectedColor = SunSeatTheme.scheme.onSurfaceVariant))
-                    Text(stringResource(labels[index]), color = SunSeatTheme.scheme.onSurface, style = MaterialTheme.typography.bodyLarge)
-                }
-            }
+            val labels = listOf(R.string.settings_avoid_back, R.string.settings_avoid_front, R.string.settings_min_total).map { stringResource(it) }
+            SettingsRadioList(labels, settings.benchPreference.ordinal, onSelect = { index -> update { it.copy(benchPreference = BenchPreference.entries[index]) } })
         }
         QuietButton(onClick = onFavorites) { Text(stringResource(R.string.favorites_title)) }
         SectionCard(title = stringResource(R.string.settings_info)) {
