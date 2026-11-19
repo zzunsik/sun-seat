@@ -162,7 +162,7 @@ internal fun PlaceSearchScreen(search: SearchState, actions: InputActions, modif
                     }
                 }
             }
-            items(search.results, key = { it.id }) { place ->
+            items(if (search.loading) emptyList() else search.results, key = { it.id }) { place ->
                 ResultRow(
                     title = place.name,
                     subtitle = listOf(place.category.substringAfterLast('>').trim(), place.roadAddress.ifBlank { place.address }, near?.let { origin ->

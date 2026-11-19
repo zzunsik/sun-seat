@@ -138,6 +138,8 @@ class InputViewModel(
     }
 
     private var searchJob: Job? = null
+    private var searchGeneration = 0L
+    private var runningQuery: String? = null
     private var locationJob: Job? = null
     private var locationPurpose = LocationPurpose.ORIGIN
     private var pendingLocationPermission = false
@@ -156,28 +158,37 @@ class InputViewModel(
     fun retryLocation() = fetchCurrentLocation(locationPurpose)
 
     fun openSearch(field: EndpointField) {
+        searchGeneration++
+        searchJob?.cancel()
+        runningQuery = null
         _state.update { it.copy(search = SearchState(field), favoriteMessageRes = null) }
     }
 
     fun closeSearch() {
+        searchGeneration++
+        runningQuery = null
         searchJob?.cancel()
         _state.update { it.copy(search = null) }
     }
 
     fun onQueryChange(query: String) {
         val search = _state.value.search ?: return
-        _state.update { it.copy(search = search.copy(query = query, messageRes = null, canRetry = false, loading = query.isNotBlank())) }
+        if (search.query == query) return
+        _state.update { it.copy(search = search.copy(results = emptyList(), query = query, messageRes = null, canRetry = false, loading = query.isNotBlank())) }
         runSearch(query, debounce = true)
     }
 
     /** 키보드 검색 키·다시 시도: 기다리지 않고 바로 검색한다. */
     fun searchNow() {
         val query = _state.value.search?.query ?: return
+        if (runningQuery == query && searchJob?.isActive == true) return
         _state.update { s -> s.copy(search = s.search?.copy(messageRes = null, canRetry = false, loading = query.isNotBlank())) }
         runSearch(query, debounce = false)
     }
 
     private fun runSearch(query: String, debounce: Boolean) {
+        val generation = ++searchGeneration
+        runningQuery = null
         searchJob?.cancel()
         if (query.isBlank()) {
             _state.update { s -> s.copy(search = s.search?.copy(results = emptyList(), loading = false)) }
@@ -185,11 +196,12 @@ class InputViewModel(
         }
         searchJob = viewModelScope.launch {
             if (debounce) delay(SEARCH_DEBOUNCE_MILLIS)
+            runningQuery = query
             val near = _state.value.origin?.place?.location
             val result = placeSearch.search(query.trim(), near = near)
             _state.update { s ->
                 val current = s.search ?: return@update s
-                if (current.query != query) return@update s
+                if (generation != searchGeneration || current.query != query) return@update s
                 when (result) {
                     is ApiResult.Success -> current.copy(
                         results = result.value,
@@ -247,6 +259,8 @@ class InputViewModel(
                 EndpointField.DESTINATION -> it.copy(destination = endpoint)
             }.copy(search = null)
         }
+        searchGeneration++
+        runningQuery = null
         searchJob?.cancel()
         val mode = _state.value.mode
         mutateRecent { it.remember(place, mode) }

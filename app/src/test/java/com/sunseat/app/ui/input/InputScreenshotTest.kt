@@ -68,6 +68,18 @@ class InputScreenshotTest {
     @Test fun searchEmptyDark() { render(InputUiState(search = SearchState(EndpointField.ORIGIN)), true); shot("input_search_empty_dark") }
     @Test fun searchErrorLight() { render(InputUiState(search = SearchState(EndpointField.ORIGIN, query = "서울역", messageRes = R.string.search_error_network, canRetry = true)), false); shot("input_search_error_light") }
 
+    private fun searchStatus(dark: Boolean, loading: Boolean) {
+        compose.enableAccessibilityChecks()
+        render(InputUiState(search = SearchState(EndpointField.DESTINATION, query = "견본 장소", loading = loading,
+            messageRes = if (loading) null else R.string.search_no_results)), dark)
+        compose.onRoot().tryPerformAccessibilityChecks()
+        shot("input_search_${if (loading) "loading" else "none"}_${if (dark) "dark" else "light"}")
+    }
+    @Test fun searchLoadingLight() = searchStatus(false, true)
+    @Test fun searchLoadingDark() = searchStatus(true, true)
+    @Test fun searchNoResultsLight() = searchStatus(false, false)
+    @Test fun searchNoResultsDark() = searchStatus(true, false)
+
     private fun timeSheet(dark: Boolean, mode: com.sunseat.app.domain.TimeMode) {
         compose.enableAccessibilityChecks()
         compose.setContent { SunSeatTheme(darkTheme = dark) { TimeSheet(filled.departure, mode, TravelMode.TRANSIT, {}, { _, _ -> }, now = filled.departure!!) } }

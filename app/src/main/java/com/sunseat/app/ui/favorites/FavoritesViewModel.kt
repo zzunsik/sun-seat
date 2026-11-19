@@ -27,6 +27,8 @@ class FavoritesViewModel(private val repository: FavoritesRepository, private va
     private val deleted = Channel<RemovedFavorite>(Channel.BUFFERED)
     val deletions = deleted.receiveAsFlow()
     private var searchJob: Job? = null
+    private var searchGeneration = 0L
+    private var runningQuery: String? = null
     private var interactionVersion = 0
     private var setupKind = FavoriteKind.HOME
     init {
@@ -35,30 +37,46 @@ class FavoritesViewModel(private val repository: FavoritesRepository, private va
     }
     fun openSearch(kind: FavoriteKind) {
         interactionVersion++
+        searchGeneration++
+        runningQuery = null
         searchJob?.cancel()
         setupKind = kind
         current.update { it.copy(search = SearchState(EndpointField.DESTINATION, hintRes = if (kind == FavoriteKind.HOME) R.string.favorites_search_home else R.string.favorites_search_work), errorRes = null) }
     }
-    fun closeSearch() { interactionVersion++; searchJob?.cancel(); current.update { it.copy(search = null) } }
+    fun closeSearch() { searchGeneration++; runningQuery = null; interactionVersion++; searchJob?.cancel(); current.update { it.copy(search = null) } }
     fun onQueryChange(query: String) {
-        current.update { it.copy(search = it.search?.copy(query = query, results = emptyList(), messageRes = null, loading = false, canRetry = false)) }
+        if (current.value.search?.query == query) return
+        current.update { it.copy(search = it.search?.copy(query = query, results = emptyList(), messageRes = null, loading = query.isNotBlank(), canRetry = false)) }
         search(debounce = true)
     }
-    fun searchNow() = search(debounce = false)
+    fun searchNow() {
+        if (runningQuery == current.value.search?.query?.trim() && searchJob?.isActive == true) return
+        search(debounce = false)
+    }
     private fun search(debounce: Boolean) {
+        val generation = ++searchGeneration
+        runningQuery = null
         searchJob?.cancel()
         val query = current.value.search?.query?.trim().orEmpty()
         if (query.isEmpty()) return
         searchJob = viewModelScope.launch {
             if (debounce) delay(300)
-            current.update { it.copy(search = it.search?.copy(loading = true)) }
-            when (val response = places.search(query)) {
-                is ApiResult.Success -> current.update { it.copy(search = it.search?.copy(results = response.value, loading = false, messageRes = if (response.value.isEmpty()) R.string.search_no_results else null, canRetry = false)) }
-                is ApiResult.Failure -> current.update { it.copy(search = it.search?.copy(loading = false, messageRes = response.error.messageRes(), canRetry = true)) }
+            runningQuery = query
+            current.update { it.copy(search = it.search?.copy(results = emptyList(), loading = true, messageRes = null, canRetry = false)) }
+            val response = places.search(query)
+            current.update { state ->
+                val active = state.search ?: return@update state
+                if (generation != searchGeneration) return@update state
+                state.copy(search = when (response) {
+                    is ApiResult.Success -> active.copy(results = response.value, loading = false, messageRes = if (response.value.isEmpty()) R.string.search_no_results else null, canRetry = false)
+                    is ApiResult.Failure -> active.copy(results = emptyList(), loading = false, messageRes = response.error.messageRes(), canRetry = response.error != com.sunseat.app.data.network.ApiError.MISSING_KEY && response.error != com.sunseat.app.data.network.ApiError.UNAUTHORIZED)
+                })
             }
         }
     }
     fun choosePlace(place: Place) {
+        searchGeneration++
+        runningQuery = null
         val kind = setupKind
         val version = interactionVersion
         searchJob?.cancel()
