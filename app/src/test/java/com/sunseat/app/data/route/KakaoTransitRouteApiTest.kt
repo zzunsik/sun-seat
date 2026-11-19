@@ -129,6 +129,18 @@ class KakaoTransitRouteApiTest {
         assertEquals(option.route.legs.size, option.legDetails.size)
         option.route.legs.zipWithNext().forEach { (a, b) -> assertEquals(a.path.last(), b.path.first()) }
         org.junit.Assert.assertTrue(option.route.legs.all { it.estimatedStationTiming })
+        assertEquals(listOf(0), option.route.legs.map { it.transitStepIndex }.distinct())
+    }
+
+    @Test fun originalBoardingIdentitySurvivesEstimatedSplitting() {
+        val step = PtStep(properties = PtStepProperties(type = "SUBWAY", time = 1200.0,
+            stops = listOf("왕십리", "한양대", "뚝섬", "성수", "건대입구").map { PtStop(it) },
+            vehicles = listOf(PtVehicle("2호선"))),
+            path = PtPath(listOf(listOf(127.0, 37.0), listOf(127.1, 37.1))))
+        val option = PtRoute(steps = listOf(step, step)).toOption()!!
+        assertEquals(setOf(0, 1), option.route.legs.map { it.transitStepIndex }.toSet())
+        assertEquals(4, option.route.legs.count { it.transitStepIndex == 0 })
+        assertEquals(4, option.route.legs.count { it.transitStepIndex == 1 })
     }
 
     @Test

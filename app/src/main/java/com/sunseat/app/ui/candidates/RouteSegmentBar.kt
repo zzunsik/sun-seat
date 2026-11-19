@@ -32,7 +32,7 @@ fun RouteSegmentBar(item: CandidateUi, modifier: Modifier = Modifier, taxi: Bool
     } }
     val weights = item.chosen.route.legs.map { it.duration.seconds.toFloat().coerceAtLeast(1f) }
     val total = weights.sum().coerceAtLeast(1f)
-    val description = labels.joinToString(" → ")
+    val description = routeLegGroups(item).joinToString(" → ") { labels.getOrElse(it.first) { "" } }
     Box(modifier.fillMaxWidth().height(Spacing.touch).clearAndSetSemantics { contentDescription = description }) {
         Canvas(Modifier.matchParentSize()) {
             var x = 0f
@@ -49,22 +49,36 @@ fun RouteSegmentBar(item: CandidateUi, modifier: Modifier = Modifier, taxi: Bool
     }
 }
 
+/** Fold only known estimated intervals from the same original boarding, never a transfer. */
+internal fun routeLegGroups(item: CandidateUi): List<IntRange> {
+    val legs = item.chosen.route.legs
+    return buildList {
+        var first = 0
+        while (first < legs.size) {
+            val leg = legs[first]
+            var last = first
+            while (last + 1 < legs.size && leg.mode == Mode.SUBWAY && leg.transitStepIndex != null &&
+                legs[last].estimatedStationTiming && legs[last + 1].estimatedStationTiming &&
+                legs[last + 1].transitStepIndex == leg.transitStepIndex && legs[last + 1].mode == leg.mode &&
+                item.chips.getOrNull(last + 1)?.lineName == item.chips.getOrNull(first)?.lineName &&
+                legs[last].endName.isNotBlank() && legs[last].endName == legs[last + 1].startName) last++
+            add(first..last)
+            first = last + 1
+        }
+    }
+}
+
 /** Readable itinerary independent of proportional segment widths. Only estimated splits are folded. */
 @Composable
 internal fun RouteLegSummary(item: CandidateUi, taxi: Boolean) {
     val scheme = SunSeatTheme.scheme
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
         val legs = item.chosen.route.legs
-        var index = 0
-        while (index < legs.size) {
-            val first = index
+        for (range in routeLegGroups(item)) {
+            val first = range.first
             val leg = legs[first]
             val chip = item.chips.getOrNull(first) ?: LegChip(leg.mode)
-            var last = first
-            while (last + 1 < legs.size && legs[last].estimatedStationTiming &&
-                legs[last + 1].estimatedStationTiming && legs[last + 1].mode == leg.mode &&
-                item.chips.getOrNull(last + 1)?.lineName == chip.lineName &&
-                legs[last].endName == legs[last + 1].startName) last++
+            val last = range.last
             val mode = stringResource(when (leg.mode) {
                 Mode.WALK -> R.string.common_walk
                 Mode.BUS -> R.string.common_bus
@@ -90,7 +104,6 @@ internal fun RouteLegSummary(item: CandidateUi, taxi: Boolean) {
                     if (stops.isNotEmpty()) Text(stops.joinToString(" → "), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
                 }
             }
-            index = last + 1
         }
     }
 }

@@ -23,6 +23,8 @@ data class Leg(
     val groundLevel: GroundLevel = GroundLevel.UNKNOWN,
     val busType: String? = null,
     val estimatedStationTiming: Boolean = false,
+    /** Original transit API step; estimated station intervals retain the same boarding identity. */
+    val transitStepIndex: Int? = null,
 )
 
 /** 구간을 순서대로 이은 경로. */
