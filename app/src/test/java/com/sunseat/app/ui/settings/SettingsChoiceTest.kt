@@ -4,15 +4,19 @@ import android.app.Application
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.height
 import com.sunseat.app.data.settings.Settings
 import com.sunseat.app.data.settings.ThemeMode
+import com.sunseat.app.domain.BenchPreference
 import com.sunseat.app.domain.SunGoal
 import com.sunseat.app.domain.TravelMode
+import com.sunseat.app.ui.theme.Sizes
 import com.sunseat.app.ui.theme.SunSeatTheme
 import org.junit.Assert.*
 import org.junit.Rule
@@ -73,9 +77,31 @@ class SettingsChoiceTest {
         compose.onNodeWithText("어둡게").assertIsSelected()
         compose.onNodeWithText("자가용").assertIsSelected()
         compose.onNodeWithText("대중교통").assertIsNotSelected().performClick()
-        compose.runOnIdle { assertEquals(TravelMode.TRANSIT, state().mode) }
+        compose.onNodeWithText("정면 햇빛").assertIsNotSelected().performClick()
+        compose.runOnIdle {
+            assertEquals(TravelMode.TRANSIT, state().mode)
+            assertEquals(BenchPreference.AVOID_FRONT, state().benchPreference)
+        }
+        compose.onNodeWithText("정면 햇빛").assertIsSelected()
         choices.forEach(::assertFullyVisible)
         assertNoHorizontalScroll()
+    }
+
+    @Test fun smallLargeFontUsesOneVerticalRadioListForEverySetting() {
+        render(1.5f)
+        // 한 화면에서 연결형 버튼과 라디오 목록이 섞이지 않는다: 들어가는 두 개짜리 햇빛 선호도 세로로 놓인다.
+        listOf(listOf("시스템", "밝게", "어둡게"), listOf("피하기", "받기"), listOf("대중교통", "택시", "자가용")).forEach { group ->
+            val tops = group.map { compose.onNodeWithText(it).fetchSemanticsNode().boundsInRoot.top }
+            assertEquals("$group must stack vertically", group.size, tops.distinct().size)
+        }
+        (choices + listOf("등 뒤 햇빛", "정면 햇빛", "전체 햇빛")).forEach { label ->
+            val row = compose.onNodeWithText(label)
+            row.assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton))
+            row.assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Selected))
+            val height = row.getUnclippedBoundsInRoot().height
+            assertTrue("$label row must be at least ${Sizes.listRowInteractive}: $height", height.value >= Sizes.listRowInteractive.value - 0.01f)
+        }
+        listOf("화면 모드", "햇빛 선호", "기본 이동 수단").forEach { compose.onNodeWithText(it).assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)) }
     }
 
     @Config(qualifiers = "w390dp-h1600dp-xxhdpi")

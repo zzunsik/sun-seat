@@ -46,16 +46,21 @@ fun SettingsRoute(repository: SettingsRepository, onBack: () -> Unit, onLicenses
 fun SettingsScreen(settings: Settings, update: ((Settings) -> Settings) -> Unit, onBack: () -> Unit, onLicenses: () -> Unit, modifier: Modifier = Modifier, saveError: Boolean = false, onFavorites: () -> Unit = {}) {
     SettingsPage(stringResource(R.string.settings_title), onBack, modifier) {
         if (saveError) Text(stringResource(R.string.settings_save_error), color = SunSeatTheme.scheme.error)
+        val themes = listOf(ChoiceOption(stringResource(R.string.settings_system)), ChoiceOption(stringResource(R.string.settings_light)), ChoiceOption(stringResource(R.string.settings_dark)))
+        val goals = listOf(ChoiceOption(stringResource(R.string.input_goal_avoid)), ChoiceOption(stringResource(R.string.input_goal_seek)))
+        val modes = listOf(ChoiceOption(stringResource(R.string.input_mode_transit)), ChoiceOption(stringResource(R.string.common_taxi)), ChoiceOption(stringResource(R.string.common_car)))
+        // One width for every choice set so a card never mixes connected buttons with a radio list (#104).
+        val requiredWidth = listOf(themes, goals, modes).map { settingsChoiceWidth(it) }.max()
         SectionCard {
-            SettingsChoice(stringResource(R.string.settings_theme), listOf(ChoiceOption(stringResource(R.string.settings_system)), ChoiceOption(stringResource(R.string.settings_light)), ChoiceOption(stringResource(R.string.settings_dark))), settings.theme.ordinal,
-                onSelect = { index -> update { it.copy(theme = ThemeMode.entries[index]) } })
+            SettingsChoice(stringResource(R.string.settings_theme), themes, settings.theme.ordinal,
+                onSelect = { index -> update { it.copy(theme = ThemeMode.entries[index]) } }, requiredWidth = requiredWidth)
         }
         SectionCard(title = stringResource(R.string.settings_defaults)) {
-            SettingsChoice(stringResource(R.string.settings_default_goal), listOf(ChoiceOption(stringResource(R.string.input_goal_avoid)), ChoiceOption(stringResource(R.string.input_goal_seek))), settings.goal.ordinal,
-                onSelect = { index -> update { it.copy(goal = SunGoal.entries[index]) } })
+            SettingsChoice(stringResource(R.string.settings_default_goal), goals, settings.goal.ordinal,
+                onSelect = { index -> update { it.copy(goal = SunGoal.entries[index]) } }, requiredWidth = requiredWidth)
             Spacer(Modifier.height(Spacing.s))
-            SettingsChoice(stringResource(R.string.settings_default_mode), listOf(ChoiceOption(stringResource(R.string.input_mode_transit)), ChoiceOption(stringResource(R.string.common_taxi)), ChoiceOption(stringResource(R.string.common_car))), settings.mode.ordinal,
-                onSelect = { index -> update { it.copy(mode = TravelMode.entries[index]) } })
+            SettingsChoice(stringResource(R.string.settings_default_mode), modes, settings.mode.ordinal,
+                onSelect = { index -> update { it.copy(mode = TravelMode.entries[index]) } }, requiredWidth = requiredWidth)
         }
         SectionCard(title = stringResource(R.string.settings_bench)) {
             Text(stringResource(R.string.settings_bench_detail), style = MaterialTheme.typography.bodySmall, color = SunSeatTheme.scheme.onSurfaceVariant)
