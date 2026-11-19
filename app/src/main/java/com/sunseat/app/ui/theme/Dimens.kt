@@ -28,6 +28,9 @@ object Sizes {
     val simulationMapInfo = 84.dp
     val simulationSunRay = 56.dp
     val mapHeight = 240.dp
+
+    /** 축약 여정 바 최소 높이(DESIGN 4.2, 5.1) */
+    val journeyBar = 56.dp
     val mapMarker = 32.dp
     val mapRoute = 5.dp
     val mapWalk = 3.dp

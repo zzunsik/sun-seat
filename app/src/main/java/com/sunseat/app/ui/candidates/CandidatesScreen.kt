@@ -52,6 +52,10 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.platform.LocalContext
 import com.sunseat.app.ui.input.NeutralTabs
@@ -163,11 +167,37 @@ fun CandidatesScreen(
     var mapHeight by remember { mutableStateOf(0.dp) }
     var mapWidth by remember { mutableStateOf(0.dp) }
     var scaffoldTop by remember { mutableStateOf(0.dp) }
+    // #101: 목록 상단은 펼친 헤더 전체 또는 축약 여정 바 전체 중 하나만 보인다(DESIGN 5.1, 12.3).
+    var fullHeaderHeight by remember { mutableStateOf(0.dp) }
+    var journeyBarHeight by remember { mutableStateOf(0.dp) }
+    var dragHandleHeight by remember { mutableStateOf(0.dp) }
+    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    // 가로 화면 옆 컷아웃 아래로 뒤로·편집 컨트롤이 들어가지 않게 한다.
+    val cutoutSides = WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal)
+    // 펼친 헤더가 접혔다 다시 보여도 스크롤 위치를 유지한다.
+    val headerScroll = rememberScrollState()
+    // 축약 여정 바를 재기 전 어림값: 제목 2줄 + 보조 1줄(현재 글자 크기). 실제보다 작게 어림하면 시트가 바를 덮는다.
+    val typography = MaterialTheme.typography
+    val journeyBarEstimate = statusBarTop + with(density) { maxOf(Sizes.journeyBar, (typography.titleMedium.lineHeight * 2).toDp() + typography.bodySmall.lineHeight.toDp() + Spacing.xs * 2) }
     BoxWithConstraints(modifier.fillMaxSize()) {
     val viewportHeight = maxHeight
     val headerLimit = (maxHeight - Spacing.touch * 3).coerceAtLeast(Spacing.touch)
-    val peek = (if (preview) Sizes.mapHeight.coerceAtMost((maxHeight - headerHeight).coerceAtLeast(Spacing.touch) / 2) else Sizes.mapHeight + Sizes.mapHeight / 2 + Spacing.touch + Spacing.xxl)
-        .coerceAtMost((maxHeight - headerHeight).coerceAtLeast(Spacing.touch))
+    // 펼친 헤더를 재기 전에는 가장 큰 경우(headerLimit)로 보아 기본 시트가 헤더를 덮지 않게 한다.
+    val listHeader = if (fullHeaderHeight > 0.dp) fullHeaderHeight else headerLimit
+    val peekTop = if (preview) headerHeight else listHeader
+    val peek = (if (preview) Sizes.mapHeight.coerceAtMost((maxHeight - peekTop).coerceAtLeast(Spacing.touch) / 2) else Sizes.mapHeight + Sizes.mapHeight / 2 + Spacing.touch + Spacing.xxl)
+        .coerceAtMost((maxHeight - peekTop).coerceAtLeast(Spacing.touch))
+    // 완전 확장한 시트(손잡이 포함)의 위끝은 축약 여정 바 바로 아래다. 바·손잡이를 재기 전에는 최소 높이로 어림한다.
+    val listSheetMax = (maxHeight - (if (journeyBarHeight > 0.dp) journeyBarHeight else journeyBarEstimate) - (if (dragHandleHeight > 0.dp) dragHandleHeight else Spacing.touch)).coerceAtLeast(Spacing.touch)
+    // 시트가 펼친 헤더 아래끝보다 올라오면(완전 확장·중간 드래그) 펼친 헤더를 통째로 접고 축약 여정 바로 바꾼다.
+    // 시트 앵커는 헤더 높이와 무관하므로 바뀌어도 시트가 움직이지 않는다.
+    val fullHeaderPx = with(density) { listHeader.toPx() }
+    val compactHeader by remember(preview, fullHeaderPx) {
+        derivedStateOf {
+            val top = runCatching { scaffoldState.bottomSheetState.requireOffset() }.getOrDefault(Float.NaN)
+            !preview && top.isFinite() && top < fullHeaderPx - 0.5f
+        }
+    }
     val offset = runCatching { with(density) { scaffoldState.bottomSheetState.requireOffset().toDp() } }.getOrDefault(maxHeight - peek)
     val mapPadding = com.sunseat.app.ui.map.sheetMapPadding(mapTop, mapHeight, scaffoldTop + offset)
     LaunchedEffect(fitTrigger, mapHeight, mapWidth) {
@@ -182,13 +212,16 @@ fun CandidatesScreen(
     BottomSheetScaffold(
         modifier = Modifier.fillMaxSize().onGloballyPositioned { scaffoldTop = with(density) { it.positionInRoot().y.toDp() } }, scaffoldState = scaffoldState, containerColor = scheme.background,
         sheetContainerColor = scheme.surface, sheetPeekHeight = peek,
+        sheetDragHandle = { Box(Modifier.testTag("candidates_sheet_handle").onSizeChanged { dragHandleHeight = with(density) { it.height.toDp() } }) { BottomSheetDefaults.DragHandle() } },
         topBar = {
-            Surface(color = scheme.surface, modifier = Modifier.onSizeChanged { headerHeight = with(density) { it.height.toDp() } }) {
-                if (preview) Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = Spacing.s), verticalAlignment = Alignment.CenterVertically) {
+            Surface(color = scheme.surface, modifier = Modifier.testTag("candidates_header").onSizeChanged { headerHeight = with(density) { it.height.toDp() } }) {
+                if (preview) Row(Modifier.fillMaxWidth().statusBarsPadding().windowInsetsPadding(cutoutSides).padding(horizontal = Spacing.s), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = ::closePreview) { Icon(painterResource(R.drawable.ic_ms_arrow_back), stringResource(R.string.candidates_preview_close)) }
                     Text("${request.origin.name} → ${request.destination.name}", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     QuietButton(onClick = { userMoved = false; fitTrigger++ }) { Text(stringResource(R.string.candidates_fit_route)) }
-                } else Column(Modifier.fillMaxWidth().heightIn(max = headerLimit).verticalScroll(rememberScrollState()).statusBarsPadding().padding(horizontal = Spacing.screen, vertical = Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+                } else if (compactHeader) JourneyBar(request, now, actions.onBack, Modifier.windowInsetsPadding(cutoutSides).onSizeChanged { journeyBarHeight = with(density) { it.height.toDp() } }) {
+                    scope.launch { scaffoldState.bottomSheetState.partialExpand() }
+                } else Column(Modifier.onSizeChanged { fullHeaderHeight = with(density) { it.height.toDp() } }.fillMaxWidth().heightIn(max = headerLimit).verticalScroll(headerScroll).statusBarsPadding().windowInsetsPadding(cutoutSides).padding(horizontal = Spacing.screen, vertical = Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = actions.onBack) { Icon(painterResource(R.drawable.ic_ms_arrow_back), stringResource(R.string.common_back)) }
                         Column(Modifier.weight(1f)) {
@@ -207,7 +240,7 @@ fun CandidatesScreen(
         },
         sheetContent = {
             if (preview && previewCandidate != null) {
-                Column(Modifier.fillMaxWidth().heightIn(max = viewportHeight - headerHeight).verticalScroll(rememberScrollState()).navigationBarsPadding().padding(Spacing.screen), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+                Column(Modifier.fillMaxWidth().heightIn(max = (viewportHeight - headerHeight - (if (dragHandleHeight > 0.dp) dragHandleHeight else Spacing.touch)).coerceAtLeast(Spacing.touch)).verticalScroll(rememberScrollState()).navigationBarsPadding().padding(Spacing.screen), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(stringResource(R.string.candidates_preview_title), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
@@ -217,7 +250,7 @@ fun CandidatesScreen(
                     }
                     PrimaryButton(onClick = { showPreview = false; actions.onSelect(previewCandidate) }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.candidates_view_seat)) }
                 }
-            } else Column(Modifier.fillMaxWidth().heightIn(max = Sizes.mapHeight * 3).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+            } else Column(Modifier.testTag("candidates_sheet").fillMaxWidth().heightIn(max = listSheetMax).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                 if (options != null && request.mode == TravelMode.TRANSIT) {
                     Row(Modifier.fillMaxWidth().horizontalScroll(sortScroll).padding(horizontal = Spacing.screen), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
                         CandidateSort.entries.forEach { sort -> NeutralFilterChip(options.sort == sort, sortLabel(sort, request.goal)) { actions.onSort(sort) } }
@@ -278,6 +311,32 @@ fun CandidatesScreen(
     CandidateSort.WALK -> R.string.candidates_sort_walk
     CandidateSort.SUN -> if (goal == SunGoal.AVOID) R.string.candidates_sort_sun_less else R.string.candidates_sort_sun_more
 })
+
+/**
+ * 축약 여정 바(DESIGN 5.1): 시트를 완전히 펼쳤을 때 펼친 헤더 대신 보인다.
+ * 뒤로 + "출발 → 도착" / "수단 · 출발 시각". 바를 누르면 시트를 기본 높이로 내려 펼친 헤더(편집·맞바꾸기·시각)로 돌아간다.
+ */
+@Composable
+private fun JourneyBar(request: TripRequest, now: java.time.LocalDateTime, onBack: () -> Unit, modifier: Modifier = Modifier, onExpand: () -> Unit) {
+    val scheme = SunSeatTheme.scheme
+    val mode = stringResource(when (request.mode) {
+        TravelMode.TRANSIT -> R.string.input_mode_transit
+        TravelMode.TAXI -> R.string.common_taxi
+        TravelMode.CAR -> R.string.common_car
+    })
+    Row(modifier.fillMaxWidth().statusBarsPadding().heightIn(min = Sizes.journeyBar).padding(horizontal = Spacing.s), verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = onBack) { Icon(painterResource(R.drawable.ic_ms_arrow_back), stringResource(R.string.common_back)) }
+        Column(
+            Modifier.weight(1f).heightIn(min = Spacing.touch).testTag("candidates_journey_bar")
+                .clickable(role = Role.Button, onClickLabel = stringResource(R.string.candidates_journey_expand), onClick = onExpand)
+                .padding(horizontal = Spacing.s, vertical = Spacing.xs),
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text("${request.origin.name} → ${request.destination.name}", style = MaterialTheme.typography.titleMedium, color = scheme.onSurface, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text("$mode · ${scheduleLabel(request.departure, now)}", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+        }
+    }
+}
 
 @Composable
 private fun Loading(content: PaddingValues, mode: TravelMode, animate: Boolean) {

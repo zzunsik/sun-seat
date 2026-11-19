@@ -101,13 +101,25 @@ class CandidatesScreenshotTest {
     fun previewLandscape() = preview(false, "candidates_preview_landscape")
 
     @OptIn(ExperimentalMaterial3Api::class)
-    @Test fun expandedList() {
-        val (sheet, scope) = render(list, false)
+    @Test fun expandedList() = expanded(false, "candidates_expanded_light")
+    @Test fun expandedDark() = expanded(true, "candidates_expanded_dark")
+    @Test @Config(qualifiers = "w320dp-h640dp-xxhdpi")
+    fun expandedSmallLargeText() = expanded(false, "candidates_expanded_small_large_text", transitRequest.copy(origin = transitRequest.origin.copy(name = "아주 긴 견본 출발지 이름과 부가 설명"), destination = transitRequest.destination.copy(name = "아주 긴 견본 목적지 이름과 부가 설명")), 1.5f)
+    @Test @Config(qualifiers = "w844dp-h390dp-xxhdpi")
+    fun expandedLandscape() = expanded(false, "candidates_expanded_landscape")
+
+    /** 완전 확장: 펼친 헤더 조각 없이 축약 여정 바 + 시트 전체(#101). */
+    @OptIn(ExperimentalMaterial3Api::class)
+    private fun expanded(dark: Boolean, name: String, request: com.sunseat.app.domain.TripRequest = transitRequest, fontScale: Float = 1f) {
+        compose.enableAccessibilityChecks()
+        val (sheet, scope) = render(list, dark, request, fontScale)
         compose.runOnIdle { scope.launch { sheet.bottomSheetState.expand() } }
         compose.mainClock.advanceTimeBy(5000)
         compose.waitForIdle()
         org.junit.Assert.assertEquals(SheetValue.Expanded, sheet.bottomSheetState.currentValue)
-        shot("candidates_expanded_light")
+        compose.onNodeWithTag("candidates_journey_bar").assertIsDisplayed()
+        compose.onRoot().tryPerformAccessibilityChecks()
+        shot(name)
         compose.runOnIdle { scope.launch { sheet.bottomSheetState.partialExpand() } }
         compose.mainClock.advanceTimeBy(5000)
         compose.waitForIdle()
