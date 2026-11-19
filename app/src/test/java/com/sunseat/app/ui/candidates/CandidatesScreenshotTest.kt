@@ -1,6 +1,8 @@
 package com.sunseat.app.ui.candidates
 
 import androidx.compose.material3.*
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.runtime.*
 import kotlinx.coroutines.launch
 import androidx.compose.ui.test.junit4.accessibility.enableAccessibilityChecks
@@ -110,15 +112,17 @@ class CandidatesScreenshotTest {
     }
 
     @Test fun loadingLight() { render(CandidatesState.Loading(com.sunseat.app.domain.TravelMode.TRANSIT), false); shot("candidates_loading_light") }
-    private fun taxi(dark: Boolean) {
+    private fun taxi(dark: Boolean, car: Boolean = false) {
         val route = com.sunseat.app.ui.result.ResultFixtures.carRoute
         val result = com.sunseat.app.ui.result.ResultFixtures.advisor(90.0, 20.0).advise(route, com.sunseat.app.ui.result.ResultFixtures.departure, transitRequest.goal, travelMode = com.sunseat.app.domain.TravelMode.TAXI)
         val item = list.items.first().copy(totalDuration = route.duration, arrival = (result.departure + route.duration).atZone(java.time.ZoneId.of("Asia/Seoul")).toLocalDateTime(), transfers = 0, walkMinutes = 0, fare = 14500, chips = listOf(LegChip(com.sunseat.app.domain.Mode.CAR)), chosen = ChosenRoute(route, route.duration, result))
         compose.enableAccessibilityChecks()
-        render(CandidatesState.Options(listOf(item), selectedId = item.id), dark, transitRequest.copy(mode = com.sunseat.app.domain.TravelMode.TAXI))
+        render(CandidatesState.Options(listOf(item), selectedId = item.id), dark, transitRequest.copy(mode = if (car) com.sunseat.app.domain.TravelMode.CAR else com.sunseat.app.domain.TravelMode.TAXI))
         compose.onRoot().tryPerformAccessibilityChecks()
-        shot("candidates_taxi_${if (dark) "dark" else "light"}")
+        shot("candidates_${if (car) "car" else "taxi"}_${if (dark) "dark" else "light"}")
     }
+    @Test fun carLight() = taxi(false, car = true)
+    @Test fun carDark() = taxi(true, car = true)
     @Test fun taxiLight() = taxi(false)
     @Test fun taxiDark() = taxi(true)
     @Test fun loadingDark() { render(CandidatesState.Loading(com.sunseat.app.domain.TravelMode.TRANSIT), true); shot("candidates_loading_dark") }
@@ -152,6 +156,41 @@ class CandidatesScreenshotTest {
         render(noRoute, true)
         compose.onRoot().tryPerformAccessibilityChecks()
     }
+
+    private fun readableCard(dark: Boolean, large: Boolean = false, missing: Boolean = false) {
+        compose.enableAccessibilityChecks()
+        val base = CandidatesFixtures.readable.toUi(0, java.time.LocalDateTime.of(2026, 11, 15, 23, 50), false)
+        val night = com.sunseat.app.ui.result.ResultFixtures.advisor(90.0, -20.0).advise(base.chosen.route, java.time.Instant.parse("2026-11-15T14:50:00Z"), transitRequest.goal, totalDuration = base.totalDuration)
+        val computed = base.copy(chosen = base.chosen.copy(cachedResult = night))
+        val item = if (missing) computed.copy(chips = emptyList(), boardAt = "", alightAt = "", chosen = computed.chosen.copy(route = computed.chosen.route.copy(legs = computed.chosen.route.legs.map { it.copy(startName = "", endName = "") }))) else computed
+        compose.setContent {
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, if (large) 1.5f else 1f)) {
+                SunSeatTheme(darkTheme = dark) {
+                    androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.then(androidx.compose.ui.Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState()))) {
+                        CandidateCard(item, true, transitRequest, {}, {})
+                    }
+                }
+            }
+        }
+        compose.onRoot().tryPerformAccessibilityChecks()
+        if (!missing) {
+            compose.onNodeWithText("버스 견본 광역급행 아주 긴 노선 이름 12345 / 대체노선 67890").assertExists()
+            compose.onNodeWithText("견본 출발 정류장 이름이 아주 긴 곳 승차 → 견본 환승센터 하차").assertExists()
+        }
+        compose.onNodeWithText("23:50 출발 → 00:30 도착 예상").assertExists()
+        shot("candidates_readable_${if (dark) "dark" else "light"}${if (large) "_large" else ""}${if (missing) "_missing" else ""}")
+        compose.onNodeWithText("자리 보기").performScrollTo().assertIsDisplayed()
+        compose.onRoot().tryPerformAccessibilityChecks()
+        if (large) shot("candidates_readable_${if (dark) "dark" else "light"}_large_bottom")
+    }
+    @Test fun readableLight() = readableCard(false)
+    @Test fun readableDark() = readableCard(true)
+    @Test @Config(qualifiers = "w320dp-h640dp-xxhdpi")
+    fun readableSmallLarge() = readableCard(false, large = true)
+    @Test @Config(qualifiers = "w320dp-h640dp-xxhdpi")
+    fun readableDarkSmallLarge() = readableCard(true, large = true)
+    @Test fun readableMissing() = readableCard(false, missing = true)
 
     private fun shot(name: String) = compose.onRoot().captureRoboImage("src/test/screenshots/$name.png")
 }

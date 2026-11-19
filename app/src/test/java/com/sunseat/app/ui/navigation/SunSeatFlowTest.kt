@@ -481,9 +481,9 @@ class SunSeatFlowTest {
         waitForText("30분")
         clickText(text(R.string.common_taxi))
         compose.waitUntil(10_000) { graph.server.carRequests == 1 }
-        compose.onNodeWithText(text(R.string.common_taxi)).assertIsSelected()
+        compose.onNode(hasText(text(R.string.common_taxi)) and androidx.compose.ui.test.SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.Role, androidx.compose.ui.semantics.Role.Tab)).assertIsSelected()
         back()
-        compose.onNodeWithText(text(R.string.common_taxi)).assertIsSelected()
+        compose.onNode(hasText(text(R.string.common_taxi)) and androidx.compose.ui.test.SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.Role, androidx.compose.ui.semantics.Role.Tab)).assertIsSelected()
         compose.onNodeWithText(ORIGIN).assertExists()
         compose.onNodeWithText(DESTINATION).assertExists()
         assertEquals(1, graph.server.transitRequests)

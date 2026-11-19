@@ -312,7 +312,7 @@ private fun OptionList(items: List<CandidateUi>, selectedId: Int?, request: Trip
 }
 
 @Composable
-private fun CandidateCard(item: CandidateUi, selected: Boolean, request: TripRequest, onClick: () -> Unit, onView: () -> Unit) {
+internal fun CandidateCard(item: CandidateUi, selected: Boolean, request: TripRequest, onClick: () -> Unit, onView: () -> Unit) {
     val scheme = SunSeatTheme.scheme
     Surface(color = if (selected) scheme.surfaceContainerHigh else scheme.surface,
         shape = MaterialTheme.shapes.large,
@@ -321,14 +321,21 @@ private fun CandidateCard(item: CandidateUi, selected: Boolean, request: TripReq
             .clickable(role = Role.Button, onClickLabel = stringResource(R.string.candidates_highlight), onClick = onClick)) {
         Column(Modifier.padding(Spacing.l), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                Text(formatDuration(item.totalDuration), style = MaterialTheme.typography.headlineSmall, color = scheme.onSurface)
-                item.arrival?.let { Text(stringResource(R.string.candidates_arrival, it.format(ArrivalFormat)), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant) }
-                if (request.mode != TravelMode.TAXI) item.fare?.let { Text(formatWon(it), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant) }
+                Text(formatDuration(item.totalDuration), modifier = Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, color = scheme.onSurface)
                 if (selected) Icon(painterResource(R.drawable.ic_ms_check), stringResource(R.string.candidates_selected), Modifier.size(Sizes.iconSmall))
             }
-            if (request.mode == TravelMode.TAXI) item.fare?.let { Text(stringResource(R.string.candidates_taxi_fare, formatWon(it)), style = MaterialTheme.typography.bodyMedium) }
+            item.arrival?.let { arrival ->
+                val departure = arrival.minus(item.totalDuration)
+                Text(stringResource(R.string.candidates_schedule, departure.format(ArrivalFormat), arrival.format(ArrivalFormat)), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+            }
+            item.fare?.let { Text(if (request.mode == TravelMode.TAXI) stringResource(R.string.candidates_taxi_fare, formatWon(it)) else formatWon(it), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant) }
             RouteSegmentBar(item, taxi = request.mode == TravelMode.TAXI)
-            if (request.mode == TravelMode.TRANSIT) Text(listOf(stringResource(R.string.candidates_transfers, item.transfers), stringResource(R.string.candidates_walk, item.walkMinutes)).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+            if (request.mode == TravelMode.TRANSIT) {
+                val walking = item.chosen.route.legs.filter { it.mode == com.sunseat.app.domain.Mode.WALK }.fold(java.time.Duration.ZERO) { sum, leg -> sum.plus(leg.duration) }
+                val walkLabel = if (!walking.isZero && walking < java.time.Duration.ofMinutes(1)) stringResource(R.string.candidates_walk_under_minute) else stringResource(R.string.candidates_walk, walking.toMinutes())
+                Text(listOf(stringResource(R.string.candidates_transfers, item.transfers), walkLabel).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+            }
+            RouteLegSummary(item, taxi = request.mode == TravelMode.TAXI)
             val result = item.chosen.cachedResult
             if (result == null) {
                 Box(Modifier.fillMaxWidth().height(Sizes.timelineBar).background(scheme.surfaceContainerHighest))
@@ -336,7 +343,7 @@ private fun CandidateCard(item: CandidateUi, selected: Boolean, request: TripReq
             } else {
                 if (result.sunIfFollowed.isZero && result.shadeIfFollowed.isZero) Text(stringResource(R.string.result_no_outdoor), style = MaterialTheme.typography.bodyMedium)
                 else {
-                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                         com.sunseat.app.ui.components.ExposurePill(com.sunseat.app.ui.components.Exposure.Shade, stringResource(R.string.result_shade, formatDuration(result.shadeIfFollowed, zeroOk = true)))
                         com.sunseat.app.ui.components.ExposurePill(com.sunseat.app.ui.components.Exposure.Sun, stringResource(R.string.result_sun, formatDuration(result.sunIfFollowed, zeroOk = true)))
                     }

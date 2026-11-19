@@ -39,6 +39,13 @@
     <string name="search_error_network">인터넷에 연결하지 못했어요.\n연결 상태를 확인해 주세요.</string>
     <string name="search_error_unknown">장소를 검색하지 못했어요.\n잠시 뒤 다시 찾아보세요.</string>
 
+    <string name="common_bus">버스</string>
+    <string name="common_walk">도보</string>
+    <string name="candidates_walk_under_minute">도보 1분 미만</string>
+    <string name="candidates_under_minute">1분 미만</string>
+    <string name="candidates_schedule">%1$s 출발 → %2$s 도착 예상</string>
+    <string name="candidates_board">%1$s 승차</string>
+    <string name="candidates_alight">%1$s 하차</string>
     <!-- 경로 후보 화면 (#12) -->
     <string name="common_back">뒤로</string>
     <string name="candidates_loading">경로를 찾는 중…</string>

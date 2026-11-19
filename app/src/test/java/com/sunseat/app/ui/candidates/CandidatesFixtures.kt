@@ -48,5 +48,21 @@ object CandidatesFixtures {
         legDetails = listOf(TransitLegDetail(listOf(TransitVehicle("140", "간선")), emptyList(), "")),
     )
 
+    val readable = TransitRouteOption(
+        route = Route(listOf(
+            leg(Mode.BUS, 1, "견본 출발 정류장 이름이 아주 긴 곳", "견본 환승센터"),
+            leg(Mode.WALK, 1, "견본 환승센터", "견본 환승역").copy(duration = Duration.ofSeconds(20)),
+            leg(Mode.SUBWAY, 30, "견본 환승역", "견본 두번째 환승역"),
+            leg(Mode.BUS, 2, "견본 두번째 환승역", "견본 도착 정류장"),
+        )), type = TransitRouteType.BUS_AND_SUBWAY, totalDuration = Duration.ofMinutes(40),
+        distanceMeters = 10000, transfers = 2, fare = null,
+        legDetails = listOf(
+            TransitLegDetail(listOf(TransitVehicle("견본 광역급행 아주 긴 노선 이름 12345", "광역"), TransitVehicle("대체노선 67890", "광역")), emptyList(), ""),
+            TransitLegDetail(emptyList(), emptyList(), ""),
+            TransitLegDetail(listOf(TransitVehicle("2호선", "일반")), emptyList(), ""),
+            TransitLegDetail(emptyList(), emptyList(), ""),
+        ),
+    )
+
     val options = listOf(subwayOnly, busOnly)
 }
