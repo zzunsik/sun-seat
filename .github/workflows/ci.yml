@@ -43,8 +43,27 @@ jobs:
 
       # 단위 테스트(release는 단위 테스트가 꺼져 있어 debug만)를 돌리며 스크린샷을 app/src/test/screenshots/의 기준 이미지와 비교하고,
       # 한 장이라도 다르면 실패한다. 기준 이미지 갱신은 AGENTS.md "화면 작업" 참고.
+      # ci-passed가 auto-merge의 유일한 근거이므로 테스트는 빌드 캐시·최신 판정 결과를 재사용하지 않고
+      # 매번 실제로 돈다(--rerun은 바로 앞 작업 testDebugUnitTest에만 적용, #116).
       - name: Unit tests + screenshot verify
-        run: ./gradlew verifyRoborazziDebug --console=plain
+        run: ./gradlew verifyRoborazziDebug testDebugUnitTest --rerun --console=plain
+
+      # 실제로 돈 테스트 수를 실행 요약에 남긴다. 결과 파일이 없거나 0건이면 실패한다.
+      - name: Test count summary
+        if: always()
+        run: |
+          shopt -s globstar nullglob
+          files=(app/build/test-results/testDebugUnitTest/**/*.xml)
+          if [ ${#files[@]} -eq 0 ]; then echo "테스트 결과 파일이 없습니다."; exit 1; fi
+          read -r tests failures errors skipped < <(cat "${files[@]}" | grep -o '<testsuite [^>]*>' |
+            awk '{ for (i = 1; i <= NF; i++) { split($i, kv, "="); gsub(/"/, "", kv[2]);
+                     if (kv[1] == "tests") t += kv[2]; else if (kv[1] == "failures") f += kv[2];
+                     else if (kv[1] == "errors") e += kv[2]; else if (kv[1] == "skipped") s += kv[2] } }
+                   END { print t + 0, f + 0, e + 0, s + 0 }')
+          line="단위 테스트 ${tests}건 실행: 실패 ${failures}, 오류 ${errors}, 건너뜀 ${skipped} (결과 파일 ${#files[@]}개)"
+          echo "$line"
+          echo "$line" >> "$GITHUB_STEP_SUMMARY"
+          [ "$tests" -gt 0 ] || { echo "실행된 테스트가 없습니다."; exit 1; }
 
       - name: Upload reports
         if: always()
