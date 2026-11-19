@@ -37,13 +37,15 @@ import com.sunseat.app.ui.result.label
 import com.sunseat.app.ui.theme.Sizes
 import com.sunseat.app.ui.theme.Spacing
 import com.sunseat.app.ui.theme.SunSeatTheme
+import kotlin.math.abs
 
 /** Null follows the map's test renderer; debug GPU fixtures may explicitly opt into native 3D. */
 internal val LocalCabinPreview = staticCompositionLocalOf<Boolean?> { null }
 
 @Composable
 internal fun CabinPanel(point: TimelinePoint, mode: TravelMode, state: SimulationUiState, actions: SimulationActions) {
-    val profile=remember(point.leg,mode) { CabinProfile.forLeg(point.leg,mode) } ?: return
+    val manual=state.models[point.legIndex]
+    val profile=remember(point.leg,mode,manual) { CabinProfile.forLeg(point.leg,mode,manual) } ?: return
     val chosen=state.seats[point.legIndex]?.let { id -> profile.seats.firstOrNull { it.id==id } }
         ?: profile.recommended(point.spot) ?: profile.seats.first()
     val recommended=profile.recommended(point.spot)
@@ -53,13 +55,16 @@ internal fun CabinPanel(point: TimelinePoint, mode: TravelMode, state: Simulatio
     val key=listOf(profile,point.time,point.heading,point.sun,available)
     val light=remember(key) { CabinSimulation.calculate(profile,point.sun,point.heading,available) }
     var choosing by remember(profile) { mutableStateOf(false) }
-    val profileLabel=stringResource(R.string.simulation_cabin_profile,stringResource(when(profile.kind) {
+    val kindName=stringResource(when(profile.kind) {
         CabinKind.BUS -> R.string.simulation_bus
         CabinKind.COACH -> R.string.simulation_coach
         CabinKind.SUBWAY -> R.string.simulation_subway
         CabinKind.TAXI -> R.string.simulation_taxi
         CabinKind.CAR -> R.string.simulation_car
-    }))
+    })
+    // Bus models always say whether they are estimated or chosen, next to the name (#76).
+    val profileLabel=stringResource(R.string.simulation_cabin_profile,if(profile.kind in BusModels.kinds)
+        stringResource(if(manual!=null) R.string.simulation_bus_name_manual else R.string.simulation_bus_name_estimated,kindName) else kindName)
     Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(Spacing.s)) {
     val summary=when {
         point.leg.mode==Mode.SUBWAY && point.leg.groundLevel==GroundLevel.BELOW -> stringResource(R.string.simulation_cabin_underground)
@@ -94,6 +99,7 @@ internal fun CabinPanel(point: TimelinePoint, mode: TravelMode, state: Simulatio
             QuietButton(onClick={actions.camera(!state.interior)}) { Text(stringResource(if(state.interior) R.string.simulation_overview else R.string.simulation_inside)) }
         }
     }
+    if(profile.kind in BusModels.kinds) BusModelRow(point,mode,profile,manual,state,actions)
     recommended?.let { Text(stringResource(R.string.simulation_recommended_seat,
         if(point.leg.mode==Mode.CAR) it.label() else point.spot!!.label()),style=MaterialTheme.typography.bodySmall) }
     light.cells.filter { it.seatId==chosen.id && it.window!=null }.groupBy { it.window }.forEach { (window,cells) ->
@@ -106,6 +112,48 @@ internal fun CabinPanel(point: TimelinePoint, mode: TravelMode, state: Simulatio
     }
     Text(stringResource(R.string.simulation_cabin_note),style=MaterialTheme.typography.bodySmall,color=SunSeatTheme.scheme.onSurfaceVariant)
     }
+}
+
+/** #76: which standard bus model is shown, why (always an estimate from the route category or the user's choice), and how to change it. */
+@Composable
+private fun BusModelRow(point: TimelinePoint, mode: TravelMode, profile: CabinProfile, manual: CabinKind?, state: SimulationUiState, actions: SimulationActions) {
+    val estimate=BusModels.estimate(point.leg.busType)
+    var open by remember(point.legIndex) { mutableStateOf(false) }
+    @Composable fun Note(text: String) = Text(text,style=MaterialTheme.typography.bodySmall,color=SunSeatTheme.scheme.onSurfaceVariant)
+    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(Spacing.s)) {
+        Column(Modifier.weight(1f)) {
+            Text(stringResource(if(manual!=null) R.string.simulation_bus_model_manual else R.string.simulation_bus_model_estimated,
+                stringResource(if(profile.kind==CabinKind.COACH) R.string.simulation_coach else R.string.simulation_bus)),
+                style=MaterialTheme.typography.bodyMedium)
+            Note(if(manual!=null) stringResource(R.string.simulation_bus_manual_scope) else when(estimate.basis) {
+                BusModelBasis.NO_TYPE -> stringResource(R.string.simulation_bus_basis_none)
+                BusModelBasis.CITY_TYPE -> stringResource(R.string.simulation_bus_basis_city,estimate.type!!)
+                BusModelBasis.COACH_TYPE -> stringResource(R.string.simulation_bus_basis_coach,estimate.type!!)
+                BusModelBasis.UNKNOWN_TYPE -> stringResource(R.string.simulation_bus_basis_unknown,estimate.type!!)
+            })
+        }
+        Box {
+            QuietButton(onClick={open=true}) { Text(stringResource(R.string.simulation_change_model)) }
+            DropdownMenu(expanded=open,onDismissRequest={open=false}) {
+                BusModels.kinds.forEach { kind -> DropdownMenuItem(
+                    text={Text(stringResource(if(kind==CabinKind.COACH) R.string.simulation_model_coach_option else R.string.simulation_model_city_option))},
+                    modifier=Modifier.semantics { selected=kind==profile.kind },
+                    leadingIcon=if(kind==profile.kind) ({ Icon(painterResource(R.drawable.ic_ms_check),null) }) else null,
+                    onClick={
+                        open=false
+                        if(kind!=profile.kind) {
+                            val target=CabinProfile.forLeg(point.leg,mode,kind)!!
+                            actions.busModel(point.legIndex,kind,profile.carry(target,state.seats[point.legIndex]))
+                        }
+                    }) }
+            }
+        }
+    }
+    state.notice?.takeIf { it.leg==point.legIndex }?.carry?.let { carry ->
+        val from=carry.from!!.label()
+        Text(stringResource(if(carry.carried) R.string.simulation_seat_carried else R.string.simulation_seat_not_carried,from),style=MaterialTheme.typography.bodySmall)
+    }
+    Note(stringResource(if(profile.kind==CabinKind.COACH) R.string.simulation_coach_note else R.string.simulation_bus_note))
 }
 
 private fun coverageText(count: Int): Int = when(count) {
@@ -122,7 +170,13 @@ private fun CabinSeat.label(): String {
         CarSeat.REAR_LEFT -> R.string.simulation_rear_left
         CarSeat.REAR_RIGHT -> R.string.simulation_rear_right
     }) else spot.label()
-    return if(car!=null) name else stringResource(R.string.simulation_model_seat,name,id.substringAfter('-').substringBefore('-').toIntOrNull()?.plus(1) ?: 1)
+    if(car!=null) return name
+    if(number>0) {
+        // Bus models (#76): model numbers, plus the facing when it is not forward (city bus aisle-facing seats).
+        val facingName=if(abs(facing.z)<.5) stringResource(R.string.seat_separator)+stringResource(R.string.simulation_side_facing) else ""
+        return stringResource(R.string.simulation_model_seat,name+facingName,number)
+    }
+    return stringResource(R.string.simulation_model_seat,name,id.substringAfter('-').substringBefore('-').toIntOrNull()?.plus(1) ?: 1)
 }
 
 @Composable

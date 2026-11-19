@@ -14,6 +14,7 @@ class CabinCameraTest {
     private fun profile(mode: Mode, travel: TravelMode = TravelMode.TRANSIT, busType: String? = null) =
         CabinProfile.forLeg(Leg(mode, listOf(a, a.copy(latitude = 38.0)), Duration.ofMinutes(20), "A", "B", GroundLevel.ABOVE, busType = busType), travel)!!
     private val profiles get() = mapOf(
+        // #76: city bus (no route type) and 40-seat express coach (coach-style type) models.
         "bus" to profile(Mode.BUS), "coach" to profile(Mode.BUS, busType = "광역"),
         "subway" to profile(Mode.SUBWAY), "taxi" to profile(Mode.CAR, TravelMode.TAXI),
     )
@@ -84,7 +85,8 @@ class CabinCameraTest {
 
     @Test fun framingNeverResizesPhysicalVehicleOrSeats() {
         val bus = profile(Mode.BUS); val subway = profile(Mode.SUBWAY)
-        assertEquals(7.0, bus.length, 0.0); assertEquals(2.5, bus.width, 0.0); assertEquals(8.0, subway.length, 0.0)
+        // #76 standard bus body (city and 40-seat coach share it): 7.8m was 7.0m before the door/driver layouts.
+        assertEquals(7.8, bus.length, 0.0); assertEquals(2.5, bus.width, 0.0); assertEquals(8.0, subway.length, 0.0)
         (profiles.values.flatMap { it.seats }).forEach { assertEquals(.46, it.width, 0.0); assertEquals(.46, it.depth, 0.0) }
         val before = CabinSimulation.calculate(bus, SunPosition(90.0, 20.0), 0.0, true)
         viewports.forEach { vp -> bus.seats.forEach { CabinCamera.seat(bus, it, vp.aspect, vp.inset) }; CabinCamera.overview(bus, vp.aspect, vp.inset) }

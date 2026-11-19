@@ -69,7 +69,8 @@ class SimulationScreenshotTest {
         render(6, false)
         val app=org.robolectric.RuntimeEnvironment.getApplication()
         val map=compose.onNodeWithContentDescription(app.getString(R.string.map_description,"숲 입구","공원")).fetchSemanticsNode().boundsInRoot
-        val detail=compose.onNodeWithText(app.getString(R.string.simulation_cabin_profile,app.getString(R.string.simulation_bus))).fetchSemanticsNode().boundsInRoot
+        // #76: bus labels now carry their estimate status next to the name.
+        val detail=compose.onNodeWithText(app.getString(R.string.simulation_cabin_profile,app.getString(R.string.simulation_bus_name_estimated,app.getString(R.string.simulation_bus)))).fetchSemanticsNode().boundsInRoot
         assertTrue("landscape must place map beside details, not squeeze it above",map.right<=detail.left)
         assertTrue(map.height>0)
         val scene=compose.onNode(hasContentDescription("3D 차량",substring=true)).fetchSemanticsNode().boundsInRoot
@@ -99,6 +100,55 @@ class SimulationScreenshotTest {
         compose.onNodeWithContentDescription("재생 시각").performSemanticsAction(SemanticsActions.SetProgress) { it(0.5f) }
         assertEquals(690_000L, vm.state.value.elapsedMillis)
         assertFalse(vm.state.value.playing)
+    }
+    /** #76: the shown bus model is labelled as an estimate with its basis and can be switched for this leg only. */
+    private fun renderBusModel(dark: Boolean, busType: String?): SimulationViewModel {
+        val route = route.copy(legs = listOf(route.legs[0].copy(busType = busType)) + route.legs.drop(1))
+        val timeline = timeline(route = route)
+        val vm = SimulationViewModel(timeline)
+        vm.seek(6f / 25)
+        compose.enableAccessibilityChecks()
+        compose.setContent { CompositionLocalProvider(LocalMapRenderer provides MapRenderer.PREVIEW) {
+            SunSeatTheme(darkTheme = dark) {
+                val state by vm.state.collectAsState()
+                SimulationScreen(request, route, timeline.result, state, timeline.at(start.plusMillis(state.elapsedMillis)), timeline.boundaries,
+                    SimulationActions(seat = vm::seat, busModel = vm::busModel), zone = zone)
+            }
+        } }
+        compose.waitForIdle()
+        compose.onRoot().tryPerformAccessibilityChecks()
+        return vm
+    }
+    @Test fun coachEstimateFromRouteTypeDark() {
+        val app = org.robolectric.RuntimeEnvironment.getApplication()
+        renderBusModel(true, "광역")
+        compose.onNodeWithText(app.getString(R.string.simulation_cabin_profile, app.getString(R.string.simulation_bus_name_estimated, app.getString(R.string.simulation_coach)))).assertExists()
+        compose.onNodeWithText(app.getString(R.string.simulation_bus_basis_coach, "광역")).assertExists()
+        compose.onNodeWithText(app.getString(R.string.simulation_bus_model_estimated, app.getString(R.string.simulation_coach))).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(app.getString(R.string.simulation_coach_note)).assertExists()
+        shot("simulation_coach_estimate_dark")
+    }
+    @Test fun switchingModelAppliesToThisLegAndAsksToReselectWithoutAnEquivalentSeat() {
+        val app = org.robolectric.RuntimeEnvironment.getApplication()
+        val vm = renderBusModel(false, null)
+        compose.onNodeWithText(app.getString(R.string.simulation_cabin_profile, app.getString(R.string.simulation_bus_name_estimated, app.getString(R.string.simulation_bus)))).assertExists()
+        compose.onNodeWithText(app.getString(R.string.simulation_bus_basis_none)).assertExists()
+        compose.onNodeWithText(app.getString(R.string.simulation_change_model)).performScrollTo().performClick()
+        compose.onNodeWithText(app.getString(R.string.simulation_model_coach_option)).performClick()
+        assertEquals(mapOf(0 to CabinKind.COACH), vm.state.value.models)
+        compose.onNodeWithText(app.getString(R.string.simulation_cabin_profile, app.getString(R.string.simulation_bus_name_manual, app.getString(R.string.simulation_coach)))).assertExists()
+        compose.onNodeWithText(app.getString(R.string.simulation_bus_model_manual, app.getString(R.string.simulation_coach))).assertExists()
+        // Choose a left aisle seat that the city model does not have, then switch back.
+        compose.onNodeWithText(app.getString(R.string.simulation_choose_seat)).performScrollTo().performClick()
+        compose.onNodeWithText("왼쪽 · 앞 · 통로 · 모형 2번").performClick()
+        assertEquals("coach-2", vm.state.value.seats[0])
+        compose.onNodeWithText(app.getString(R.string.simulation_change_model)).performScrollTo().performClick()
+        compose.onNodeWithText(app.getString(R.string.simulation_model_city_option)).performClick()
+        assertEquals(mapOf(0 to CabinKind.BUS), vm.state.value.models)
+        assertNull("no silent move to another seat", vm.state.value.seats[0])
+        compose.onNodeWithText(app.getString(R.string.simulation_bus_model_manual, app.getString(R.string.simulation_bus))).assertExists()
+        compose.onNodeWithText(app.getString(R.string.simulation_seat_not_carried, "왼쪽 · 앞 · 통로")).performScrollTo().assertIsDisplayed()
+        shot("simulation_bus_model_switched_light")
     }
     @Test fun reducedMotionOffersScrubberOnly() {
         android.provider.Settings.Global.putFloat(org.robolectric.RuntimeEnvironment.getApplication().contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 0f)

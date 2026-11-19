@@ -35,6 +35,7 @@ data class SimulationActions(
     val back: () -> Unit = {}, val seek: (Float) -> Unit = {}, val toggle: () -> Unit = {},
     val speed: (Int) -> Unit = {}, val unfollow: () -> Unit = {}, val follow: () -> Unit = {},
     val seat: (Int,String) -> Unit = { _,_ -> }, val camera: (Boolean) -> Unit = {},
+    val busModel: (Int,CabinKind,SeatCarry) -> Unit = { _,_,_ -> },
 )
 
 @Composable
