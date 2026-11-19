@@ -24,6 +24,14 @@ class SimulationViewModelTest {
         val source = SunPositionSource { _, _, _ -> SunPosition(90.0, 30.0) }
         return TripTimeline(route, TripAdvisor(ExposureAnalyzer(source)).advise(route, Instant.EPOCH, SunGoal.AVOID), source)
     }
+    @Test fun cameraAndSeatChangesKeepPlaybackTimeAndFollowing() {
+        val vm = SimulationViewModel(timeline())
+        vm.enter(false); vm.setSpeed(2); vm.advance(1000); vm.follow(false)
+        val before = vm.state.value
+        vm.camera(true); vm.seat(0, "RIGHT-2-WINDOW"); vm.camera(false)
+        val after = vm.state.value
+        assertEquals(before.copy(seats = mapOf(0 to "RIGHT-2-WINDOW")), after)
+    }
     @Test fun playSpeedEndRestartAndScrub() {
         val vm = SimulationViewModel(timeline())
         vm.advance(1000); assertEquals(0L, vm.state.value.elapsedMillis)
