@@ -24,6 +24,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
@@ -55,20 +56,14 @@ fun ChoiceGroup(
     val scheme = SunSeatTheme.scheme
     val haptics = rememberSunSeatHaptics()
     val density = LocalDensity.current
-    val measurer = rememberTextMeasurer()
     val style = MaterialTheme.typography.labelLarge
-    // Reserve the check even for an unselected option so selection never squeezes its label.
-    val widths = options.map {
-        (with(density) { measurer.measure(it.label, style, softWrap = false).size.width.toDp() } +
-            Sizes.iconSmall + Spacing.xs + Spacing.l * 2).coerceAtLeast(Spacing.touch)
-    }
+    val widths = choiceWidths(options)
     val scroll = rememberScrollState()
     Column(modifier, verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = scheme.onSurface)
         BoxWithConstraints(Modifier.fillMaxWidth()) {
         val gaps = ButtonGroupDefaults.ConnectedSpaceBetween * (options.size - 1).coerceAtLeast(0)
-        val total = widths.sumOf { it.value.toDouble() }.toFloat().dp
-        val scrollable = total + gaps > maxWidth
+        val scrollable = connectedWidth(widths) > maxWidth
         val equal = (widths.maxOrNull() ?: 0.dp) * options.size + gaps <= maxWidth
         LaunchedEffect(selected, widths, maxWidth) {
             val offset = with(density) { (widths.take(selected).fold(0.dp) { sum, width -> sum + width } + ButtonGroupDefaults.ConnectedSpaceBetween * selected).roundToPx() }
@@ -112,3 +107,23 @@ fun ChoiceGroup(
         }
     }
 }
+
+/**
+ * 연결형 버튼 하나가 라벨을 한 줄로 온전히 보이는 데 필요한 폭(#93).
+ * 선택되지 않은 항목도 체크 자리를 확보해 선택이 라벨을 밀어내지 않게 한다.
+ */
+@Composable
+internal fun choiceWidths(options: List<ChoiceOption>): List<Dp> {
+    val density = LocalDensity.current
+    val measurer = rememberTextMeasurer()
+    val style = MaterialTheme.typography.labelLarge
+    return options.map {
+        (with(density) { measurer.measure(it.label, style, softWrap = false).size.width.toDp() } +
+            Sizes.iconSmall + Spacing.xs + Spacing.l * 2).coerceAtLeast(Spacing.touch)
+    }
+}
+
+/** 연결형 버튼 묶음 전체를 가로 탐색 없이 한 줄에 놓는 데 필요한 폭. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+internal fun connectedWidth(widths: List<Dp>): Dp =
+    widths.fold(0.dp) { sum, width -> sum + width } + ButtonGroupDefaults.ConnectedSpaceBetween * (widths.size - 1).coerceAtLeast(0)
