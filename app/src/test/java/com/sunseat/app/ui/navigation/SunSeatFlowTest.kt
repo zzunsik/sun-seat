@@ -116,8 +116,11 @@ class SunSeatFlowTest {
         compose.onNodeWithText(text(R.string.settings_title)).assertExists()
         compose.mainClock.autoAdvance = false
         compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
-        compose.mainClock.advanceTimeBy(64)
         compose.waitForIdle()
+        repeat(4) {
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+        }
         compose.onNodeWithText(text(R.string.settings_title)).assertDoesNotExist()
         compose.mainClock.autoAdvance = true
         compose.onNodeWithText(text(R.string.input_destination_placeholder)).assertExists()
