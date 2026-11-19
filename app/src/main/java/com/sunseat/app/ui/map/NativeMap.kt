@@ -127,6 +127,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         private set
     private var geometry: Triple<List<Route>, Int, Pair<com.sunseat.app.domain.NamedPlace?, com.sunseat.app.domain.NamedPlace?>>? = null
     private var padding: MapPadding? = null
+    private val fitPolicy = MapFitPolicy()
     private var cursor: Label? = null
     private var ray: Label? = null
     private var myLocation: Label? = null
@@ -190,8 +191,9 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         if (geometryChanged || padding != state.padding) {
             padding = state.padding
             target.setPadding(0, (state.padding.top.value * density).toInt(), 0, (state.padding.bottom.value * density).toInt())
-            val points = state.points()
-            if (points.isNotEmpty()) target.moveCamera(CameraUpdateFactory.fitMapPoints(points.map { it.sdk() }.toTypedArray(), metrics.inset.toInt(), 17))
+        }
+        if (fitPolicy.shouldFit(state)) {
+            target.moveCamera(CameraUpdateFactory.fitMapPoints(state.points().map { it.sdk() }.toTypedArray(), metrics.inset.toInt(), 17))
         }
         state.focus?.let { focus ->
             val layer = target.labelManager?.layer

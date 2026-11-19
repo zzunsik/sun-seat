@@ -8,6 +8,7 @@ import androidx.compose.ui.unit.IntOffset
 
 /** 움직임 토큰. docs/DESIGN.md 7 */
 object Motion {
+    const val CAMERA_SETTLE_MS = 180L
     /** About 30fps; 33ms avoids waiting a third 60Hz vsync for a 34ms threshold. */
     const val SIMULATION_FRAME_MS = 33L
     /** 결과 카드 순차 등장 간격(ms) */

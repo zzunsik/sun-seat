@@ -9,6 +9,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -63,12 +71,18 @@ fun SunSeatMap(state: MapState, modifier: Modifier = Modifier) {
 fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
     val scheme = com.sunseat.app.ui.theme.LightScheme
     val sun = com.sunseat.app.ui.theme.LightSunSeatColors.onSunContainer
-    Box(modifier) {
+    val fitPolicy = remember { MapFitPolicy() }
+    val camera = remember { PreviewCamera() }
+    var pan by remember { mutableStateOf(Offset.Zero) }
+    val onGesture by rememberUpdatedState(state.onGesture)
+    if (fitPolicy.shouldFit(state)) { camera.points = state.points(); camera.padding = state.padding; camera.revision++ }
+    LaunchedEffect(camera.revision) { pan = Offset.Zero }
+    Box(modifier.pointerInput(Unit) { detectDragGestures { change, drag -> change.consume(); pan += drag; onGesture() } }) {
     Canvas(Modifier.fillMaxSize().background(scheme.surfaceContainer)) {
-        val top = state.padding.top.toPx()
-        val bottom = state.padding.bottom.toPx()
-        val projection = MapProjection(state.focus?.let { listOf(it.location) } ?: state.points(), size.width, (size.height - top - bottom).coerceAtLeast(1f), Sizes.mapInset.toPx())
-        fun position(point: com.sunseat.app.domain.LatLng): Offset = projection.project(point).let { Offset(it.first, it.second + top) }
+        val top = camera.padding.top.toPx()
+        val bottom = camera.padding.bottom.toPx()
+        val projection = MapProjection(state.focus?.let { listOf(it.location) } ?: camera.points, size.width, (size.height - top - bottom).coerceAtLeast(1f), Sizes.mapInset.toPx())
+        fun position(point: com.sunseat.app.domain.LatLng): Offset = projection.project(point).let { Offset(it.first, it.second + top) + pan }
         val grid = Sizes.mapInset.toPx()
         var x = 0f
         while (x < size.width) { drawLine(scheme.outlineVariant, Offset(x, 0f), Offset(x, size.height), Sizes.hairline.toPx()); x += grid }
@@ -145,4 +159,10 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
         Text(stringResource(R.string.map_preview), Modifier.background(scheme.surface).padding(Spacing.s), color = scheme.onSurfaceVariant, style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
     }
     }
+}
+
+private class PreviewCamera {
+    var revision = 0L
+    var points: List<com.sunseat.app.domain.LatLng> = emptyList()
+    var padding: MapPadding = MapPadding()
 }

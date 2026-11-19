@@ -20,6 +20,10 @@ data class MapState(
     val routeProgress: Float? = null,
     val showDecorations: Boolean = true,
     val focus: MapFocus? = null,
+    /** Interactive sheets update padding without moving a user-controlled camera. */
+    val automaticFit: Boolean = true,
+    val cameraRevision: Long = 0,
+    val fitEnabled: Boolean = true,
 )
 
 /** A new sequence requests one camera move, even when the coordinate is unchanged. */
@@ -40,7 +44,30 @@ internal class MapProjection(points: List<LatLng>, private val width: Float, pri
         ((width / 2 + (point.longitude * longitudeScale - (minX + maxX) / 2) * scale).toFloat()) to
         ((height / 2 - (point.latitude - (minY + maxY) / 2) * scale).toFloat())
 }
-internal fun MapState.points(): List<LatLng> = routes.flatMap { it.legs }.flatMap { it.path } + listOfNotNull(origin?.location, destination?.location)
+internal fun MapState.points(): List<LatLng> =
+    (routes.getOrNull(selectedRoute)?.let { listOf(it) } ?: routes).flatMap { it.legs }.flatMap { it.path } +
+        listOfNotNull(origin?.location, destination?.location)
+
+/** Shared camera decision for SDK and test renderer. Padding updates alone need not fit. */
+internal class MapFitPolicy {
+    private var previous: MapState? = null
+    fun shouldFit(state: MapState): Boolean {
+        if (!state.fitEnabled || state.points().isEmpty()) return false
+        val old = previous
+        previous = state
+        val geometryChanged = old == null || old.routes != state.routes || old.selectedRoute != state.selectedRoute ||
+            old.origin != state.origin || old.destination != state.destination
+        return old == null || old.cameraRevision != state.cameraRevision ||
+            (state.automaticFit && (geometryChanged || old.padding != state.padding))
+    }
+}
+
+/** Coordinates share the root space; the map already starts below the top panel. */
+internal fun sheetMapPadding(mapTop: Dp, mapHeight: Dp, sheetTop: Dp): MapPadding =
+    MapPadding(bottom = (mapTop + mapHeight - sheetTop).coerceIn(0.dp, mapHeight.coerceAtLeast(0.dp)))
 
 /** Low sun is visually stronger; all rays retain the semantic sun color. */
 internal fun sunRayOpacity(altitude: Double): Float = (1.0 - 0.30 * altitude.coerceIn(0.0, 90.0) / 90.0).toFloat()
+
+internal val MapCameraRevisionKey = androidx.compose.ui.semantics.SemanticsPropertyKey<Long>("MapCameraRevision")
+internal val MapVisibleHeightKey = androidx.compose.ui.semantics.SemanticsPropertyKey<Float>("MapVisibleHeight")

@@ -327,4 +327,7 @@
     <string name="simulation_arrived_time">%1$s · 도착</string>
     <string name="simulation_progress">이동 %1$d%%</string>
     <string name="simulation_route_overview">출발 %1$s → 도착 %2$s</string>
+    <string name="candidates_preview_title">선택한 경로</string>
+    <string name="candidates_preview_close">경로 목록으로 돌아가기</string>
+    <string name="candidates_fit_route">전체 경로 보기</string>
 </resources>
