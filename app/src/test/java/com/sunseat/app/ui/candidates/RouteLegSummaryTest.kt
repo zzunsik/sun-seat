@@ -5,6 +5,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onNodeWithContentDescription
 import com.sunseat.app.domain.Mode
 import com.sunseat.app.domain.Route
 import com.sunseat.app.ui.theme.SunSeatTheme
@@ -21,12 +22,47 @@ class RouteLegSummaryTest {
 
     @Test fun estimatedStationIntervalsRemainOneRideWithOuterStops() {
         val base = CandidatesFixtures.subwayOnly.toUi(0, null, false)
-        val first = base.chosen.route.legs.first().copy(estimatedStationTiming = true)
+        val first = base.chosen.route.legs.first().copy(estimatedStationTiming = true, transitStepIndex = 0)
         val second = first.copy(startName = first.endName, endName = "견본 종점")
         val item = base.copy(chips = listOf(base.chips.first(), base.chips.first()), chosen = base.chosen.copy(route = Route(listOf(first, second))))
         compose.setContent { SunSeatTheme { RouteLegSummary(item, false) } }
         compose.onAllNodesWithText("지하철 1호선").assertCountEquals(1)
         compose.onNodeWithText("서울역 승차 → 견본 종점 하차").assertIsDisplayed()
+    }
+
+    @Test fun segmentDescriptionFoldsEstimatedIntervalsOfOneRide() {
+        val base = CandidatesFixtures.subwayOnly.toUi(0, null, false)
+        val first = base.chosen.route.legs.first().copy(estimatedStationTiming = true, transitStepIndex = 0)
+        val second = first.copy(startName = first.endName, endName = "견본 종점")
+        val item = base.copy(chips = listOf(base.chips.first(), base.chips.first()), chosen = base.chosen.copy(route = Route(listOf(first, second))))
+        compose.setContent { SunSeatTheme { RouteSegmentBar(item) } }
+        compose.onNodeWithContentDescription("지하철 1호선").assertIsDisplayed()
+    }
+
+    @Test fun segmentDescriptionPreservesSeparateBoardingsOfSameLine() {
+        val base = CandidatesFixtures.subwayOnly.toUi(0, null, false)
+        val first = base.chosen.route.legs.first()
+        val second = first.copy(startName = first.endName, endName = "다른 종점")
+        val item = base.copy(chips = listOf(base.chips.first(), base.chips.first()), chosen = base.chosen.copy(route = Route(listOf(first, second))))
+        compose.setContent { SunSeatTheme { RouteSegmentBar(item) } }
+        compose.onNodeWithContentDescription("지하철 1호선 → 지하철 1호선").assertIsDisplayed()
+    }
+
+    @Test fun sameLineEstimatedStepsDoNotMergeAcrossBoardings() {
+        val base = CandidatesFixtures.subwayOnly.toUi(0, null, false)
+        val first = base.chosen.route.legs.first().copy(estimatedStationTiming = true, transitStepIndex = 0)
+        val second = first.copy(startName = first.endName, endName = "다른 종점", transitStepIndex = 1)
+        val item = base.copy(chips = listOf(base.chips.first(), base.chips.first()), chosen = base.chosen.copy(route = Route(listOf(first, second))))
+        compose.setContent { SunSeatTheme { RouteSegmentBar(item); RouteLegSummary(item, false) } }
+        compose.onNodeWithContentDescription("지하철 1호선 → 지하철 1호선").assertIsDisplayed()
+        compose.onAllNodesWithText("지하철 1호선").assertCountEquals(2)
+    }
+
+    @Test fun walkBetweenSameLineRidesRemainsInDescription() {
+        val base = CandidatesFixtures.subwayOnly.toUi(0, null, false)
+        val item = base.copy(chips = listOf(base.chips.first(), base.chips[1], base.chips.first()))
+        compose.setContent { SunSeatTheme { RouteSegmentBar(item) } }
+        compose.onNodeWithContentDescription("지하철 1호선 → 도보 3분 → 지하철 1호선").assertIsDisplayed()
     }
 
     @Test fun multipleShortWalksUseTheirCombinedDuration() {

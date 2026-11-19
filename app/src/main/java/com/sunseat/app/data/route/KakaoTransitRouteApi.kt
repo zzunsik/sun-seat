@@ -124,7 +124,7 @@ internal fun PtRoute.toOption(): TransitRouteOption? {
     if (steps.isEmpty()) return null
     val legs = ArrayList<Leg>(steps.size)
     val details = ArrayList<TransitLegDetail>(steps.size)
-    for (step in steps) {
+    for ((stepIndex, step) in steps.withIndex()) {
         val p = step.properties
         val mode = when (p.type) {
             "BUS" -> Mode.BUS
@@ -134,6 +134,7 @@ internal fun PtRoute.toOption(): TransitRouteOption? {
         }
         val stopNames = p.stops.map { it.name }
         legs += Leg(
+            transitStepIndex = stepIndex,
             mode = mode,
             busType = if (mode == Mode.BUS) p.vehicles.firstOrNull()?.type else null,
             path = step.path?.points.orEmpty().mapNotNull { it.toLatLng() },
