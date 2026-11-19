@@ -141,8 +141,10 @@ internal class CabinMesh {
                 chair(s,seat,neutral,car || p.kind==CabinKind.COACH)
             }
             p.furniture.take(1).forEach { bevelBox(it,seat) }
+            // Driver (never selectable) and door floor markings identify the vehicle's front and kerb side (#76).
+            p.driver?.let { chair(it,seat,neutral,car || p.kind==CabinKind.COACH) }
+            p.doors.forEach { box(it,seat) }
             if(car) {
-                chair(CabinSeat("driver",SeatSpot(Side.LEFT),V3(-.43,.48,-.65),V3(0.0,0.0,-1.0)),seat,neutral,true)
                 // Exterior below the window line identifies the sedan without obscuring seat contact surfaces.
                 bevelBox(CabinBox(V3(-w-.06,.12,-l-.72),V3(w+.06,.65,-l)),neutral)
                 bevelBox(CabinBox(V3(-w-.06,.12,l),V3(w+.06,.55,l+.4)),neutral)
