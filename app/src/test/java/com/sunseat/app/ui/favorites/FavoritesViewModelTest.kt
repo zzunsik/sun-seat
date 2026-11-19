@@ -38,10 +38,14 @@ class FavoritesViewModelTest {
         val api = object : PlaceSearchApi {
             override suspend fun search(query: String, near: LatLng?, size: Int): ApiResult<List<Place>> {
                 val old = ++calls == 1
-                return kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
-                    kotlinx.coroutines.delay(if (old) 1000 else 10)
-                    ApiResult.Success(listOf(if (old) place else office))
+                try {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                        kotlinx.coroutines.delay(if (old) 1000 else 10)
+                    }
+                } catch (_: kotlinx.coroutines.CancellationException) {
+                    // Deliberately return even when the caller has cancelled.
                 }
+                return ApiResult.Success(listOf(if (old) place else office))
             }
         }
         val model = FavoritesViewModel(repository(backgroundScope), api, FavoriteKind.HOME)

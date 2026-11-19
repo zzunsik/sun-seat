@@ -80,6 +80,22 @@ class InputScreenshotTest {
     @Test fun searchNoResultsLight() = searchStatus(false, false)
     @Test fun searchNoResultsDark() = searchStatus(true, false)
 
+    @Test
+    @Config(qualifiers = "w320dp-h640dp-xxhdpi")
+    fun searchSmallLargeText() {
+        compose.enableAccessibilityChecks()
+        compose.setContent {
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, 1.5f)) {
+                SunSeatTheme { PlaceSearchScreen(SearchState(EndpointField.DESTINATION, query = "견본 장소", messageRes = R.string.search_error_network, canRetry = true), InputActions()) }
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithText("다시 시도").assertIsDisplayed()
+        compose.onRoot().tryPerformAccessibilityChecks()
+        shot("input_search_small_large_text")
+    }
+
     private fun timeSheet(dark: Boolean, mode: com.sunseat.app.domain.TimeMode) {
         compose.enableAccessibilityChecks()
         compose.setContent { SunSeatTheme(darkTheme = dark) { TimeSheet(filled.departure, mode, TravelMode.TRANSIT, {}, { _, _ -> }, now = filled.departure!!) } }

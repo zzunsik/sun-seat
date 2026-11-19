@@ -57,15 +57,41 @@ class InputViewModelTest {
     @After fun tearDown() = Dispatchers.resetMain()
 
     @Test
+    fun immediateSearchDeduplicatesInFlightAndClearInvalidatesResponse() = runTest(dispatcher) {
+        var calls = 0
+        val api = object : PlaceSearchApi {
+            override suspend fun search(query: String, near: LatLng?, size: Int): ApiResult<List<Place>> {
+                calls++
+                kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { kotlinx.coroutines.delay(500) }
+                return ApiResult.Success(listOf(seoul))
+            }
+        }
+        val vm = vm(api)
+        vm.openSearch(EndpointField.ORIGIN)
+        vm.onQueryChange("A"); vm.searchNow(); dispatcher.scheduler.runCurrent()
+        vm.searchNow(); dispatcher.scheduler.runCurrent()
+        assertEquals(1, calls)
+        vm.onQueryChange(" ")
+        advanceUntilIdle()
+        assertTrue(vm.state.value.search!!.results.isEmpty())
+        assertFalse(vm.state.value.search!!.loading)
+        assertNull(vm.state.value.search!!.messageRes)
+    }
+
+    @Test
     fun lateResponseCannotOverwriteSameQueryInReopenedField() = runTest(dispatcher) {
         var calls = 0
         val api = object : PlaceSearchApi {
             override suspend fun search(query: String, near: LatLng?, size: Int): ApiResult<List<Place>> {
                 val old = ++calls == 1
-                return kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
-                    kotlinx.coroutines.delay(if (old) 1000 else 10)
-                    ApiResult.Success(listOf(if (old) seoul else busan))
+                try {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                        kotlinx.coroutines.delay(if (old) 1000 else 10)
+                    }
+                } catch (_: kotlinx.coroutines.CancellationException) {
+                    // Deliberately return even when the caller has cancelled.
                 }
+                return ApiResult.Success(listOf(if (old) seoul else busan))
             }
         }
         val vm = vm(api)
