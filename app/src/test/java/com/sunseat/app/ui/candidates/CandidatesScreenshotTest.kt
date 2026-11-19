@@ -168,6 +168,19 @@ class CandidatesScreenshotTest {
     @Test fun emptyFilterDark() { render(list.copy(filters = setOf(com.sunseat.app.data.route.TransitRouteType.BUS_AND_SUBWAY)), true); shot("candidates_empty_filter_dark") }
     @Test fun noRouteDark() { render(noRoute, true); shot("candidates_no_route_dark") }
 
+    /** #105: 최소 도보 정렬은 응답의 환승 도보만 비교한다는 목록 공통 안내. */
+    private fun walkSort(dark: Boolean, name: String, fontScale: Float = 1f) {
+        compose.enableAccessibilityChecks()
+        render(list.copy(sort = CandidateSort.WALK), dark, fontScale = fontScale)
+        compose.onRoot().tryPerformAccessibilityChecks()
+        compose.onNodeWithTag("walk_scope_notice").assertIsDisplayed()
+        shot(name)
+    }
+    @Test fun walkSortLight() = walkSort(false, "candidates_walk_sort_light")
+    @Test fun walkSortDark() = walkSort(true, "candidates_walk_sort_dark")
+    @Test @Config(qualifiers = "w320dp-h640dp-xxhdpi")
+    fun walkSortSmallLargeText() = walkSort(false, "candidates_walk_sort_small_large_text", 1.5f)
+
     @Test
     fun accessibilityList() {
         compose.enableAccessibilityChecks()
