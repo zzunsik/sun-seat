@@ -1,6 +1,8 @@
 package com.sunseat.app.ui.settings
 
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.junit4.accessibility.enableAccessibilityChecks
 import androidx.compose.ui.test.onRoot
@@ -29,6 +31,21 @@ class SettingsScreenshotTest {
     }
     @Test fun light() { render(false); compose.onRoot().captureRoboImage("src/test/screenshots/settings_light.png") }
     @Test fun dark() { render(true); compose.onRoot().captureRoboImage("src/test/screenshots/settings_dark.png") }
+    private fun largeFont(dark: Boolean) {
+        compose.enableAccessibilityChecks()
+        compose.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, 1.5f)) {
+                SunSeatTheme(darkTheme = dark) { SettingsScreen(Settings(), {}, {}, {}) }
+            }
+        }
+        compose.onRoot().tryPerformAccessibilityChecks()
+        compose.onRoot().captureRoboImage("src/test/screenshots/settings_small_large_${if (dark) "dark" else "light"}.png")
+    }
+    @Config(qualifiers = "w320dp-h1000dp-xxhdpi")
+    @Test fun smallLargeLight() = largeFont(false)
+    @Config(qualifiers = "w320dp-h1000dp-xxhdpi")
+    @Test fun smallLargeDark() = largeFont(true)
     @Test fun saveError() { render(false, true); compose.onRoot().captureRoboImage("src/test/screenshots/settings_error_light.png") }
     @Test fun licensesLight() {
         compose.setContent { SunSeatTheme(darkTheme = false) { LicensesScreen({}) } }
