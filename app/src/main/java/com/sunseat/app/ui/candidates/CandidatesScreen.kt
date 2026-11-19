@@ -129,6 +129,7 @@ fun CandidatesScreen(
     val scope = rememberCoroutineScope()
     var fitTrigger by remember { mutableLongStateOf(0L) }
     var fitRevision by remember { mutableLongStateOf(0L) }
+    var fittedTrigger by remember { mutableLongStateOf(-1L) }
     var userMoved by remember { mutableStateOf(false) }
     val mapCandidates = options?.visible?.sortedBy { it.id }.orEmpty()
     val routes = mapCandidates.map { it.chosen.route }
@@ -152,11 +153,13 @@ fun CandidatesScreen(
     val offset = runCatching { with(density) { scaffoldState.bottomSheetState.requireOffset().toDp() } }.getOrDefault(maxHeight - peek)
     val mapPadding = com.sunseat.app.ui.map.sheetMapPadding(mapTop, mapHeight, scaffoldTop + offset)
     LaunchedEffect(fitTrigger, mapHeight, mapWidth) {
+        if (fittedTrigger == fitTrigger) return@LaunchedEffect
         snapshotFlow { runCatching { scaffoldState.bottomSheetState.requireOffset() }.getOrDefault(Float.NaN) }
             .debounce(com.sunseat.app.ui.theme.Motion.CAMERA_SETTLE_MS)
             .first { value -> value.isFinite() && !scaffoldState.bottomSheetState.isAnimationRunning &&
                 mapHeight - com.sunseat.app.ui.map.sheetMapPadding(mapTop, mapHeight, scaffoldTop + with(density) { value.toDp() }).bottom > Sizes.mapInset * 2 }
         if (!userMoved) fitRevision++
+        fittedTrigger = fitTrigger
     }
     BottomSheetScaffold(
         modifier = Modifier.fillMaxSize().onGloballyPositioned { scaffoldTop = with(density) { it.positionInRoot().y.toDp() } }, scaffoldState = scaffoldState, containerColor = scheme.background,
