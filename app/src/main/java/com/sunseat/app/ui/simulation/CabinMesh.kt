@@ -10,6 +10,15 @@ internal class CabinMesh {
     private var vertices = FloatArray(65_536)
     private var used=0
     val count get() = used / 11
+    /** Axis-aligned bounds of every emitted vertex. */
+    fun bounds(): CabinBox {
+        var min=V3(Double.MAX_VALUE,Double.MAX_VALUE,Double.MAX_VALUE); var max=V3(-Double.MAX_VALUE,-Double.MAX_VALUE,-Double.MAX_VALUE)
+        for(i in 0 until used step 11) {
+            val x=vertices[i].toDouble(); val y=vertices[i+1].toDouble(); val z=vertices[i+2].toDouble()
+            min=V3(minOf(min.x,x),minOf(min.y,y),minOf(min.z,z)); max=V3(maxOf(max.x,x),maxOf(max.y,y),maxOf(max.z,z))
+        }
+        return CabinBox(min,max)
+    }
     fun buffer(): ByteBuffer = ByteBuffer.allocateDirect(used*4).order(ByteOrder.nativeOrder()).apply {
         asFloatBuffer().put(vertices,0,used)
     }
@@ -104,6 +113,15 @@ internal class CabinMesh {
         }
     }
     companion object {
+        /** Selection check badge floating above a seat back. */
+        fun badgeCenter(s: CabinSeat): V3 = s.center-s.facing*(s.depth/2)+V3(0.0,.93,0.0)
+        /** Everything the overview must keep in frame: the cut-away body and any seat's selection check. */
+        fun visualBounds(p: CabinProfile): CabinBox {
+            val neutral=floatArrayOf(0f,0f,0f,1f)
+            val b=body(p,neutral,neutral).bounds()
+            val top=p.seats.maxOf { badgeCenter(it).y+.075 }
+            return CabinBox(b.min,b.max.copy(y=maxOf(b.max.y,top)))
+        }
         fun body(p: CabinProfile, neutral: FloatArray, seat: FloatArray,cutaway: Boolean=true): CabinMesh = CabinMesh().apply {
             val w=p.width/2; val l=p.length/2
             val car=p.kind in listOf(CabinKind.CAR,CabinKind.TAXI)
@@ -164,7 +182,7 @@ internal class CabinMesh {
             p.seats.firstOrNull { it.id==selected }?.let { s ->
                 val outline=listOf(s.sample(SeatSurface.CUSHION,0.0,0.0),s.sample(SeatSurface.CUSHION,1.0,0.0),s.sample(SeatSurface.CUSHION,1.0,1.0),s.sample(SeatSurface.CUSHION,0.0,1.0)).map { it+V3(0.0,.018,0.0) }
                 for(i in 0..3) ray(outline[i],outline[(i+1)%4],ink,.025)
-                val badge=s.center-s.facing*(s.depth/2)+V3(0.0,.93,0.0)
+                val badge=badgeCenter(s)
                 val r=s.right*.11;val up=V3(0.0,.075,0.0)
                 quad(badge-r-up,badge+r-up,badge+r+up,badge-r+up,ink)
                 val front=s.facing*.004
