@@ -352,4 +352,5 @@
     <string name="candidates_preview_title">선택한 경로</string>
     <string name="candidates_preview_close">경로 목록으로 돌아가기</string>
     <string name="candidates_fit_route">전체 경로 보기</string>
+    <string name="candidates_journey_expand">여정 펼쳐서 바꾸기</string>
 </resources>
