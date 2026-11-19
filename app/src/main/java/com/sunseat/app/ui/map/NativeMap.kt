@@ -68,9 +68,12 @@ internal fun NativeMap(state: MapState, modifier: Modifier = Modifier, keyAvaila
     val labelSize = androidx.compose.material3.MaterialTheme.typography.labelMedium.fontSize
     val origin = stringResource(R.string.input_origin)
     val destination = stringResource(R.string.input_destination)
+    val bus = stringResource(R.string.common_bus)
+    val subway = stringResource(R.string.common_subway)
+    val moreLines = stringResource(R.string.map_line_more)
     val metrics = with(density) {
         MapMetrics(Sizes.mapMarker.toPx(), Sizes.mapRouteWalk.toPx(), Sizes.mapInset.toPx(), (if(state.routeProgress!=null) Sizes.simulationSunRay else Sizes.mapSunRay).toPx(),
-            Sizes.mapStopMarker.toPx(), Sizes.mapRouteSelected.toPx(), Sizes.mapStopBorder.toPx(), Sizes.mapMarkerTail.toPx(), Spacing.xs.toPx(), labelSize.toPx(), origin, destination)
+            Sizes.mapStopMarker.toPx(), Sizes.mapRouteArrow.toPx(), Sizes.mapStopBorder.toPx(), Sizes.mapMarkerTail.toPx(), Spacing.xs.toPx(), labelSize.toPx(), origin, destination, Sizes.mapLabelHeight.toPx(), bus, subway, moreLines)
     }
     val session = remember(context, lifecycle, ink, surface, sun, metrics) { MapSession(context, ink, surface, sun, metrics) }
     var ready by remember(session) { mutableStateOf(false) }
@@ -123,15 +126,23 @@ private const val STOP_RANK = 10L
 private const val STOP_NAME_RANK = 5L
 private const val PLACE_RANK = 20L
 private const val ARROW_RANK = 1L
-private const val MAX_WALK_DOTS = 300
+private const val MAX_WALK_DOTS = 150
 /** SDK lines have round caps of half the width on each end, so a short stub renders as a round dot of the line width. */
 private const val DOT_STUB = 0.2
 
 private data class MapMetrics(
     val marker: Float, val walk: Float, val inset: Float, val ray: Float,
     val stop: Float, val arrow: Float, val stopBorder: Float, val tail: Float, val textPadding: Float, val text: Float,
-    val origin: String, val destination: String,
-)
+    val origin: String, val destination: String, val labelHeight: Float,
+    val bus: String, val subway: String, val moreLines: String,
+) {
+    /** 승차·환승 라벨: 첫 노선(여럿이면 "외 n"), 없으면 수단 이름. 전체 이름은 TalkBack 요약에 있다. */
+    fun stopLabel(stop: StopMarker): String = when {
+        stop.lines.isEmpty() -> if (stop.mode == Mode.SUBWAY) subway else bus
+        stop.lines.size == 1 -> stop.lines.first()
+        else -> String.format(moreLines, stop.lines.first(), stop.lines.size - 1)
+    }
+}
 /** Playback icons rotate around the current route coordinate. */
 internal fun playbackLabelStyle(bitmap: Bitmap): LabelStyle = LabelStyle.from(bitmap).setApplyDpScale(false).setAnchorPoint(.5f,.5f)
 private fun LatLng.sdk(): com.kakao.vectormap.LatLng = com.kakao.vectormap.LatLng.from(latitude, longitude)
@@ -189,7 +200,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
             target.routeLineManager?.layer?.let { layer ->
                 layer.removeAll()
                 val scale = target.mapDpScale
-                fun add(legs: List<com.sunseat.app.domain.Leg>, role: RouteRole, zOrder: Int): com.kakao.vectormap.route.RouteLine? {
+                fun add(legs: List<com.sunseat.app.domain.Leg>, role: RouteRole): com.kakao.vectormap.route.RouteLine? {
                     val styles = mutableListOf<RouteLineStyles>()
                     val segments = legs.filter { it.path.size > 1 }.map { leg ->
                         val lineStyles = RouteLineStyles.from(sdkStyle(RouteLinePolicy.forLeg(leg.mode, leg.lineName, role), density, scale))
@@ -197,14 +208,14 @@ private class MapSession(context: Context, private val ink: Int, private val sur
                         RouteLineSegment.from(leg.path.map { it.sdk() }, lineStyles)
                     }
                     return if (segments.isEmpty()) null
-                    else layer.addRouteLine(RouteLineOptions.from(segments).setStylesSet(RouteLineStylesSet.from(styles)).setZOrder(zOrder))
+                    else layer.addRouteLine(RouteLineOptions.from(segments).setStylesSet(RouteLineStylesSet.from(styles)).setZOrder(legs.maxOf { RouteLinePolicy.forLeg(it.mode, it.lineName, role).layer }))
                 }
                 // DESIGN 11.1 layers: alternates(1) < walking(2) < rides(3) < passed playback overlay.
-                state.routes.forEachIndexed { index, route -> if (index != state.selectedRoute) add(route.legs, RouteRole.ALTERNATE, 1) }
+                state.routes.forEachIndexed { index, route -> if (index != state.selectedRoute) add(route.legs, RouteRole.ALTERNATE) }
                 state.routes.getOrNull(state.selectedRoute)?.let { route ->
                     // Walking dots (layer 2) and direction chevrons are zoom-dependent geometry: see decorate().
-                    add(route.legs.filter { it.mode != Mode.WALK }, RouteRole.SELECTED, 3)
-                    if (playbackMode) add(route.legs, RouteRole.PASSED, 5)?.let { progressLines += it }
+                    add(route.legs.filter { it.mode != Mode.WALK }, RouteRole.SELECTED)
+                    if (playbackMode) add(route.legs, RouteRole.PASSED)?.let { progressLines += it }
                 }
             }
             target.labelManager?.layer?.let { layer ->
@@ -212,9 +223,10 @@ private class MapSession(context: Context, private val ink: Int, private val sur
                 state.routes.getOrNull(state.selectedRoute)?.let { route ->
                     RouteLinePolicy.stops(route).forEach { stop ->
                         layer.addLabel(LabelOptions.from(stop.location.sdk()).setRank(STOP_RANK).setStyles(LabelStyle.from(stopIcon(stop.color.toArgb())).setApplyDpScale(false).setAnchorPoint(.5f, .5f)))
-                        stop.label?.let { name ->
-                            // Transfer line name sits beside the marker; the label layer drops it when it collides.
-                            layer.addLabel(LabelOptions.from(stop.location.sdk()).setRank(STOP_NAME_RANK).setStyles(LabelStyle.from(nameIcon(name, stop.color.toArgb())).setApplyDpScale(false).setAnchorPoint(-metrics.stop / 2 / nameWidth(name), .5f)))
+                        if (stop.labeled) {
+                            // Line name beside the marker, on the side away from the outgoing line; dropped on collision.
+                            val name = metrics.stopLabel(stop)
+                            layer.addLabel(LabelOptions.from(stop.location.sdk()).setRank(STOP_NAME_RANK).setStyles(LabelStyle.from(nameIcon(name, stop.color.toArgb(), stop.labelOnLeft)).setApplyDpScale(false).setAnchorPoint(if (stop.labelOnLeft) 1f else 0f, .5f)))
                         }
                     }
                 }
@@ -345,13 +357,16 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         val scale = target.mapDpScale
         val px = { dp: androidx.compose.ui.unit.Dp -> dp.value * lineDensity * metersPerPx }
         val walk = RouteLinePolicy.forLeg(Mode.WALK, null, RouteRole.SELECTED)
-        val dashes = route.legs.filter { it.mode == Mode.WALK }.flatMap { RouteGeometry.dashes(it.path, px(walk.core) * DOT_STUB, px(walk.core) * (1 - DOT_STUB) + px(Sizes.mapRouteWalkGap)) }
-        if (dashes.isNotEmpty()) {
-            val style = RouteLineStyles.from(RouteLineStyle.from(RouteLinePolicy.sdkWidth(walk.core, lineDensity, scale), walk.color.toArgb()))
-            // One RouteLine per dot: segments inside a RouteLine are joined into a continuous line by the SDK.
-            target.routeLineManager?.layer?.let { lines -> dashes.take(MAX_WALK_DOTS).forEach { dash ->
-                walkLines += lines.addRouteLine(RouteLineOptions.from(RouteLineSegment.from(dash.map { p -> p.sdk() }, style)).setStylesSet(RouteLineStylesSet.from(style)).setZOrder(2))
-            } }
+        val style = RouteLineStyles.from(RouteLineStyle.from(RouteLinePolicy.sdkWidth(walk.core, lineDensity, scale), walk.color.toArgb()))
+        target.routeLineManager?.layer?.let { lines ->
+            route.legs.filter { it.mode == Mode.WALK && it.path.size > 1 }.forEach { leg ->
+                val dots = RouteGeometry.dashes(leg.path, px(walk.core) * DOT_STUB, px(walk.core) * (1 - DOT_STUB) + px(Sizes.mapRouteWalkGap), MAX_WALK_DOTS)
+                // Over the cap (very long walk at high zoom) draw the whole walk as a plain thin line rather than dropping part of it.
+                (dots ?: listOf(leg.path)).forEach { dash ->
+                    // One RouteLine per dot: segments inside a RouteLine are joined into a continuous line by the SDK.
+                    walkLines += lines.addRouteLine(RouteLineOptions.from(RouteLineSegment.from(dash.map { p -> p.sdk() }, style)).setStylesSet(RouteLineStylesSet.from(style)).setZOrder(walk.layer))
+                }
+            }
         }
         val layer = target.labelManager?.layer ?: return
         route.legs.forEach { leg ->
@@ -391,20 +406,19 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         }
     }
 
-    fun nameWidth(name: String): Float = textPaint(ink).measureText(name) + metrics.textPadding * 2 + metrics.stop / 2
-
-    /** 환승 후 노선 이름. 표식 오른쪽에 흰 바탕 글자로 둔다. */
-    private fun nameIcon(name: String, color: Int): Bitmap {
+    /** 탈 노선 이름. 표식 한쪽([onLeft])에 흰 바탕 글자로 두며, 이미지 가장자리에서 표식 반지름만큼 떨어진다. */
+    private fun nameIcon(name: String, color: Int, onLeft: Boolean): Bitmap {
         val paint = textPaint(ink)
-        val width = nameWidth(name)
-        val height = metrics.text * 1.6f
+        val width = paint.measureText(name) + metrics.textPadding * 2 + metrics.stop / 2
+        val height = maxOf(metrics.labelHeight, -paint.ascent() + paint.descent() + metrics.textPadding)
         return createBitmap(width.toInt().coerceAtLeast(1), height.toInt().coerceAtLeast(1)).also { bitmap ->
             val canvas = Canvas(bitmap)
-            val left = metrics.stop / 2
+            val left = if (onLeft) 0f else metrics.stop / 2
+            val right = if (onLeft) width - metrics.stop / 2 else width
             val box = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = surface }
-            canvas.drawRoundRect(left, 0f, width, height, height / 2, height / 2, box)
+            canvas.drawRoundRect(left, 0f, right, height, height / 2, height / 2, box)
             box.color = color; box.style = Paint.Style.STROKE; box.strokeWidth = metrics.stopBorder / 2
-            canvas.drawRoundRect(left + box.strokeWidth, box.strokeWidth, width - box.strokeWidth, height - box.strokeWidth, height / 2, height / 2, box)
+            canvas.drawRoundRect(left + box.strokeWidth, box.strokeWidth, right - box.strokeWidth, height - box.strokeWidth, height / 2, height / 2, box)
             canvas.drawText(name, left + metrics.textPadding, height / 2 - (paint.ascent() + paint.descent()) / 2, paint)
         }
     }

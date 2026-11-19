@@ -36,8 +36,10 @@ object Sizes {
     val mapRouteWalk = 3.dp
     val mapRouteWalkGap = 3.dp
     val mapRouteAlternate = 3.dp
-    /** 진행 방향 화살표 최소 간격(화살표 크기는 mapRouteSelected) */
+    /** 진행 방향 쉐브론 크기와 간격, 정류장 이름 라벨 최소 높이 */
+    val mapRouteArrow = 8.dp
     val mapRouteArrowSpacing = 72.dp
+    val mapLabelHeight = 20.dp
     /** 승차·환승·하차 표식과 그 테두리, 출발·도착 글자 표식 꼬리 */
     val mapStopMarker = 14.dp
     val mapStopBorder = 2.dp

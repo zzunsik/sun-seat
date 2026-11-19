@@ -33,8 +33,16 @@ internal data class RouteLineSpec(
 
 internal enum class StopKind { BOARD, TRANSFER, ALIGHT }
 
-/** 탑승 구간 끝점에서만 만든 정류장 표식. [label]은 환승 후 노선 이름(모르면 null). */
-internal data class StopMarker(val location: LatLng, val kind: StopKind, val color: Color, val label: String?)
+/**
+ * 탑승 구간 끝점에서만 만든 정류장 표식. 승차·환승 표식은 탈 노선 이름 [lines]를 라벨로 단다(비면 수단 이름).
+ * [labelOnLeft]: 다음 탑승 선이 동쪽으로 나가면 라벨을 왼쪽에 두어 선을 가리지 않는다. 하차 표식은 라벨이 없다.
+ */
+internal data class StopMarker(
+    val location: LatLng, val kind: StopKind, val color: Color, val mode: Mode = Mode.BUS,
+    val lines: List<String> = emptyList(), val labelOnLeft: Boolean = false,
+) {
+    val labeled: Boolean get() = kind != StopKind.ALIGHT
+}
 
 /** TalkBack 요약의 한 단계. [line]이 null이면 수단 이름으로 읽는다. */
 internal data class RideStep(val kind: StopKind, val mode: Mode, val line: String?, val stop: String)
@@ -42,18 +50,20 @@ internal data class RideStep(val kind: StopKind, val mode: Mode, val line: Strin
 /** 수단·노선·역할 → 선 모양. 네이티브와 테스트 렌더러가 함께 쓰는 단일 계약(#100). */
 internal object RouteLinePolicy {
     private const val MIN_LINE_CONTRAST = 3.0
+    /** 재생의 지난 구간은 탑승선(3) 위를 덮는다. 정류장·출발/도착 표식(라벨)은 선보다 항상 위다. */
+    private const val PASSED_LAYER = 4
 
     fun forLeg(mode: Mode, lineName: String?, role: RouteRole): RouteLineSpec = when {
         role == RouteRole.ALTERNATE ->
             RouteLineSpec(MapRouteColors.alternate, Sizes.mapRouteAlternate, null, 0.dp, LinePattern.SOLID, layer = 1, arrows = false)
         mode == Mode.WALK ->
             // Passed overlay is a continuous progress line, so it is solid grey on top of the dotted walk.
-            if (role == RouteRole.PASSED) RouteLineSpec(MapRouteColors.passed, Sizes.mapRouteWalk, null, 0.dp, LinePattern.SOLID, layer = 2, arrows = false)
+            if (role == RouteRole.PASSED) RouteLineSpec(MapRouteColors.passed, Sizes.mapRouteWalk, null, 0.dp, LinePattern.SOLID, layer = PASSED_LAYER, arrows = false)
             else RouteLineSpec(MapRouteColors.walk, Sizes.mapRouteWalk, null, 0.dp, LinePattern.DOTTED, layer = 2, arrows = false)
         else -> {
             val color = lineColor(mode, lineName)
             val edge = if (contrastOnWhite(color) < MIN_LINE_CONTRAST) MapRouteColors.outlineLowContrast else MapRouteColors.casing
-            if (role == RouteRole.PASSED) RouteLineSpec(MapRouteColors.passed, Sizes.mapRouteCore, MapRouteColors.casing, Sizes.mapRouteCasing, LinePattern.SOLID, layer = 3, arrows = false)
+            if (role == RouteRole.PASSED) RouteLineSpec(MapRouteColors.passed, Sizes.mapRouteCore, MapRouteColors.casing, Sizes.mapRouteCasing, LinePattern.SOLID, layer = PASSED_LAYER, arrows = false)
             else RouteLineSpec(color, Sizes.mapRouteCore, edge, Sizes.mapRouteCasing, LinePattern.SOLID, layer = 3, arrows = true)
         }
     }
@@ -95,10 +105,12 @@ internal object RouteLinePolicy {
         return rides.flatMapIndexed { index, ride ->
             val first = ride.first()
             val color = lineColor(first.mode, first.lineName)
-            val board = StopMarker(first.path.first(), if (index == 0) StopKind.BOARD else StopKind.TRANSFER, color, if (index == 0) null else first.lineName)
+            val heading = first.path.zipWithNext().firstOrNull { (a, b) -> a != b }?.let { (a, b) -> com.sunseat.app.domain.ExposureAnalyzer.bearing(a, b) } ?: 0.0
+            val lines = first.lineName?.split(" / ")?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
+            val board = StopMarker(first.path.first(), if (index == 0) StopKind.BOARD else StopKind.TRANSFER, color, first.mode, lines, labelOnLeft = heading > 0.0 && heading < 180.0)
             // A transfer marker already marks where the next ride starts; only the final alight gets its own marker
             // so two markers do not pile up at short walking transfers (device check, #100).
-            if (index < rides.lastIndex) listOf(board) else listOf(board, StopMarker(ride.last().path.last(), StopKind.ALIGHT, color, null))
+            if (index < rides.lastIndex) listOf(board) else listOf(board, StopMarker(ride.last().path.last(), StopKind.ALIGHT, color, ride.last().mode))
         }
     }
 
@@ -133,12 +145,14 @@ internal object RouteGeometry {
     }
 
     /** [dash] 길이 조각을 [gap] 간격으로. 각 조각은 시작·끝 두 점(경로가 꺾이면 근사). */
-    fun dashes(path: List<LatLng>, dash: Double, gap: Double): List<List<LatLng>> {
+    fun dashes(path: List<LatLng>, dash: Double, gap: Double, max: Int = Int.MAX_VALUE): List<List<LatLng>>? {
         if (path.size < 2 || dash <= 0 || gap < 0) return emptyList()
         val total = length(path)
+        // Too many dots for the zoom (very long walk): caller draws a plain line instead of dropping part of the walk.
+        if (total / (dash + gap) > max) return null
         val out = mutableListOf<List<LatLng>>()
         var at = 0.0
-        while (at < total && out.size < MAX_MARKS) {
+        while (at < total) {
             val start = pointAt(path, at)?.first ?: break
             val end = pointAt(path, minOf(at + dash, total))?.first ?: path.last()
             if (start != end) out += listOf(start, end)

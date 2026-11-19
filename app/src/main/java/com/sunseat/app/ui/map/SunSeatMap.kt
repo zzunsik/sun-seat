@@ -67,6 +67,9 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
     val labelStyle = androidx.compose.material3.MaterialTheme.typography.labelMedium
     val originLabel = stringResource(R.string.input_origin)
     val destinationLabel = stringResource(R.string.input_destination)
+    val busLabel = stringResource(R.string.common_bus)
+    val subwayLabel = stringResource(R.string.common_subway)
+    val moreLines = stringResource(R.string.map_line_more)
     if (fitPolicy.shouldFit(state)) { camera.points = state.points(); camera.padding = state.padding; camera.revision++ }
     LaunchedEffect(camera.revision) { pan = Offset.Zero }
     Box(modifier.pointerInput(Unit) { detectDragGestures { change, drag -> change.consume(); pan += drag; onGesture() } }) {
@@ -114,15 +117,20 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
             val radius = Sizes.mapStopMarker.toPx() / 2 - Sizes.mapStopBorder.toPx() / 2
             drawCircle(MapRouteColors.casing, radius, p)
             drawCircle(stop.color, radius, p, style = Stroke(Sizes.mapStopBorder.toPx()))
-            stop.label?.let { name ->
+            if (stop.labeled) {
+                val name = when {
+                    stop.lines.isEmpty() -> if (stop.mode == Mode.SUBWAY) subwayLabel else busLabel
+                    stop.lines.size == 1 -> stop.lines.first()
+                    else -> String.format(moreLines, stop.lines.first(), stop.lines.size - 1)
+                }
                 val text = textMeasurer.measure(name, labelStyle.copy(color = scheme.onSurface))
                 val pad = Spacing.xs.toPx()
-                val left = p.x + Sizes.mapStopMarker.toPx() / 2
-                val box = androidx.compose.ui.geometry.Size(text.size.width + pad * 2, text.size.height.toFloat())
+                val box = androidx.compose.ui.geometry.Size(text.size.width + pad * 2, maxOf(Sizes.mapLabelHeight.toPx(), text.size.height.toFloat()))
+                val left = if (stop.labelOnLeft) p.x - Sizes.mapStopMarker.toPx() / 2 - box.width else p.x + Sizes.mapStopMarker.toPx() / 2
                 val corner = androidx.compose.ui.geometry.CornerRadius(box.height / 2)
                 drawRoundRect(MapRouteColors.casing, Offset(left, p.y - box.height / 2), box, corner)
                 drawRoundRect(stop.color, Offset(left, p.y - box.height / 2), box, corner, style = Stroke(Sizes.mapStopBorder.toPx() / 2))
-                drawText(text, topLeft = Offset(left + pad, p.y - box.height / 2))
+                drawText(text, topLeft = Offset(left + pad, p.y - text.size.height / 2f))
             }
         } }
         state.origin?.let { drawPlaceMarker(position(it.location), textMeasurer.measure(originLabel, labelStyle.copy(color = MapRouteColors.transit)), filled = false, surface = MapRouteColors.casing) }
@@ -190,14 +198,14 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRouteLine(path:
     if (!spec.arrows) return
     val measure = androidx.compose.ui.graphics.PathMeasure().apply { setPath(path, false) }
     val spacing = Sizes.mapRouteArrowSpacing.toPx()
-    val half = Sizes.mapRouteSelected.toPx() * .3f
+    val half = Sizes.mapRouteArrow.toPx() * .3f
     var at = spacing / 2
     while (at < measure.length - spacing / 4) {
         val p = measure.getPosition(at)
         val t = measure.getTangent(at)
         val n = Offset(-t.y, t.x)
         drawPath(Path().apply { moveTo(p.x - t.x * half + n.x * half, p.y - t.y * half + n.y * half); lineTo(p.x + t.x * half * .6f, p.y + t.y * half * .6f); lineTo(p.x - t.x * half - n.x * half, p.y - t.y * half - n.y * half) },
-            chevron, style = Stroke(Sizes.mapRouteSelected.toPx() / 4, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+            chevron, style = Stroke(Sizes.mapRouteArrow.toPx() / 4, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
         at += spacing
     }
 }

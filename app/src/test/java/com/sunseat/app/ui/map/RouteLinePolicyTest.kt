@@ -109,6 +109,7 @@ class RouteLinePolicyTest {
         assertEquals(grey, ride.color)
         assertEquals(RouteLinePolicy.forLeg(Mode.SUBWAY, "2호선", RouteRole.SELECTED).total, ride.total)
         assertFalse(ride.arrows)
+        assertTrue(ride.layer > RouteLinePolicy.forLeg(Mode.SUBWAY, "2호선", RouteRole.SELECTED).layer)
         val walk = RouteLinePolicy.forLeg(Mode.WALK, null, RouteRole.PASSED)
         assertEquals(grey, walk.color)
         assertEquals(3.dp, walk.total)
@@ -148,8 +149,11 @@ class RouteLinePolicyTest {
         assertEquals(LatLng(37.51, 127.0), stops[0].location)
         assertEquals(LatLng(37.54, 127.0), stops[1].location)
         assertEquals(LatLng(37.55, 127.0), stops[2].location)
-        assertEquals("2호선", stops[1].label)
-        assertNull(stops[0].label)
+        // Every boarding marker names the line it boards (not colour alone); the final alight has no label.
+        assertEquals(listOf("4호선"), stops[0].lines)
+        assertEquals(listOf("2호선"), stops[1].lines)
+        assertEquals(listOf(true, true, false), stops.map { it.labeled })
+        assertEquals(Mode.SUBWAY, stops[1].mode)
         assertEquals(Color(0xFF00A5DE), stops[0].color)
         assertEquals(Color(0xFF00A84D), stops[1].color)
         assertTrue(RouteLinePolicy.stops(Route(listOf(leg(Mode.WALK, "", "", null, 37.5)))).isEmpty())
@@ -174,11 +178,14 @@ class RouteLinePolicyTest {
     @Test fun walkDashesFollowThePathAtTheRequestedSpacing() {
         // ~1113 m due north; 10 m dots every 20 m.
         val path = listOf(LatLng(37.50, 127.0), LatLng(37.51, 127.0))
-        val dashes = RouteGeometry.dashes(path, 10.0, 10.0)
+        val dashes = RouteGeometry.dashes(path, 10.0, 10.0)!!
         assertEquals(56, dashes.size)
         dashes.forEach { assertEquals(10.0, RouteGeometry.length(it), 0.5) }
         assertEquals(path.first(), dashes.first().first())
-        assertTrue(RouteGeometry.dashes(listOf(path.first()), 10.0, 10.0).isEmpty())
+        assertTrue(RouteGeometry.dashes(listOf(path.first()), 10.0, 10.0)!!.isEmpty())
+        // Over the cap the caller gets null and draws the whole walk, never a truncated part of it.
+        assertNull(RouteGeometry.dashes(path, 10.0, 10.0, max = 50))
+        assertEquals(56, RouteGeometry.dashes(path, 10.0, 10.0, max = 60)!!.size)
     }
 
     @Test fun directionMarksStartHalfwayFollowPathOrderAndSkipShortLegs() {
@@ -188,5 +195,14 @@ class RouteLinePolicyTest {
         assertEquals(0.0, marks.first().second, 0.5) // north first
         assertEquals(90.0, marks.last().second, 1.0) // then east
         assertTrue(RouteGeometry.marks(listOf(LatLng(37.5, 127.0), LatLng(37.5005, 127.0)), 200.0).isEmpty())
+    }
+
+    @Test fun boardingLabelSitsOnTheSideAwayFromTheOutgoingLineAndKeepsAllNames() {
+        fun ride(to: LatLng, line: String?) = Route(listOf(Leg(Mode.BUS, listOf(LatLng(37.5, 127.0), to), Duration.ofMinutes(5), "A", "B", lineName = line, transitStepIndex = 0)))
+        assertTrue(RouteLinePolicy.stops(ride(LatLng(37.5, 127.01), "402")).first().labelOnLeft) // heads east -> label west
+        assertFalse(RouteLinePolicy.stops(ride(LatLng(37.5, 126.99), "402")).first().labelOnLeft) // heads west -> label east
+        assertFalse(RouteLinePolicy.stops(ride(LatLng(37.51, 127.0), "402")).first().labelOnLeft) // north -> default right
+        assertEquals(listOf("402", "405", "N16(심야)"), RouteLinePolicy.stops(ride(LatLng(37.51, 127.0), "402 / 405 / N16(심야)")).first().lines)
+        assertTrue(RouteLinePolicy.stops(ride(LatLng(37.51, 127.0), null)).first().lines.isEmpty())
     }
 }
