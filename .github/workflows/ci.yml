@@ -5,6 +5,10 @@ on:
   push:
     branches: [main]
 
+# 공개 저장소다. 워크플로는 읽기 권한만 쓰고 시크릿을 쓰지 않는다.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -14,16 +18,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: temurin
           java-version: "25"
 
-      - uses: android-actions/setup-android@v4
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
 
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
 
       # API 키 없이 빌드한다. local.properties는 만들지 않는다.
       - name: Build
@@ -39,26 +45,28 @@ jobs:
 
       - name: Upload reports
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: reports
           path: |
             app/build/reports/
             app/build/test-results/
           if-no-files-found: ignore
+          retention-days: 14
 
       # 비교에 실패하면 차이 이미지(*_compare.png)와 실제 렌더링, Roborazzi 리포트를 올린다.
       - name: Upload screenshot diffs
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: screenshot-diffs
           path: |
             app/build/outputs/roborazzi/
             app/build/reports/roborazzi/
           if-no-files-found: ignore
+          retention-days: 14
 
-  # 머지 판단용 단일 검사. scripts/merge-pr.sh는 이 검사가 PR의 현재 커밋에서 성공일 때만 머지한다.
+  # 머지 판단용 단일 검사. main ruleset이 이 검사 하나를 필수로 건다(AGENTS.md "저장소 설정").
   # job을 추가하면 needs에 함께 넣는다.
   ci-passed:
     if: always()
