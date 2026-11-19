@@ -332,7 +332,7 @@ internal fun CandidateCard(item: CandidateUi, selected: Boolean, request: TripRe
             RouteSegmentBar(item, taxi = request.mode == TravelMode.TAXI)
             if (request.mode == TravelMode.TRANSIT) {
                 val walking = item.chosen.route.legs.filter { it.mode == com.sunseat.app.domain.Mode.WALK }.fold(java.time.Duration.ZERO) { sum, leg -> sum.plus(leg.duration) }
-                val walkLabel = if (!walking.isZero && walking < java.time.Duration.ofMinutes(1)) stringResource(R.string.candidates_walk_under_minute) else stringResource(R.string.candidates_walk, item.walkMinutes)
+                val walkLabel = if (!walking.isZero && walking < java.time.Duration.ofMinutes(1)) stringResource(R.string.candidates_walk_under_minute) else stringResource(R.string.candidates_walk, walking.toMinutes())
                 Text(listOf(stringResource(R.string.candidates_transfers, item.transfers), walkLabel).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             }
             RouteLegSummary(item, taxi = request.mode == TravelMode.TAXI)

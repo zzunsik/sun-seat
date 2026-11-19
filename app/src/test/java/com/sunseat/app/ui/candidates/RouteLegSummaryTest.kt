@@ -29,6 +29,14 @@ class RouteLegSummaryTest {
         compose.onNodeWithText("서울역 승차 → 견본 종점 하차").assertIsDisplayed()
     }
 
+    @Test fun multipleShortWalksUseTheirCombinedDuration() {
+        val base = CandidatesFixtures.readable.toUi(0, null, false)
+        val walk = base.chosen.route.legs[1].copy(duration = java.time.Duration.ofSeconds(40))
+        val item = base.copy(chips = listOf(LegChip(Mode.WALK), LegChip(Mode.WALK)), chosen = base.chosen.copy(route = Route(listOf(walk, walk))))
+        compose.setContent { SunSeatTheme { CandidateCard(item, false, CandidatesFixtures.transitRequest, {}, {}) } }
+        compose.onNodeWithText("환승 2회 · 도보 1분", useUnmergedTree = true).assertIsDisplayed()
+    }
+
     @Test fun missingLegNamesUseAvailableCandidateEndpoints() {
         val base = CandidatesFixtures.busOnly.toUi(0, null, false)
         val item = base.copy(chosen = base.chosen.copy(route = Route(base.chosen.route.legs.map { it.copy(mode = Mode.CAR, startName = "", endName = "") })), chips = listOf(LegChip(Mode.CAR)))
