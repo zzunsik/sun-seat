@@ -68,6 +68,27 @@ class BusModelTest {
         }
     }
 
+    /** Review of #76: a cushion or backrest must not sit where the passenger's knees go (≥0.15m clear ahead of every forward seat). */
+    @Test fun everyForwardSeatHasKneeRoom() {
+        for (p in listOf(city, coach)) {
+            val solids = (p.seats.map { it to listOf(it.backBox, it.cushionBox) } + (p.driver!! to listOf(p.driver!!.backBox, p.driver!!.cushionBox)))
+            for (s in p.seats.filter { it.facing.z < -.5 }) {
+                val front = s.center.z - s.depth / 2
+                val knees = CabinBox(V3(s.center.x - s.width / 2, 0.0, front - .15 + 1e-6), V3(s.center.x + s.width / 2, 1.0, front))
+                fun hits(b: CabinBox) = b.min.x < knees.max.x && knees.min.x < b.max.x && b.min.z < knees.max.z && knees.min.z < b.max.z
+                for ((o, boxes) in solids) if (o !== s) assertFalse("${p.kind} ${s.id} has ${o.id} in its knee room", boxes.any(::hits))
+                assertFalse("${p.kind} ${s.id} knees in dashboard", hits(p.furniture.first()))
+            }
+        }
+    }
+
+    @Test fun bothModelsShareOneZoneRule() {
+        // Same longitudinal position, same front/middle/rear label, so carrying a seat between models keeps its meaning.
+        val coachZones = coach.seats.associate { it.center.z to it.spot.zone }
+        city.seats.filter { it.spot.side == Side.LEFT }.forEach { assertEquals(coachZones[it.center.z], it.spot.zone) }
+        assertEquals(listOf(12, 16, 12), listOf(SeatZone.FRONT, SeatZone.MIDDLE, SeatZone.REAR).map { z -> coach.seats.count { it.spot.zone == z } })
+    }
+
     @Test fun routeTypeOnlyEverGivesAnEstimate() {
         // The transit API reports a route category, never capacity or body: nothing confirms a 40-seat coach.
         assertEquals(BusModelEstimate(CabinKind.BUS, BusModelBasis.NO_TYPE, null), BusModels.estimate(null))

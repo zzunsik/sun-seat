@@ -55,13 +55,16 @@ internal fun CabinPanel(point: TimelinePoint, mode: TravelMode, state: Simulatio
     val key=listOf(profile,point.time,point.heading,point.sun,available)
     val light=remember(key) { CabinSimulation.calculate(profile,point.sun,point.heading,available) }
     var choosing by remember(profile) { mutableStateOf(false) }
-    val profileLabel=stringResource(R.string.simulation_cabin_profile,stringResource(when(profile.kind) {
+    val kindName=stringResource(when(profile.kind) {
         CabinKind.BUS -> R.string.simulation_bus
         CabinKind.COACH -> R.string.simulation_coach
         CabinKind.SUBWAY -> R.string.simulation_subway
         CabinKind.TAXI -> R.string.simulation_taxi
         CabinKind.CAR -> R.string.simulation_car
-    }))
+    })
+    // Bus models always say whether they are estimated or chosen, next to the name (#76).
+    val profileLabel=stringResource(R.string.simulation_cabin_profile,if(profile.kind in BusModels.kinds)
+        stringResource(if(manual!=null) R.string.simulation_bus_name_manual else R.string.simulation_bus_name_estimated,kindName) else kindName)
     Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(Spacing.s)) {
     val summary=when {
         point.leg.mode==Mode.SUBWAY && point.leg.groundLevel==GroundLevel.BELOW -> stringResource(R.string.simulation_cabin_underground)
@@ -119,7 +122,8 @@ private fun BusModelRow(point: TimelinePoint, mode: TravelMode, profile: CabinPr
     @Composable fun Note(text: String) = Text(text,style=MaterialTheme.typography.bodySmall,color=SunSeatTheme.scheme.onSurfaceVariant)
     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(Spacing.s)) {
         Column(Modifier.weight(1f)) {
-            Text(stringResource(if(manual!=null) R.string.simulation_bus_model_manual else R.string.simulation_bus_model_estimated),
+            Text(stringResource(if(manual!=null) R.string.simulation_bus_model_manual else R.string.simulation_bus_model_estimated,
+                stringResource(if(profile.kind==CabinKind.COACH) R.string.simulation_coach else R.string.simulation_bus)),
                 style=MaterialTheme.typography.bodyMedium)
             Note(if(manual!=null) stringResource(R.string.simulation_bus_manual_scope) else when(estimate.basis) {
                 BusModelBasis.NO_TYPE -> stringResource(R.string.simulation_bus_basis_none)

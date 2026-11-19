@@ -295,8 +295,10 @@
     <string name="simulation_cabin_profile">표준 %1$s · 3D 햇빛</string>
     <string name="simulation_bus">시내버스</string>
     <string name="simulation_coach">40인승 고속버스</string>
-    <string name="simulation_bus_model_estimated">추정한 모형</string>
-    <string name="simulation_bus_model_manual">직접 고른 모형</string>
+    <string name="simulation_bus_model_estimated">추정한 모형: %1$s</string>
+    <string name="simulation_bus_name_estimated">%1$s(추정)</string>
+    <string name="simulation_bus_name_manual">%1$s(직접 고름)</string>
+    <string name="simulation_bus_model_manual">직접 고른 모형: %1$s</string>
     <string name="simulation_bus_basis_none">노선 유형 정보가 없어 시내버스로 추정했어요.</string>
     <string name="simulation_bus_basis_city">노선 유형 ‘%1$s’ 기준 추정이에요.</string>
     <string name="simulation_bus_basis_coach">노선 유형 ‘%1$s’ 기준 추정이에요. 실제 차량·정원은 알 수 없어요.</string>

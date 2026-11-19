@@ -165,39 +165,42 @@ data class CabinProfile(val kind: CabinKind, val width: Double, val length: Doub
         private const val BUS_LENGTH = 7.8
         private const val BUS_WINDOW_X = .95
         private const val BUS_AISLE_X = .48
-        private fun busDriver() = CabinSeat("driver",SeatSpot(Side.LEFT),V3(-.75,.5,-BUS_LENGTH/2+.6),FORWARD)
+        private fun busDriver() = CabinSeat("driver",SeatSpot(Side.LEFT),V3(-.75,.5,-BUS_LENGTH/2+.55),FORWARD)
+        /** Longitudinal position of forward row [i] (0.69m pitch, first row 0.15m clear of the driver's backrest). */
+        private fun busRow(i: Int) = -BUS_LENGTH/2+1.24+i*.69
+        /** One zone rule for both bus models: coach rows 1–3 front, 4–7 middle, 8–10 rear, city seats by the same boundaries. */
+        private fun busZone(z: Double) = if(z < (busRow(2)+busRow(3))/2) SeatZone.FRONT else if(z < (busRow(6)+busRow(7))/2) SeatZone.MIDDLE else SeatZone.REAR
         private fun floorStrip(z0: Double, z1: Double) = CabinBox(V3(.7,0.0,z0),V3(2.5/2-.045,.02,z1))
         private fun numbered(seats: List<CabinSeat>, prefix: String) =
             seats.sortedWith(compareBy({ it.center.z }, { it.center.x })).mapIndexed { i, s -> s.copy(id="$prefix-${i+1}",number=i+1) }
         /**
-         * 40-seat express coach model: 10 forward rows of 2+2 at 0.7m pitch, one centre aisle, 40 passenger seats
+         * 40-seat express coach model: 10 forward rows of 2+2 at 0.69m pitch, one centre aisle, 40 passenger seats
          * excluding the driver. Rows 1–3 front, 4–7 middle, 8–10 rear. Numbers run front to back, left window → right window.
          */
         private fun coach(): CabinProfile {
             val l = BUS_LENGTH/2
             val seats = buildList {
                 for (row in 0 until 10) for (s in Side.entries) for (pos in SeatPosition.entries) {
-                    val zone = if(row<3) SeatZone.FRONT else if(row<7) SeatZone.MIDDLE else SeatZone.REAR
+                    val z = busRow(row)
                     val x = (if(s==Side.LEFT) -1 else 1)*(if(pos==SeatPosition.WINDOW) BUS_WINDOW_X else BUS_AISLE_X)
-                    add(CabinSeat("",SeatSpot(s,zone,pos),V3(x,.5,-l+1.15+row*.7),FORWARD))
+                    add(CabinSeat("",SeatSpot(s,busZone(z),pos),V3(x,.5,z),FORWARD))
                 }
             }
             return CabinProfile(CabinKind.COACH,2.5,BUS_LENGTH,2.25,.85,1.95,numbered(seats,"coach"),busDriver(),listOf(floorStrip(-l+.1,-l+.9)))
         }
         /**
          * City bus model: front door and a middle door on the right, forward single seats along the left, two aisle-facing
-         * seats behind the front door, forward pairs on the right before and after the middle door. Zones are thirds of the length.
+         * seats behind the front door, forward pairs on the right before and after the middle door. Zones use the coach row boundaries.
          */
         private fun cityBus(): CabinProfile {
             val l = BUS_LENGTH/2
-            fun zone(z: Double) = if(z < -1.3) SeatZone.FRONT else if(z < 1.3) SeatZone.MIDDLE else SeatZone.REAR
             val seats = buildList {
-                for (i in 0 until 10) { val z = -l+1.15+i*.7; add(CabinSeat("",SeatSpot(Side.LEFT,zone(z),SeatPosition.WINDOW),V3(-BUS_WINDOW_X,.5,z),FORWARD)) }
-                for (z in listOf(-l+1.18,-l+1.66)) add(CabinSeat("",SeatSpot(Side.RIGHT,zone(z),SeatPosition.WINDOW),V3(.88,.5,z),V3(-1.0,0.0,0.0)))
-                for (z in listOf(-l+2.15,-l+2.85,-l+4.4,-l+5.1,-l+5.8,-l+6.5,-l+7.2)) for (pos in SeatPosition.entries)
-                    add(CabinSeat("",SeatSpot(Side.RIGHT,zone(z),pos),V3(if(pos==SeatPosition.WINDOW) BUS_WINDOW_X else BUS_AISLE_X,.5,z),FORWARD))
+                for (i in 0 until 10) { val z = busRow(i); add(CabinSeat("",SeatSpot(Side.LEFT,busZone(z),SeatPosition.WINDOW),V3(-BUS_WINDOW_X,.5,z),FORWARD)) }
+                for (z in listOf(-l+1.15,-l+1.62)) add(CabinSeat("",SeatSpot(Side.RIGHT,busZone(z),SeatPosition.WINDOW),V3(.88,.5,z),V3(-1.0,0.0,0.0)))
+                for (z in listOf(-l+2.23,-l+2.93,-l+4.45,-l+5.15,-l+5.85,-l+6.55,-l+7.25)) for (pos in SeatPosition.entries)
+                    add(CabinSeat("",SeatSpot(Side.RIGHT,busZone(z),pos),V3(if(pos==SeatPosition.WINDOW) BUS_WINDOW_X else BUS_AISLE_X,.5,z),FORWARD))
             }
-            return CabinProfile(CabinKind.BUS,2.5,BUS_LENGTH,2.25,.85,1.95,numbered(seats,"city"),busDriver(),listOf(floorStrip(-l+.1,-l+.9),floorStrip(-l+3.25,-l+4.15)))
+            return CabinProfile(CabinKind.BUS,2.5,BUS_LENGTH,2.25,.85,1.95,numbered(seats,"city"),busDriver(),listOf(floorStrip(-l+.1,-l+.9),floorStrip(-l+3.3,-l+4.2)))
         }
     }
 }

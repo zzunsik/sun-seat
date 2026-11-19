@@ -69,7 +69,8 @@ class SimulationScreenshotTest {
         render(6, false)
         val app=org.robolectric.RuntimeEnvironment.getApplication()
         val map=compose.onNodeWithContentDescription(app.getString(R.string.map_description,"숲 입구","공원")).fetchSemanticsNode().boundsInRoot
-        val detail=compose.onNodeWithText(app.getString(R.string.simulation_cabin_profile,app.getString(R.string.simulation_bus))).fetchSemanticsNode().boundsInRoot
+        // #76: bus labels now carry their estimate status next to the name.
+        val detail=compose.onNodeWithText(app.getString(R.string.simulation_cabin_profile,app.getString(R.string.simulation_bus_name_estimated,app.getString(R.string.simulation_bus)))).fetchSemanticsNode().boundsInRoot
         assertTrue("landscape must place map beside details, not squeeze it above",map.right<=detail.left)
         assertTrue(map.height>0)
         val scene=compose.onNode(hasContentDescription("3D 차량",substring=true)).fetchSemanticsNode().boundsInRoot
@@ -121,22 +122,22 @@ class SimulationScreenshotTest {
     @Test fun coachEstimateFromRouteTypeDark() {
         val app = org.robolectric.RuntimeEnvironment.getApplication()
         renderBusModel(true, "광역")
-        compose.onNodeWithText(app.getString(R.string.simulation_cabin_profile, app.getString(R.string.simulation_coach))).assertExists()
+        compose.onNodeWithText(app.getString(R.string.simulation_cabin_profile, app.getString(R.string.simulation_bus_name_estimated, app.getString(R.string.simulation_coach)))).assertExists()
         compose.onNodeWithText(app.getString(R.string.simulation_bus_basis_coach, "광역")).assertExists()
-        compose.onNodeWithText(app.getString(R.string.simulation_bus_model_estimated)).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(app.getString(R.string.simulation_bus_model_estimated, app.getString(R.string.simulation_coach))).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText(app.getString(R.string.simulation_coach_note)).assertExists()
         shot("simulation_coach_estimate_dark")
     }
     @Test fun switchingModelAppliesToThisLegAndAsksToReselectWithoutAnEquivalentSeat() {
         val app = org.robolectric.RuntimeEnvironment.getApplication()
         val vm = renderBusModel(false, null)
-        compose.onNodeWithText(app.getString(R.string.simulation_cabin_profile, app.getString(R.string.simulation_bus))).assertExists()
+        compose.onNodeWithText(app.getString(R.string.simulation_cabin_profile, app.getString(R.string.simulation_bus_name_estimated, app.getString(R.string.simulation_bus)))).assertExists()
         compose.onNodeWithText(app.getString(R.string.simulation_bus_basis_none)).assertExists()
         compose.onNodeWithText(app.getString(R.string.simulation_change_model)).performScrollTo().performClick()
         compose.onNodeWithText(app.getString(R.string.simulation_model_coach_option)).performClick()
         assertEquals(mapOf(0 to CabinKind.COACH), vm.state.value.models)
-        compose.onNodeWithText(app.getString(R.string.simulation_cabin_profile, app.getString(R.string.simulation_coach))).assertExists()
-        compose.onNodeWithText(app.getString(R.string.simulation_bus_model_manual)).assertExists()
+        compose.onNodeWithText(app.getString(R.string.simulation_cabin_profile, app.getString(R.string.simulation_bus_name_manual, app.getString(R.string.simulation_coach)))).assertExists()
+        compose.onNodeWithText(app.getString(R.string.simulation_bus_model_manual, app.getString(R.string.simulation_coach))).assertExists()
         // Choose a left aisle seat that the city model does not have, then switch back.
         compose.onNodeWithText(app.getString(R.string.simulation_choose_seat)).performScrollTo().performClick()
         compose.onNodeWithText("왼쪽 · 앞 · 통로 · 모형 2번").performClick()
@@ -145,6 +146,7 @@ class SimulationScreenshotTest {
         compose.onNodeWithText(app.getString(R.string.simulation_model_city_option)).performClick()
         assertEquals(mapOf(0 to CabinKind.BUS), vm.state.value.models)
         assertNull("no silent move to another seat", vm.state.value.seats[0])
+        compose.onNodeWithText(app.getString(R.string.simulation_bus_model_manual, app.getString(R.string.simulation_bus))).assertExists()
         compose.onNodeWithText(app.getString(R.string.simulation_seat_not_carried, "왼쪽 · 앞 · 통로")).performScrollTo().assertIsDisplayed()
         shot("simulation_bus_model_switched_light")
     }
