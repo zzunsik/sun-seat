@@ -1,0 +1,8 @@
+# 저장소 동작과 보안에 영향을 주는 파일의 소유자
+/.github/          @zzunsik
+/AGENTS.md         @zzunsik
+/SECURITY.md       @zzunsik
+/gradle/           @zzunsik
+/*.gradle.kts      @zzunsik
+/app/build.gradle.kts @zzunsik
+/gradle.properties @zzunsik
