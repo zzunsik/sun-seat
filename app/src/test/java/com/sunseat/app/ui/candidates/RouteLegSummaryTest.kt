@@ -70,7 +70,7 @@ class RouteLegSummaryTest {
         val walk = base.chosen.route.legs[1].copy(duration = java.time.Duration.ofSeconds(40))
         val item = base.copy(chips = listOf(LegChip(Mode.WALK), LegChip(Mode.WALK)), chosen = base.chosen.copy(route = Route(listOf(walk, walk))))
         compose.setContent { SunSeatTheme { CandidateCard(item, false, CandidatesFixtures.transitRequest, {}, {}) } }
-        compose.onNodeWithText("환승 2회 · 도보 1분", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("환승 2회 · 환승 도보 1분", useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test fun missingLegNamesUseAvailableCandidateEndpoints() {

@@ -52,6 +52,11 @@
     <string name="candidates_transfers">환승 %1$d회</string>
     <string name="candidates_search_by_car">자가용 보기</string>
     <string name="candidates_walk">도보 %1$d분</string>
+    <!-- 도보 데이터 범위 (#105): 응답의 도보는 승차~하차 사이 환승 구간뿐이고 접근 도보는 없다 -->
+    <string name="candidates_transfer_walk">환승 도보 %1$d분</string>
+    <string name="candidates_transfer_walk_under_minute">환승 도보 1분 미만</string>
+    <string name="candidates_walk_scope">도보·막대는 승차부터 하차까지만 보여요.\n정류장까지 걷는 시간과 대기 시간은 빠져 있어요.</string>
+    <string name="candidates_walk_scope_sort">최소 도보는 환승 도보만 비교해요.\n정류장까지 걷는 시간과 대기 시간은 빠져 있어요.</string>
     <string name="candidates_arrival">%1$s 도착</string>
     <string name="candidates_no_transit_detail">도시 간 경로는 찾지 못할 수 있어요.\n자가용 경로를 찾아보세요.</string>
     <string name="candidates_try_car_detail">자가용 경로를 찾아보세요.</string>
