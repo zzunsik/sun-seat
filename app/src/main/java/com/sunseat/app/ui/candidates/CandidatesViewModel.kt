@@ -114,7 +114,7 @@ internal fun TransitRouteOption.toUi(id: Int, now: LocalDateTime?, fastest: Bool
         totalDuration = totalDuration,
         arrival = now?.plus(totalDuration),
         transfers = transfers,
-        walkMinutes = route.legs.filter { it.mode == Mode.WALK }.sumOf { it.duration.toMinutes() },
+        walkMinutes = route.legs.filter { it.mode == Mode.WALK }.fold(Duration.ZERO) { sum, leg -> sum + leg.duration }.toMinutes(),
         fare = fare,
         fastest = fastest,
         chips = chips,
@@ -288,7 +288,8 @@ fun orderCandidates(items: List<CandidateUi>, sort: CandidateSort, filters: Set<
         CandidateSort.RECOMMENDED -> visible
         CandidateSort.TIME -> visible.sortedBy { it.totalDuration }
         CandidateSort.TRANSFERS -> visible.sortedBy { it.transfers }
-        CandidateSort.WALK -> visible.sortedBy { it.walkMinutes }
+        // 같은 분이면 응답 도보의 초 단위 합으로 가른다. 도보 구간 없음(null)은 0으로 본다(#105).
+        CandidateSort.WALK -> visible.sortedWith(compareBy<CandidateUi> { it.walkMinutes }.thenBy { it.providedWalk ?: Duration.ZERO })
         CandidateSort.SUN -> visible.sortedWith(compareBy<CandidateUi> { !it.comparableSun() }.thenComparator { a, b ->
             val av = a.chosen.cachedResult?.sunIfFollowed ?: Duration.ZERO
             val bv = b.chosen.cachedResult?.sunIfFollowed ?: Duration.ZERO

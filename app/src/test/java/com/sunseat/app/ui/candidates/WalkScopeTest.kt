@@ -73,6 +73,18 @@ class WalkScopeTest {
         assertEquals(Duration.ofSeconds(20), readable.providedWalk)
     }
 
+    @Test fun walkSortUsesTheSameProvidedWalkTheCardShows() {
+        val base = CandidatesFixtures.subwayOnly
+        val walk = base.route.legs[1].copy(duration = Duration.ofSeconds(40))
+        // 40초 + 40초: 카드는 '환승 도보 1분'이므로 정렬 값도 1분이어야 한다(구간별 내림 합 0분이 아님).
+        val twoShort = base.copy(route = Route(listOf(base.route.legs[0], walk, base.route.legs[2], walk, base.route.legs[2]))).toUi(0, null, false)
+        assertEquals(1L, twoShort.walkMinutes)
+        val subMinute = CandidatesFixtures.readable.toUi(1, null, false)
+        val direct = CandidatesFixtures.busOnly.toUi(2, null, false)
+        val ordered = orderCandidates(listOf(twoShort, subMinute, direct), CandidateSort.WALK, emptySet(), com.sunseat.app.domain.SunGoal.AVOID).map { it.id }
+        assertEquals(listOf(2, 1, 0), ordered)
+    }
+
     private fun screen(state: CandidatesState, request: com.sunseat.app.domain.TripRequest = transitRequest) = compose.setContent {
         androidx.compose.runtime.CompositionLocalProvider(LocalMapRenderer provides MapRenderer.PREVIEW) {
             SunSeatTheme { CandidatesScreen(request, state, CandidatesActions(), animateLoader = false) }
@@ -81,8 +93,8 @@ class WalkScopeTest {
 
     @Test fun transitListExplainsWalkAndBarScopeOnce() {
         screen(CandidatesState.Options(CandidatesFixtures.options.toUi(null)))
-        compose.onAllNodesWithText("도보·막대는 승차부터 하차까지만 보여요.", substring = true).assertCountEquals(1)
-        compose.onAllNodesWithText("정류장까지 걷는 시간과 대기 시간은 빠져 있어요.", substring = true).assertCountEquals(1)
+        compose.onAllNodesWithText("도보와 구간 표시는 승차부터 하차까지예요.", substring = true).assertCountEquals(1)
+        compose.onAllNodesWithText("정류장을 오가는 도보와 대기 시간은 빠져요.", substring = true).assertCountEquals(1)
     }
 
     @Test fun walkSortExplainsItComparesOnlyProvidedTransferWalk() {
@@ -93,6 +105,6 @@ class WalkScopeTest {
     @Test fun taxiHasNoTransitWalkNotice() {
         val item = CandidatesFixtures.busOnly.toUi(0, null, false).copy(walkMinutes = 0, chips = listOf(LegChip(Mode.CAR)))
         screen(CandidatesState.Options(listOf(item)), transitRequest.copy(mode = TravelMode.TAXI))
-        compose.onAllNodesWithText("승차부터 하차까지", substring = true).assertCountEquals(0)
+        compose.onAllNodesWithText("정류장을 오가는", substring = true).assertCountEquals(0)
     }
 }
