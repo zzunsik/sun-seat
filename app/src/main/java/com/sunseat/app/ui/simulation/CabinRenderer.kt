@@ -31,6 +31,8 @@ internal class CabinRenderer(context: Context, val surface: SurfaceView) : UiHel
     private var light: CabinLight?=null
     private var selected: String?=null
     private var interior=false
+    private var insetWidth=0; private var insetHeight=0
+    private var cameraKey: List<Any?>?=null
     private var colors: List<FloatArray> = emptyList()
     private var body: Part?=null
     private var overlay: Part?=null
@@ -67,15 +69,16 @@ internal class CabinRenderer(context: Context, val surface: SurfaceView) : UiHel
             throw error
         }
     }
-    fun update(p: CabinProfile,l: CabinLight,selection: String?,inside: Boolean,palette: List<FloatArray>) {
+    /** [overlayWidth]/[overlayHeight]: pixels covered by the top-end view toggle; seats are framed outside it. */
+    fun update(p: CabinProfile,l: CabinLight,selection: String?,inside: Boolean,palette: List<FloatArray>,overlayWidth: Int=0,overlayHeight: Int=0) {
         if(closed) return
         val paletteChanged=colors.size!=palette.size || colors.zip(palette).any { !it.first.contentEquals(it.second) }
-        if(profile==p && light===l && selected==selection && interior==inside && !paletteChanged) return
+        if(profile==p && light===l && selected==selection && interior==inside && !paletteChanged && insetWidth==overlayWidth && insetHeight==overlayHeight) return
         if(profile!=p || paletteChanged || interior!=inside) {
             body?.let(::destroyPart)
             body=create(CabinMesh.body(p,palette[0],palette[1],cutaway=!inside),lit)
         }
-        profile=p; light=l; selected=selection; interior=inside; colors=palette
+        profile=p; light=l; selected=selection; interior=inside; colors=palette; insetWidth=overlayWidth; insetHeight=overlayHeight
         val background=palette[5]
         renderer.clearOptions=Renderer.ClearOptions().apply { clear=true; clearColor=DoubleArray(4) { background[it].toDouble() } }
         val mesh=CabinMesh.overlays(p,l,selection,palette[2],palette[3],palette[4],palette[6])
@@ -127,18 +130,17 @@ internal class CabinRenderer(context: Context, val surface: SurfaceView) : UiHel
     }
     private fun setCamera() {
         val p=profile ?: return
-        val seat=p.seats.firstOrNull { it.id==selected } ?: p.seats.first()
-        if(interior) {
-            val raw=seat.center+seat.facing*.9+seat.right*.55+V3(0.0,.75,0.0)
-            val eye=V3(raw.x.coerceIn(-p.width/2+.08,p.width/2-.08),raw.y,raw.z.coerceIn(-p.length/2+.1,p.length/2-.1))
-            val target=seat.center+V3(0.0,.18,0.0)
-            camera.lookAt(eye.x,eye.y,eye.z,target.x,target.y,target.z,0.0,1.0,0.0)
-            camera.setProjection(52.0,width.toDouble()/height,.03,40.0,Camera.Fov.VERTICAL)
-        } else {
-            val size=p.length+if(p.kind in listOf(CabinKind.CAR,CabinKind.TAXI)) .65 else 0.0
-            camera.lookAt(size*.7,size*1.05,-size*.95,0.0,.55,0.0,0.0,1.0,0.0)
-            camera.setProjection(42.0,width.toDouble()/height,.05,80.0,Camera.Fov.VERTICAL)
-        }
+        // Framing searches candidate angles; light updates every frame must not repeat it.
+        val key=listOf(p,interior,if(interior) selected else null,width,height,insetWidth,insetHeight)
+        if(key==cameraKey) return
+        cameraKey=key
+        val aspect=width.toDouble()/height
+        val inset=CabinInset((insetWidth.toDouble()/width).coerceIn(0.0,.5),(insetHeight.toDouble()/height).coerceIn(0.0,.5))
+        // Camera-only framing (#75): physical seat/vehicle sizes and light cells are untouched.
+        val v=if(interior) CabinCamera.seat(p,p.seats.firstOrNull { it.id==selected } ?: p.seats.first(),aspect,inset)
+            else CabinCamera.overview(p,aspect,inset)
+        camera.lookAt(v.eye.x,v.eye.y,v.eye.z,v.target.x,v.target.y,v.target.z,0.0,1.0,0.0)
+        camera.setProjection(v.fovDegrees,aspect,v.near,v.far,Camera.Fov.VERTICAL)
     }
     private val frame=object: Choreographer.FrameCallback {
         override fun doFrame(time: Long) {

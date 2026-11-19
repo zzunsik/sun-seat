@@ -74,6 +74,8 @@ class SimulationScreenshotTest {
         assertTrue(map.height>0)
         val scene=compose.onNode(hasContentDescription("3D 차량",substring=true)).fetchSemanticsNode().boundsInRoot
         assertTrue("landscape must show the whole 3D viewport above playback controls",scene.height>=com.sunseat.app.ui.theme.Sizes.cabinLandscapeHeight.value*compose.density.density-1)
+        val slider=compose.onNodeWithContentDescription(app.getString(R.string.simulation_slider)).fetchSemanticsNode().boundsInRoot
+        assertTrue("#75: enlarged landscape scene must still fit above playback controls without scrolling",scene.bottom<=slider.top)
         shot("simulation_landscape_light")
     }
     @Test fun nightDark() { render(6, true, -10.0); shot("simulation_night_dark") }
