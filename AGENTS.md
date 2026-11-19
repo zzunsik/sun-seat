@@ -15,7 +15,9 @@
 
 ## 브랜치
 
-- `main`에서 갈라지고 `main`으로 PR을 보낸다.
+- `develop`: 평소 작업이 모이는 기본 브랜치다.
+- `main`: 릴리스한 상태만 담는다. 릴리스할 때 `develop`에서 `main`으로 PR을 보내 머지 커밋으로 합친다. 태그·서명·배포는 #118에서 정한다.
+- 작업 브랜치는 `git fetch`로 받은 최신 `develop`에서 갈라지고 `develop`으로 PR을 보낸다.
   - `feat/<이슈번호>-<요약>`: 기능
   - `fix/<이슈번호>-<요약>`: 버그
   - `chore/<이슈번호>-<요약>`: 빌드·설정·문서
@@ -23,17 +25,17 @@
 
   ```bash
   git fetch origin
-  git worktree add --no-track -b fix/99-preview-route ../sun-seat-worktrees/99-preview-route origin/main
+  git worktree add --no-track -b fix/99-preview-route ../sun-seat-worktrees/99-preview-route origin/develop
   cd ../sun-seat-worktrees/99-preview-route
   cp ../../sun-seat/local.properties .    # 없으면 빌드가 "SDK location not found"로 실패한다
   git push -u origin fix/99-preview-route # 첫 push
   ```
 
   - 위치는 저장소 폴더 옆의 `sun-seat-worktrees/<이슈번호>-<요약>`이다. 저장소 폴더 안에는 만들지 않는다.
-  - `--no-track`을 붙인다. 빼면 새 브랜치의 upstream이 `origin/main`이 되어 `git push`가 작업 브랜치를 올리지 않는다.
+  - `--no-track`을 붙인다. 빼면 새 브랜치의 upstream이 `origin/develop`이 되어 `git push`가 작업 브랜치를 올리지 않는다.
   - PR이 머지되면 원본 클론에서 `git worktree remove <경로>`로 지운다. 지우기 전에 push하지 않은 커밋과 커밋하지 않은 변경이 없는지 확인한다. Windows에서 "Filename too long"으로 실패하면 폴더를 지운 뒤 `git worktree prune`을 돌린다.
-- 작업 브랜치에도 force push하지 않는다(`--force`, `-f`, `--force-with-lease` 모두). 훅을 건너뛰는 `--no-verify`도 쓰지 않는다. `main`은 GitHub이 막지만(아래 "저장소 설정") 작업 브랜치는 막지 않는다.
-- 저장소의 현재 상태를 말할 때는 로컬 체크아웃이 아니라 `git fetch` 뒤의 `origin/main`을 기준으로 본다.
+- 작업 브랜치에도 force push하지 않는다(`--force`, `-f`, `--force-with-lease` 모두). 훅을 건너뛰는 `--no-verify`도 쓰지 않는다. `develop`과 `main`은 GitHub이 막지만(아래 "저장소 설정") 작업 브랜치는 막지 않는다.
+- 저장소의 현재 상태를 말할 때는 로컬 체크아웃이 아니라 `git fetch` 뒤의 `origin/develop`을 기준으로 본다. 릴리스된 상태는 `origin/main`이다.
 
 ## 커밋
 
@@ -47,13 +49,14 @@
 ## PR
 
 - PR 템플릿(`.github/pull_request_template.md`)을 쓴다. 본문에 `Closes #이슈번호`, 변경 목록, 확인한 내용을 적는다.
-- `main`은 ruleset으로 보호된다(아래 "저장소 설정"). 다음을 모두 만족해야 GitHub이 머지를 허락한다.
+- 작업 PR의 대상은 `develop`이다. `develop`은 ruleset으로 보호된다(아래 "저장소 설정"). 다음을 모두 만족해야 GitHub이 머지를 허락한다.
   - PR의 현재 커밋에서 `ci-passed` 검사가 성공
-  - PR 브랜치가 `main`의 최신 커밋을 포함
+  - PR 브랜치가 `develop`의 최신 커밋을 포함
   - squash 머지
+- 릴리스 PR(`develop` → `main`)만 머지 커밋으로 합친다. 작업 PR을 `main`으로 보내지 않는다.
 - 머지는 auto-merge로 건다. PR을 올리고 `gh pr merge <PR> --auto --squash`를 실행하면 위 조건이 채워지는 순간 GitHub이 머지하고 브랜치를 지운다.
   - 초안(draft)이나 아직 리뷰·확인이 남은 PR에는 auto-merge를 걸지 않는다. 화면 PR은 독립 디자인 리뷰를 마친 뒤에 건다.
-  - `main`보다 뒤처지면 머지되지 않고 기다린다. `git merge origin/main`으로 합치고 영향받는 테스트를 다시 돌린 뒤 push하면 CI가 다시 돌고, 통과하면 머지된다. 여러 PR이 동시에 기다리면 하나가 머지될 때마다 나머지가 다시 뒤처지므로, 겹치는 PR은 순서를 정해 하나씩 건다.
+  - `develop`보다 뒤처지면 머지되지 않고 기다린다. `git merge origin/develop`으로 합치고 영향받는 테스트를 다시 돌린 뒤 push하면 CI가 다시 돌고, 통과하면 머지된다. 여러 PR이 동시에 기다리면 하나가 머지될 때마다 나머지가 다시 뒤처지므로, 겹치는 PR은 순서를 정해 하나씩 건다.
   - 머지 전에 auto-merge를 취소하려면 `gh pr merge <PR> --disable-auto`.
 - CI에 job을 추가하면 `ci-passed`의 `needs`에 넣는다. 머지 판단은 이 검사 하나로 한다.
 
@@ -110,7 +113,7 @@
 
 - 지도에 무엇이 그려지는지 검사할 때는 카메라 범위가 아니라 렌더러에 넘긴 경로 목록 자체를 확인한다. 카메라 범위 테스트가 통과하는 동안 다른 후보 경로가 함께 그려지고 있었다. (#99, #106, 2026-11-19)
 - 3D 좌석 화면의 Robolectric 스크린샷에는 3D 대신 자리표시만 찍힌다. 카메라·배치는 순수 Kotlin 계산(`CabinCamera`, `CabinCameraTest`)으로 검증하고, 실제 렌더는 실기기에서 본다. (#75, #109, 2026-11-19)
-- 병렬로 연 PR은 하나가 머지될 때마다 나머지가 `main`보다 뒤처져 CI를 다시 돌린다. 같은 화면이나 파일을 건드리는 PR은 동시에 열지 말고 순서를 정한다. (#99·#105·#75, 2026-11-19)
+- 병렬로 연 PR은 하나가 머지될 때마다 나머지가 대상 브랜치보다 뒤처져 CI를 다시 돌린다. 같은 화면이나 파일을 건드리는 PR은 동시에 열지 말고 순서를 정한다. (#99·#105·#75, 2026-11-19)
 
 ## 공개 저장소에서 지킬 것
 
@@ -165,12 +168,14 @@
 
 GitHub 설정으로 강제하는 것들이다. 설정을 바꾸면 이 절도 함께 고친다.
 
-- `main`은 ruleset `protect-main`으로 보호한다.
+- 기본 브랜치는 `develop`이다(2026-11-20, #120).
+- `develop`과 `main`은 ruleset(`protect-develop`, `protect-main`)으로 보호한다.
   - PR로만 바꿀 수 있다. 직접 push, force push, 브랜치 삭제는 거부된다.
-  - `ci-passed`가 PR의 현재 커밋에서 성공해야 하고, PR은 `main`의 최신 커밋을 포함해야 한다.
-  - squash로만 합쳐진다.
+  - `ci-passed`가 PR의 현재 커밋에서 성공해야 머지된다.
+  - `develop` 대상 PR은 `develop`의 최신 커밋을 포함해야 하고 squash로만 합쳐진다.
+  - `main` 대상 PR은 머지 커밋으로만 합쳐진다. 릴리스 머지 커밋은 `develop`에 없으므로 최신 반영 조건은 두지 않는다.
   - 우회 목록이 비어 있어 저장소 소유자도 같은 규칙을 따른다.
-- auto-merge를 허용하고, 머지된 작업 브랜치는 자동으로 지워진다. merge commit과 rebase 머지는 꺼져 있다.
+- auto-merge를 허용하고, 머지된 작업 브랜치는 자동으로 지워진다. rebase 머지는 꺼져 있다. merge commit은 릴리스 PR을 위해 켜 두고, 작업 PR은 ruleset이 squash로 제한한다.
 - 시크릿 스캐닝과 push 차단이 켜져 있다.
 - 비공개 취약점 제보가 켜져 있다.
 - CodeQL 기본 설정이 코드와 워크플로를 검사한다. 경고는 다른 결함처럼 이슈로 다룬다.

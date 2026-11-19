@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [develop, main]
 
 # 공개 저장소다. 워크플로는 읽기 권한만 쓰고 시크릿을 쓰지 않는다.
 permissions:
@@ -66,7 +66,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-  # 머지 판단용 단일 검사. main ruleset이 이 검사 하나를 필수로 건다(AGENTS.md "저장소 설정").
+  # 머지 판단용 단일 검사. develop·main ruleset이 이 검사 하나를 필수로 건다(AGENTS.md "저장소 설정").
   # job을 추가하면 needs에 함께 넣는다.
   ci-passed:
     if: always()
