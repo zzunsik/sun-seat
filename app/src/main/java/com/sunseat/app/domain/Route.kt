@@ -25,6 +25,8 @@ data class Leg(
     val estimatedStationTiming: Boolean = false,
     /** Original transit API step; estimated station intervals retain the same boarding identity. */
     val transitStepIndex: Int? = null,
+    /** Transit line/bus name(s) from the API (e.g. "2호선", "402 / 405"); null for walking/car. Map colour only. */
+    val lineName: String? = null,
 )
 
 /** 구간을 순서대로 이은 경로. */

@@ -150,6 +150,11 @@
     <string name="map_loading">지도를 불러오는 중…</string>
     <string name="map_description">출발 %1$s, 도착 %2$s 경로 지도</string>
     <string name="map_preview">경로 미리보기</string>
+    <string name="map_route_summary">선택 경로: %1$s</string>
+    <string name="map_route_board">%1$s %2$s 승차</string>
+    <string name="map_route_transfer">%1$s %2$s 환승</string>
+    <string name="map_route_alight">%1$s 하차</string>
+    <string name="map_route_separator">" → "</string>
     <string name="settings_title">설정</string>
     <string name="settings_theme">화면 모드</string>
     <string name="settings_system">시스템</string>

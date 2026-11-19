@@ -38,7 +38,6 @@ import com.kakao.vectormap.label.LabelOptions
 import com.kakao.vectormap.label.LabelStyle
 import com.kakao.vectormap.label.TransformMethod
 import com.kakao.vectormap.route.RouteLineOptions
-import com.kakao.vectormap.route.RouteLinePattern
 import com.kakao.vectormap.route.RouteLineSegment
 import com.kakao.vectormap.route.RouteLineStyle
 import com.kakao.vectormap.route.RouteLineStylesSet
@@ -64,11 +63,16 @@ internal fun NativeMap(state: MapState, modifier: Modifier = Modifier, keyAvaila
     val scheme = com.sunseat.app.ui.theme.LightScheme
     val ink = scheme.onSurface.toArgb()
     val surface = scheme.surface.toArgb()
-    val muted = scheme.outline.toArgb()
     val sun = com.sunseat.app.ui.theme.LightSunSeatColors.sun.toArgb()
     val latest by rememberUpdatedState(state)
-    val metrics = with(density) { MapMetrics(Sizes.mapMarker.toPx(), Sizes.mapRoute.toPx(), Sizes.mapWalk.toPx(), Sizes.mapSubway.toPx(), Sizes.mapInset.toPx(), (if(state.routeProgress!=null) Sizes.simulationSunRay else Sizes.mapSunRay).toPx()) }
-    val session = remember(context, lifecycle, ink, surface, muted, sun, metrics) { MapSession(context, ink, surface, muted, sun, metrics) }
+    val labelSize = androidx.compose.material3.MaterialTheme.typography.labelMedium.fontSize
+    val origin = stringResource(R.string.input_origin)
+    val destination = stringResource(R.string.input_destination)
+    val metrics = with(density) {
+        MapMetrics(Sizes.mapMarker.toPx(), Sizes.mapRouteWalk.toPx(), Sizes.mapInset.toPx(), (if(state.routeProgress!=null) Sizes.simulationSunRay else Sizes.mapSunRay).toPx(),
+            Sizes.mapStopMarker.toPx(), Sizes.mapRouteSelected.toPx(), Sizes.mapStopBorder.toPx(), Sizes.mapMarkerTail.toPx(), Spacing.xs.toPx(), labelSize.toPx(), origin, destination)
+    }
+    val session = remember(context, lifecycle, ink, surface, sun, metrics) { MapSession(context, ink, surface, sun, metrics) }
     var ready by remember(session) { mutableStateOf(false) }
     var failed by remember(session) { mutableStateOf(false) }
     DisposableEffect(session, lifecycle) {
@@ -114,13 +118,27 @@ internal fun MapNotice(message: Int, modifier: Modifier = Modifier) {
     }
 }
 
-private data class MapMetrics(val marker: Float, val route: Float, val walk: Float, val subway: Float, val inset: Float, val ray: Float)
+/** 픽셀 값(밀도 적용). 경로선 두께는 지도 준비 후 mapDpScale로 따로 변환한다([RouteLinePolicy.sdkWidth]). */
+private const val STOP_RANK = 10L
+private const val STOP_NAME_RANK = 5L
+private const val PLACE_RANK = 20L
+private const val ARROW_RANK = 1L
+private const val MAX_WALK_DOTS = 300
+/** SDK lines have round caps of half the width on each end, so a short stub renders as a round dot of the line width. */
+private const val DOT_STUB = 0.2
+
+private data class MapMetrics(
+    val marker: Float, val walk: Float, val inset: Float, val ray: Float,
+    val stop: Float, val arrow: Float, val stopBorder: Float, val tail: Float, val textPadding: Float, val text: Float,
+    val origin: String, val destination: String,
+)
 /** Playback icons rotate around the current route coordinate. */
 internal fun playbackLabelStyle(bitmap: Bitmap): LabelStyle = LabelStyle.from(bitmap).setApplyDpScale(false).setAnchorPoint(.5f,.5f)
 private fun LatLng.sdk(): com.kakao.vectormap.LatLng = com.kakao.vectormap.LatLng.from(latitude, longitude)
 
 /** 네이티브 객체의 소유권과 갱신을 한 곳에서 관리한다. */
-private class MapSession(context: Context, private val ink: Int, private val surface: Int, private val muted: Int, private val sun: Int, private val metrics: MapMetrics) {
+private class MapSession(context: Context, private val ink: Int, private val surface: Int, private val sun: Int, private val metrics: MapMetrics) {
+    private val typeface = runCatching { androidx.core.content.res.ResourcesCompat.getFont(context, R.font.pretendard_variable) }.getOrNull()
     val view = MapView(context).apply { setFinishManually(true) }
     var map: KakaoMap? = null
     var closed = false
@@ -140,8 +158,14 @@ private class MapSession(context: Context, private val ink: Int, private val sur
     private var lastRayAltitude: Double? = null
     private var lastVehicleLight: Int? = null
     private var gesture: () -> Unit = {}
-    private val startIcon = marker(0, ink)
-    private val endIcon = marker(1, ink)
+    private val startIcon = placeIcon(metrics.origin, filled = false)
+    private val endIcon = placeIcon(metrics.destination, filled = true)
+    private val arrows = HashMap<Int, Bitmap>()
+    private var decorRoute: Route? = null
+    private var decorZoom: Int? = null
+    private var lineDensity = 1f
+    private val decorations = mutableListOf<Label>()
+    private val walkLines = mutableListOf<com.kakao.vectormap.route.RouteLine>()
     private val vehicleIcon = marker(2, ink)
     private val rayIcon = marker(3, sun)
     private val myLocationIcon = marker(4, ink)
@@ -152,7 +176,10 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         if (closed) return
         val target = map ?: return
         gesture = state.onGesture
-        if (geometry == null) target.setOnCameraMoveStartListener { _, type -> if (type != GestureType.Unknown) gesture() }
+        if (geometry == null) {
+            target.setOnCameraMoveStartListener { _, type -> if (type != GestureType.Unknown) gesture() }
+            target.setOnCameraMoveEndListener { moved, position, _ -> if (position.zoomLevel != decorZoom) view.post { if (map === moved) decorate(moved) } }
+        }
         val next = Triple(state.routes, state.selectedRoute, state.origin to state.destination)
         val geometryChanged = geometry != next || playbackMode != (state.routeProgress != null)
         if (geometryChanged) {
@@ -161,32 +188,40 @@ private class MapSession(context: Context, private val ink: Int, private val sur
             progressLines.clear(); lastProgress = null
             target.routeLineManager?.layer?.let { layer ->
                 layer.removeAll()
-                state.routes.withIndex().sortedBy { it.index == state.selectedRoute }.forEach { (index, route) ->
-                    val lineColors = if (playbackMode && index == state.selectedRoute) listOf(muted, ink) else listOf(if (index == state.selectedRoute) ink else muted)
-                    lineColors.forEachIndexed { pass, color ->
+                val scale = target.mapDpScale
+                fun add(legs: List<com.sunseat.app.domain.Leg>, role: RouteRole, zOrder: Int): com.kakao.vectormap.route.RouteLine? {
                     val styles = mutableListOf<RouteLineStyles>()
-                    val segments = route.legs.filter { it.path.size > 1 }.map { leg ->
-                        val style = when (leg.mode) {
-                            Mode.WALK -> RouteLineStyle.from(RouteLinePattern.from(dot(color), metrics.walk * 2))
-                            Mode.SUBWAY -> RouteLineStyle.from(metrics.subway, color)
-                            else -> RouteLineStyle.from(metrics.route, color)
-                        }
-                        val lineStyles = RouteLineStyles.from(style)
+                    val segments = legs.filter { it.path.size > 1 }.map { leg ->
+                        val lineStyles = RouteLineStyles.from(sdkStyle(RouteLinePolicy.forLeg(leg.mode, leg.lineName, role), density, scale))
                         styles += lineStyles
                         RouteLineSegment.from(leg.path.map { it.sdk() }, lineStyles)
                     }
-                    if (segments.isNotEmpty()) {
-                        val line = layer.addRouteLine(RouteLineOptions.from(segments).setStylesSet(RouteLineStylesSet.from(styles)))
-                        if (playbackMode && index == state.selectedRoute && pass == 1) progressLines += line
-                    }
-                    }
+                    return if (segments.isEmpty()) null
+                    else layer.addRouteLine(RouteLineOptions.from(segments).setStylesSet(RouteLineStylesSet.from(styles)).setZOrder(zOrder))
+                }
+                // DESIGN 11.1 layers: alternates(1) < walking(2) < rides(3) < passed playback overlay.
+                state.routes.forEachIndexed { index, route -> if (index != state.selectedRoute) add(route.legs, RouteRole.ALTERNATE, 1) }
+                state.routes.getOrNull(state.selectedRoute)?.let { route ->
+                    // Walking dots (layer 2) and direction chevrons are zoom-dependent geometry: see decorate().
+                    add(route.legs.filter { it.mode != Mode.WALK }, RouteRole.SELECTED, 3)
+                    if (playbackMode) add(route.legs, RouteRole.PASSED, 5)?.let { progressLines += it }
                 }
             }
             target.labelManager?.layer?.let { layer ->
                 layer.removeAll(); cursor = null; ray = null; myLocation = null; lastCursor = null; lastRayAltitude = null; lastVehicleLight=null
-                state.origin?.let { layer.addLabel(LabelOptions.from(it.location.sdk()).setStyles(LabelStyle.from(startIcon).setApplyDpScale(false))) }
-                state.destination?.let { layer.addLabel(LabelOptions.from(it.location.sdk()).setStyles(LabelStyle.from(endIcon).setApplyDpScale(false))) }
+                state.routes.getOrNull(state.selectedRoute)?.let { route ->
+                    RouteLinePolicy.stops(route).forEach { stop ->
+                        layer.addLabel(LabelOptions.from(stop.location.sdk()).setRank(STOP_RANK).setStyles(LabelStyle.from(stopIcon(stop.color.toArgb())).setApplyDpScale(false).setAnchorPoint(.5f, .5f)))
+                        stop.label?.let { name ->
+                            // Transfer line name sits beside the marker; the label layer drops it when it collides.
+                            layer.addLabel(LabelOptions.from(stop.location.sdk()).setRank(STOP_NAME_RANK).setStyles(LabelStyle.from(nameIcon(name, stop.color.toArgb())).setApplyDpScale(false).setAnchorPoint(-metrics.stop / 2 / nameWidth(name), .5f)))
+                        }
+                    }
+                }
+                state.origin?.let { layer.addLabel(LabelOptions.from(it.location.sdk()).setRank(PLACE_RANK).setStyles(LabelStyle.from(startIcon).setApplyDpScale(false).setAnchorPoint(.5f, 1f))) }
+                state.destination?.let { layer.addLabel(LabelOptions.from(it.location.sdk()).setRank(PLACE_RANK).setStyles(LabelStyle.from(endIcon).setApplyDpScale(false).setAnchorPoint(.5f, 1f))) }
             }
+            decorRoute = state.routes.getOrNull(state.selectedRoute); decorZoom = null; lineDensity = density; walkLines.clear(); decorations.clear()
         }
         if (geometryChanged || padding != state.padding) {
             padding = state.padding
@@ -195,6 +230,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         if (fitPolicy.shouldFit(state)) {
             target.moveCamera(CameraUpdateFactory.fitMapPoints(state.points().map { it.sdk() }.toTypedArray(), metrics.inset.toInt(), 17))
         }
+        if (decorZoom == null) view.post { map?.let(::decorate) }
         state.focus?.let { focus ->
             val layer = target.labelManager?.layer
             if (myLocation == null) myLocation = layer?.addLabel(LabelOptions.from(focus.location.sdk()).setStyles(LabelStyle.from(myLocationIcon).setApplyDpScale(false)))
@@ -236,7 +272,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         lastCursor = position
     }
 
-    /** 직접 만든 원·사각·차량 화살표와 짧은 해 방향 선. */
+    /** 현재 위치 원·차량 화살표와 짧은 해 방향 선. */
     private fun marker(kind: Int, color: Int, lightSide: Int=0,altitude: Double=20.0): Bitmap {
         val width = (if(kind==3) metrics.ray*2 else metrics.marker).toInt().coerceAtLeast(1)
         val height = width
@@ -247,8 +283,6 @@ private class MapSession(context: Context, private val ink: Int, private val sur
             val radius = width / 3f
             when (kind) {
                 4 -> { paint.color = surface; canvas.drawCircle(mid, mid, radius, paint); paint.color = color; paint.style = Paint.Style.STROKE; canvas.drawCircle(mid, mid, radius, paint); paint.style = Paint.Style.FILL; canvas.drawCircle(mid, mid, radius / 3, paint) }
-                0 -> { paint.color = surface; canvas.drawCircle(mid, mid, radius, paint); paint.color = color; paint.style = Paint.Style.STROKE; canvas.drawCircle(mid, mid, radius, paint) }
-                1 -> { canvas.drawLine(mid,mid-radius,mid,mid+radius,paint);canvas.drawRect(mid,mid-radius,mid+radius*.8f,mid,paint) }
                 2 -> {
                     val body=Path().apply { addRoundRect(width*.24f,height*.14f,width*.76f,height*.92f,width*.12f,width*.12f,Path.Direction.CW) }
                     paint.color=surface;canvas.drawPath(body,paint)
@@ -281,5 +315,118 @@ private class MapSession(context: Context, private val ink: Int, private val sur
             }
         }
     }
-    private fun dot(color: Int): Bitmap = createBitmap(metrics.walk.toInt().coerceAtLeast(1), metrics.walk.toInt().coerceAtLeast(1)).also { it.eraseColor(color) }
+    /** [RouteLineSpec] → SDK 스타일. 두께와 패턴 이미지는 SDK가 mapDpScale을 곱하므로 미리 나눈다. */
+    private fun sdkStyle(spec: RouteLineSpec, density: Float, scale: Float): RouteLineStyle {
+        val color = spec.color.toArgb()
+        val core = RouteLinePolicy.sdkWidth(spec.core, density, scale)
+        val edgeColor = spec.edgeColor ?: return RouteLineStyle.from(core, color)
+        val edge = RouteLinePolicy.sdkWidth(spec.edge, density, scale)
+        return RouteLineStyle.from(core, color, edge, edgeColor.toArgb())
+    }
+
+    /**
+     * 도보 점선(층 2)과 진행 방향 쉐브론을 현재 줌의 미터/픽셀로 다시 만든다. SDK 2.15.2의 RouteLinePattern 이미지는
+     * 실기기에서 그려지지 않았다(#100 실측). 줌 단계가 바뀔 때만 다시 계산한다.
+     */
+    private fun decorate(target: KakaoMap) {
+        if (closed) return
+        val w = view.width
+        val h = view.height
+        if (w <= 0 || h <= 0) return
+        val left = target.fromScreenPoint(0, h / 2) ?: return
+        val right = target.fromScreenPoint(w, h / 2) ?: return
+        val metersPerPx = com.sunseat.app.domain.ExposureAnalyzer.distanceMeters(LatLng(left.latitude, left.longitude), LatLng(right.latitude, right.longitude)) / w
+        if (!(metersPerPx > 0)) return
+        decorZoom = target.cameraPosition?.zoomLevel
+        walkLines.forEach { it.remove() }; walkLines.clear()
+        target.labelManager?.layer?.let { layer -> decorations.forEach { layer.remove(it) } }
+        decorations.clear()
+        val route = decorRoute ?: return
+        val scale = target.mapDpScale
+        val px = { dp: androidx.compose.ui.unit.Dp -> dp.value * lineDensity * metersPerPx }
+        val walk = RouteLinePolicy.forLeg(Mode.WALK, null, RouteRole.SELECTED)
+        val dashes = route.legs.filter { it.mode == Mode.WALK }.flatMap { RouteGeometry.dashes(it.path, px(walk.core) * DOT_STUB, px(walk.core) * (1 - DOT_STUB) + px(Sizes.mapRouteWalkGap)) }
+        if (dashes.isNotEmpty()) {
+            val style = RouteLineStyles.from(RouteLineStyle.from(RouteLinePolicy.sdkWidth(walk.core, lineDensity, scale), walk.color.toArgb()))
+            // One RouteLine per dot: segments inside a RouteLine are joined into a continuous line by the SDK.
+            target.routeLineManager?.layer?.let { lines -> dashes.take(MAX_WALK_DOTS).forEach { dash ->
+                walkLines += lines.addRouteLine(RouteLineOptions.from(RouteLineSegment.from(dash.map { p -> p.sdk() }, style)).setStylesSet(RouteLineStylesSet.from(style)).setZOrder(2))
+            } }
+        }
+        val layer = target.labelManager?.layer ?: return
+        route.legs.forEach { leg ->
+            val spec = RouteLinePolicy.forLeg(leg.mode, leg.lineName, RouteRole.SELECTED)
+            if (!spec.arrows || playbackMode) return@forEach
+            val icon = arrow((spec.edgeColor ?: spec.color).toArgb())
+            RouteGeometry.marks(leg.path, px(Sizes.mapRouteArrowSpacing)).forEach { (at, bearing) ->
+                layer.addLabel(LabelOptions.from(at.sdk()).setRank(ARROW_RANK).setTransform(TransformMethod.AbsoluteRotation)
+                    .setStyles(LabelStyle.from(icon).setApplyDpScale(false).setAnchorPoint(.5f, .5f)))?.let { label ->
+                    label.rotateTo(Math.toRadians(bearing).toFloat()); decorations += label
+                }
+            }
+        }
+    }
+
+    /** 위쪽(북)을 가리키는 쉐브론. 흰 테두리 노선은 흰색, 저대비 노선은 어두운 테두리 색. 라벨 회전으로 진행 방향을 맞춘다. */
+    private fun arrow(color: Int): Bitmap = arrows.getOrPut(color) {
+        val px = (metrics.arrow).toInt().coerceAtLeast(2)
+        createBitmap(px, px).also { bitmap ->
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = color; style = Paint.Style.STROKE; strokeWidth = px / 4f; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
+            Canvas(bitmap).drawPath(Path().apply { moveTo(px * .2f, px * .7f); lineTo(px * .5f, px * .35f); lineTo(px * .8f, px * .7f) }, paint)
+        }
+    }
+
+    private fun textPaint(color: Int) = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = color; textSize = metrics.text; typeface = this@MapSession.typeface; isFakeBoldText = typeface == null }
+
+    /** 승차·환승·하차: 흰 원 + 구간 색 테두리. */
+    private fun stopIcon(color: Int): Bitmap {
+        val px = metrics.stop.toInt().coerceAtLeast(2)
+        return createBitmap(px, px).also { bitmap ->
+            val canvas = Canvas(bitmap)
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = surface }
+            val radius = px / 2f - metrics.stopBorder / 2
+            canvas.drawCircle(px / 2f, px / 2f, radius, paint)
+            paint.color = color; paint.style = Paint.Style.STROKE; paint.strokeWidth = metrics.stopBorder
+            canvas.drawCircle(px / 2f, px / 2f, radius, paint)
+        }
+    }
+
+    fun nameWidth(name: String): Float = textPaint(ink).measureText(name) + metrics.textPadding * 2 + metrics.stop / 2
+
+    /** 환승 후 노선 이름. 표식 오른쪽에 흰 바탕 글자로 둔다. */
+    private fun nameIcon(name: String, color: Int): Bitmap {
+        val paint = textPaint(ink)
+        val width = nameWidth(name)
+        val height = metrics.text * 1.6f
+        return createBitmap(width.toInt().coerceAtLeast(1), height.toInt().coerceAtLeast(1)).also { bitmap ->
+            val canvas = Canvas(bitmap)
+            val left = metrics.stop / 2
+            val box = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = surface }
+            canvas.drawRoundRect(left, 0f, width, height, height / 2, height / 2, box)
+            box.color = color; box.style = Paint.Style.STROKE; box.strokeWidth = metrics.stopBorder / 2
+            canvas.drawRoundRect(left + box.strokeWidth, box.strokeWidth, width - box.strokeWidth, height - box.strokeWidth, height / 2, height / 2, box)
+            canvas.drawText(name, left + metrics.textPadding, height / 2 - (paint.ascent() + paint.descent()) / 2, paint)
+        }
+    }
+
+    /** 출발(흰 채움 + 경로 색 테두리)·도착(경로 색 채움 + 흰 글자) 글자 표식. 꼬리 끝이 좌표다. */
+    private fun placeIcon(text: String, filled: Boolean): Bitmap {
+        val transit = com.sunseat.app.ui.theme.MapRouteColors.transit.toArgb()
+        val paint = textPaint(if (filled) surface else transit)
+        val height = metrics.marker - metrics.tail
+        val width = maxOf(height, paint.measureText(text) + metrics.textPadding * 4)
+        return createBitmap(width.toInt(), metrics.marker.toInt()).also { bitmap ->
+            val canvas = Canvas(bitmap)
+            val stroke = metrics.stopBorder
+            val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = if (filled) transit else surface }
+            val body = Path().apply {
+                addRoundRect(stroke / 2, stroke / 2, width - stroke / 2, height - stroke / 2, height / 2, height / 2, Path.Direction.CW)
+                moveTo(width / 2 - metrics.tail, height - stroke); lineTo(width / 2, metrics.marker.toFloat() - stroke / 2); lineTo(width / 2 + metrics.tail, height - stroke); close()
+            }
+            canvas.drawPath(body, fill)
+            fill.color = transit; fill.style = Paint.Style.STROKE; fill.strokeWidth = stroke; fill.strokeJoin = Paint.Join.ROUND
+            canvas.drawPath(body, fill)
+            canvas.drawText(text, (width - paint.measureText(text)) / 2, height / 2 - (paint.ascent() + paint.descent()) / 2, paint)
+        }
+    }
 }
