@@ -69,6 +69,8 @@ internal fun PlaceSearchScreen(search: SearchState, actions: InputActions, modif
             IconButton(onClick = actions.closeSearch) {
                 Icon(painterResource(R.drawable.ic_ms_arrow_back), contentDescription = stringResource(R.string.input_search_close))
             }
+            Column(Modifier.weight(1f)) {
+            if (search.hintRes == null) Text(stringResource(if (search.field == EndpointField.ORIGIN) R.string.input_origin else R.string.input_destination), style = MaterialTheme.typography.labelMedium)
             OutlinedTextField(
                 value = search.query,
                 onValueChange = actions.onQueryChange,
@@ -93,8 +95,9 @@ internal fun PlaceSearchScreen(search: SearchState, actions: InputActions, modif
                     keyboard?.hide()
                 }),
                 shape = MaterialTheme.shapes.medium,
-                modifier = Modifier.weight(1f).focusRequester(focus),
+                modifier = Modifier.fillMaxWidth().focusRequester(focus),
             )
+            }
         }
         if (showFavorites) {
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = Spacing.screen), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {

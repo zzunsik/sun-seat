@@ -20,6 +20,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTextInput
 import androidx.core.view.WindowCompat
 import androidx.test.core.app.ApplicationProvider
@@ -159,6 +160,91 @@ class SunSeatFlowTest {
         compose.onNodeWithText(text(R.string.candidates_view_seat)).assertDoesNotExist()
     }
 
+    @Test fun failedCurrentLocationEditDoesNotConfirmOldLocationOnDismiss() {
+        shadowOf(compose.activity.application).grantPermissions(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+        var calls = 0
+        val graph = launch(location = com.sunseat.app.location.LocationProvider {
+            if (++calls == 1) com.sunseat.app.location.LocationResult.Success(37.5, 127.0, 20f, false)
+            else com.sunseat.app.location.LocationResult.Unavailable
+        })
+        waitForText(text(R.string.location_use_current))
+        search(text(R.string.input_destination_placeholder), "견본", DESTINATION)
+        waitForText("30분")
+        clickText(text(R.string.location_use_current))
+        clickText(text(R.string.location_use_current))
+        waitForText(text(R.string.location_unavailable))
+        compose.onNodeWithContentDescription(text(R.string.input_dismiss)).tap()
+        compose.onNode(hasSetTextAction()).assertExists()
+        assertEquals(1, graph.server.transitRequests)
+        back()
+        compose.onNodeWithText(DESTINATION).assertExists()
+        assertEquals(1, graph.server.transitRequests)
+    }
+
+    @Test fun candidateEndpointEditCancelSwapAndBackPreserveConfirmedTrip() {
+        val graph = launch()
+        enterTrip()
+        waitForText("30분")
+        clickText(text(R.string.candidates_sort_walk))
+        clickText(text(R.string.candidates_filter_subway))
+        compose.onNode(hasClickAction() and hasText("30분")).tap()
+        val placeCalls = graph.server.placeRequests
+        clickText(ORIGIN)
+        compose.onNode(hasSetTextAction() and hasText(ORIGIN)).assertExists()
+        assertEquals(placeCalls, graph.server.placeRequests)
+        compose.onNodeWithContentDescription(text(R.string.input_search_clear)).tap()
+        back()
+        compose.onNodeWithText(text(R.string.candidates_sort_walk)).assertIsSelected()
+        compose.onNodeWithText(text(R.string.candidates_filter_subway)).assertIsSelected()
+        compose.onNode(hasClickAction() and hasText("30분")).assertIsSelected()
+        assertEquals(1, graph.server.transitRequests)
+
+        // Same-place selection is rejected; then choose a synthetic different endpoint.
+        clickText(DESTINATION)
+        compose.onNode(hasSetTextAction()).performTextReplacement("예시")
+        compose.onNode(hasSetTextAction()).performImeAction()
+        compose.waitUntil(10_000) { compose.onAllNodes(hasClickAction() and hasText(ORIGIN)).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNode(hasClickAction() and hasText(ORIGIN)).tap()
+        waitForText(text(R.string.input_same_endpoints))
+        assertEquals(1, graph.server.transitRequests)
+        back()
+        clickText(ORIGIN)
+        compose.onNode(hasSetTextAction()).performTextReplacement("")
+        // Recent places are local, even when used from the candidates editor.
+        compose.onNode(hasClickAction() and hasText(ORIGIN)).tap()
+        assertEquals(1, graph.server.transitRequests)
+        compose.onNodeWithContentDescription(text(R.string.input_swap)).tap()
+        compose.waitUntil(10_000) { graph.server.transitRequests == 2 }
+        waitForText("30분")
+        compose.onNodeWithContentDescription(text(R.string.input_swap)).tap()
+        compose.waitUntil(10_000) { graph.server.transitRequests == 3 }
+        waitForText("30분")
+        back()
+        compose.onNodeWithText(ORIGIN).assertExists()
+        compose.onNodeWithText(DESTINATION).assertExists()
+        assertEquals(3, graph.server.transitRequests)
+    }
+
+    @Test fun candidateEndpointSelectionChangesOnlyChosenFieldAndQueriesOnce() {
+        val graph = launch()
+        enterTrip()
+        waitForText("30분")
+        val alternate = Place("alternate", "새 견본 도착지", "합성 주소", "", LatLng(37.61, 127.12), "")
+        runBlocking { graph.favorites.put(alternate, FavoriteKind.HOME) }
+        clickText(DESTINATION)
+        compose.onNode(hasSetTextAction() and hasText(DESTINATION)).assertExists()
+        compose.onAllNodes(hasClickAction() and hasText(text(R.string.favorites_home)))[0].tap()
+        compose.waitUntil(10_000) { graph.server.transitRequests == 2 }
+        waitForText("30분")
+        compose.onNodeWithText(ORIGIN).assertExists()
+        compose.onNodeWithText(alternate.name).assertExists()
+        assertEquals(2, graph.server.placeRequests)
+        back()
+        compose.onNodeWithText(ORIGIN).assertExists()
+        compose.onNodeWithText(alternate.name).assertExists()
+        assertEquals(2, graph.server.transitRequests)
+    }
+
     @Test fun choosingAFavoriteFillsTheInputImmediately() {
         val graph = launch()
         runBlocking { graph.favorites.put(Place("home", "우리집", "가상구 1", "", LatLng(37.51, 127.02), ""), FavoriteKind.HOME) }
@@ -183,7 +269,8 @@ class SunSeatFlowTest {
         assertEquals(2, graph.server.placeRequests)
         // 즐겨찾기를 고르면 검색 없이 도착이 정해지고 바로 경로 후보로 넘어간다
         waitForText("30분")
-        compose.onNodeWithText("$ORIGIN → $DESTINATION").assertExists()
+        compose.onNodeWithText(ORIGIN).assertExists()
+        compose.onNodeWithText(DESTINATION).assertExists()
         back()
         compose.onNodeWithText(DESTINATION).assertExists()
     }

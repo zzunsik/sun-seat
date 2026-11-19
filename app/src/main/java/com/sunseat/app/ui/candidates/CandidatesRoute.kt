@@ -24,8 +24,10 @@ fun CandidatesRoute(
     modifier: Modifier = Modifier,
     onRequestChange: (TripRequest) -> Unit = {},
     requestRevision: Long = 0,
+    onEditEndpoint: (com.sunseat.app.ui.input.EndpointField) -> Unit = {},
+    onSwap: () -> Unit = {},
     viewModel: CandidatesViewModel = viewModel(
-        key = request.copy(departure = null, timeMode = com.sunseat.app.domain.TimeMode.DEPART, goal = com.sunseat.app.domain.SunGoal.AVOID).toString(),
+        key = "candidates",
         factory = viewModelFactory {
             initializer { CandidatesViewModel(request, graph.kakao.transitRoutes, graph.kakao.carRoutes, now = { java.time.LocalDateTime.now(graph.clock) }, preference = graph.settings.settings.value.benchPreference) }
         },
@@ -33,12 +35,14 @@ fun CandidatesRoute(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(viewModel, request, requestRevision) { viewModel.updateRequest(request, requestRevision) }
-    LaunchedEffect(viewModel) { viewModel.autoSelected.collect(onAutoSelect) }
+    val currentAutoSelect by androidx.compose.runtime.rememberUpdatedState(onAutoSelect)
+    LaunchedEffect(viewModel) { viewModel.autoSelected.collect { currentAutoSelect(it) } }
     CandidatesScreen(
         request = request,
         state = state,
         modifier = modifier,
         actions = CandidatesActions(
+            onEditEndpoint = onEditEndpoint, onSwap = onSwap,
             onBack = onBack,
             onSelect = { onSelect(it.chosen) },
             onRetry = viewModel::load,

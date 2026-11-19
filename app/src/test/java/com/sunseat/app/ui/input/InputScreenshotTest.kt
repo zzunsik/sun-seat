@@ -68,6 +68,9 @@ class InputScreenshotTest {
     @Test fun searchEmptyDark() { render(InputUiState(search = SearchState(EndpointField.ORIGIN)), true); shot("input_search_empty_dark") }
     @Test fun searchErrorLight() { render(InputUiState(search = SearchState(EndpointField.ORIGIN, query = "서울역", messageRes = R.string.search_error_network, canRetry = true)), false); shot("input_search_error_light") }
 
+    @Test fun editOriginLight() { render(filled.copy(search = SearchState(EndpointField.ORIGIN, query = "기존 견본 출발지")), false); shot("input_edit_origin_light") }
+    @Test fun editDestinationDark() { render(filled.copy(search = SearchState(EndpointField.DESTINATION, query = "기존 견본 목적지")), true); shot("input_edit_destination_dark") }
+
     private fun searchStatus(dark: Boolean, loading: Boolean) {
         compose.enableAccessibilityChecks()
         render(InputUiState(search = SearchState(EndpointField.DESTINATION, query = "견본 장소", loading = loading,
