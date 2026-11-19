@@ -5,6 +5,8 @@ import androidx.compose.runtime.*
 import kotlinx.coroutines.launch
 import androidx.compose.ui.test.junit4.accessibility.enableAccessibilityChecks
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.tryPerformAccessibilityChecks
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -66,6 +68,7 @@ class CandidatesScreenshotTest {
         compose.enableAccessibilityChecks()
         render(list, false, transitRequest.copy(origin = transitRequest.origin.copy(name = "아주 긴 견본 출발지 이름과 부가 설명"), destination = transitRequest.destination.copy(name = "아주 긴 견본 목적지 이름과 부가 설명")), fontScale = 1.5f)
         compose.onRoot().tryPerformAccessibilityChecks()
+        compose.onNodeWithText("지금 출발").assertIsDisplayed()
         shot("candidates_endpoints_small_large_text")
     }
 

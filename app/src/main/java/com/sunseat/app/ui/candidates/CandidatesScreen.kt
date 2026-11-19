@@ -1,5 +1,10 @@
 package com.sunseat.app.ui.candidates
 
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -105,13 +110,18 @@ fun CandidatesScreen(
     val scheme = SunSeatTheme.scheme
     var showTime by rememberSaveable { mutableStateOf(false) }
     val options = state as? CandidatesState.Options
-    val peek = Sizes.mapHeight + Sizes.mapHeight / 2 + Spacing.touch + Spacing.xxl
+    val density = LocalDensity.current
+    var headerHeight by remember { mutableStateOf(0.dp) }
+    BoxWithConstraints(modifier.fillMaxSize()) {
+    val headerLimit = (maxHeight - Spacing.touch * 3).coerceAtLeast(Spacing.touch)
+    val peek = (Sizes.mapHeight + Sizes.mapHeight / 2 + Spacing.touch + Spacing.xxl)
+        .coerceAtMost((maxHeight - headerHeight).coerceAtLeast(Spacing.touch))
     BottomSheetScaffold(
         modifier = modifier.fillMaxSize(), scaffoldState = scaffoldState, containerColor = scheme.background,
         sheetContainerColor = scheme.surface, sheetPeekHeight = peek,
         topBar = {
             Surface(color = scheme.surface) {
-                Column(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = Spacing.screen, vertical = Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+                Column(Modifier.fillMaxWidth().heightIn(max = headerLimit).verticalScroll(rememberScrollState()).onSizeChanged { headerHeight = with(density) { it.height.toDp() } }.statusBarsPadding().padding(horizontal = Spacing.screen, vertical = Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = actions.onBack) { Icon(painterResource(R.drawable.ic_ms_arrow_back), stringResource(R.string.common_back)) }
                         Column(Modifier.weight(1f)) {
@@ -161,6 +171,7 @@ fun CandidatesScreen(
             origin = request.origin, destination = request.destination,
             padding = com.sunseat.app.ui.map.MapPadding(bottom = peek), showDecorations = false,
         ), Modifier.fillMaxSize())
+    }
     }
     if (showTime) TimeSheet(request.departure, request.timeMode, request.mode, { showTime = false }, { value, mode -> actions.onRequestChange(request.copy(departure = value, timeMode = mode)) })
 }
