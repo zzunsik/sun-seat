@@ -175,7 +175,7 @@ private fun EndpointsCard(state: InputUiState, actions: InputActions) {
 }
 
 @Composable
-private fun EndpointRow(label: String, value: String?, placeholder: String, iconRes: Int, onClick: () -> Unit) {
+internal fun EndpointRow(label: String, value: String?, placeholder: String, iconRes: Int, onClick: () -> Unit) {
     val scheme = SunSeatTheme.scheme
     Row(
         Modifier
@@ -200,7 +200,7 @@ private fun EndpointRow(label: String, value: String?, placeholder: String, icon
 }
 
 @Composable
-private fun LocationNotice(state: InputUiState, actions: InputActions) {
+internal fun LocationNotice(state: InputUiState, actions: InputActions) {
     val scheme = SunSeatTheme.scheme
     Surface(color = scheme.surfaceContainerHigh, contentColor = scheme.onSurface, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(start = Spacing.l, top = Spacing.s, end = Spacing.xs, bottom = Spacing.s)) {

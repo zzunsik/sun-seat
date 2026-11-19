@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.lifecycle.viewmodel.initializer
 import androidx.navigation3.runtime.entryProvider
@@ -72,8 +73,11 @@ fun SunSeatNavHost(graph: AppGraph, modifier: Modifier = Modifier, navigation: S
             }
             entry<Screen.Candidates> { key ->
                 val request = navigation.request ?: key.request
+                var editing by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+                androidx.compose.foundation.layout.Box {
                 CandidatesRoute(
                     graph = graph,
+                    modifier = if (editing) Modifier.clearAndSetSemantics {} else Modifier,
                     request = request,
                     requestRevision = navigation.revision,
                     onBack = { backStack.removeAt(backStack.lastIndex) },
@@ -82,7 +86,18 @@ fun SunSeatNavHost(graph: AppGraph, modifier: Modifier = Modifier, navigation: S
                     onAutoSelect = { backStack[backStack.lastIndex] = Screen.Result(request, it, navigation.revision) },
                     onRequestChange = ::updateRequest,
                     onSearchByCar = { updateRequest(request.copy(mode = TravelMode.CAR)) },
+                    onEditEndpoint = { field -> input.acceptRequest(request); input.openSearch(field); editing = true },
+                    onSwap = {
+                        input.acceptRequest(request)
+                        input.swap()
+                        input.buildRequest()?.let(::updateRequest)
+                    },
                 )
+                if (editing) com.sunseat.app.ui.input.EndpointSearchRoute(input, request,
+                    onConfirm = { editing = false; if (it != request) updateRequest(it) },
+                    onCancel = { editing = false },
+                    onFavorites = { backStack.add(Screen.Favorites(it)) })
+                }
             }
             entry<Screen.Simulation> { key ->
                 com.sunseat.app.ui.simulation.SimulationRoute(key.request, key.chosen.route, key.result, onBack = { backStack.removeAt(backStack.lastIndex) })

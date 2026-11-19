@@ -56,6 +56,37 @@ class InputViewModelTest {
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
 
+    @Test fun editPrefillsWithoutSearchAndCancelPreservesRequest() = runTest(dispatcher) {
+        val api = FakePlaces()
+        val vm = vm(api)
+        vm.openSearch(EndpointField.ORIGIN); vm.choosePlace(seoul)
+        vm.openSearch(EndpointField.DESTINATION); vm.choosePlace(busan)
+        val request = vm.buildRequest()!!
+        vm.acceptRequest(request)
+        vm.openSearch(EndpointField.ORIGIN)
+        advanceUntilIdle()
+        assertEquals(seoul.name, vm.state.value.search!!.query)
+        assertTrue(api.queries.isEmpty())
+        vm.onQueryChange("")
+        vm.cancelEndpointEdit(request)
+        assertEquals(request, vm.buildRequest())
+        assertNull(vm.automaticRequest())
+        vm.openSearch(EndpointField.ORIGIN)
+        assertEquals(seoul.name, vm.state.value.search!!.query)
+        assertNull(vm.chooseEditedPlace(busan))
+        assertEquals(R.string.input_same_endpoints, vm.state.value.search!!.messageRes)
+        assertEquals(request, vm.buildRequest())
+    }
+
+    @Test fun currentLocationLabelIsNeverAnAutomaticKeyword() = runTest(dispatcher) {
+        val api = FakePlaces()
+        val vm = vm(api, LocationProvider { LocationResult.Success(37.5, 127.0, 20f, false) })
+        vm.fetchCurrentLocation(); advanceUntilIdle()
+        vm.openSearch(EndpointField.ORIGIN); advanceUntilIdle()
+        assertEquals("", vm.state.value.search!!.query)
+        assertTrue(api.queries.isEmpty())
+    }
+
     @Test
     fun immediateSearchDeduplicatesInFlightAndClearInvalidatesResponse() = runTest(dispatcher) {
         var calls = 0

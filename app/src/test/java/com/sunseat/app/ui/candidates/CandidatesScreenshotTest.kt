@@ -36,7 +36,7 @@ class CandidatesScreenshotTest {
     private val noRoute = R.string.candidates_no_transit.let { CandidatesState.NoRoute(it, R.string.candidates_no_transit_detail, suggestCar = true) }
 
     @OptIn(ExperimentalMaterial3Api::class)
-    private fun render(state: CandidatesState, dark: Boolean, request: com.sunseat.app.domain.TripRequest = transitRequest) {
+    private fun render(state: CandidatesState, dark: Boolean, request: com.sunseat.app.domain.TripRequest = transitRequest, fontScale: Float = 1f) {
         // 로딩 애니메이션(Lottie)을 미리 읽어 둔다. 비동기 로딩이 캡처보다 늦으면 해가 빠진 화면이 찍힌다(#59).
         com.airbnb.lottie.LottieCompositionFactory.fromRawResSync(org.robolectric.RuntimeEnvironment.getApplication(), R.raw.sun_loading)
         android.provider.Settings.Global.putFloat(org.robolectric.RuntimeEnvironment.getApplication().contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 0f)
@@ -47,7 +47,10 @@ class CandidatesScreenshotTest {
             sheet = rememberBottomSheetScaffoldState()
             scope = rememberCoroutineScope()
             androidx.compose.runtime.CompositionLocalProvider(com.sunseat.app.ui.map.LocalMapRenderer provides com.sunseat.app.ui.map.MapRenderer.PREVIEW) {
-                SunSeatTheme(darkTheme = dark) { CandidatesScreen(request, state, CandidatesActions(), animateLoader = false, scaffoldState = sheet) }
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, fontScale)) {
+                    SunSeatTheme(darkTheme = dark) { CandidatesScreen(request, state, CandidatesActions(), animateLoader = false, scaffoldState = sheet) }
+                }
             }
         }
         compose.waitForIdle()
@@ -55,6 +58,15 @@ class CandidatesScreenshotTest {
         compose.mainClock.advanceTimeBy(5000)
         compose.waitForIdle()
         if (state is CandidatesState.Options) org.junit.Assert.assertEquals(SheetValue.PartiallyExpanded, sheet.bottomSheetState.currentValue)
+    }
+
+    @Test
+    @Config(qualifiers = "w320dp-h640dp-xxhdpi")
+    fun longEndpointsLargeTextSmallScreen() {
+        compose.enableAccessibilityChecks()
+        render(list, false, transitRequest.copy(origin = transitRequest.origin.copy(name = "아주 긴 견본 출발지 이름과 부가 설명"), destination = transitRequest.destination.copy(name = "아주 긴 견본 목적지 이름과 부가 설명")), fontScale = 1.5f)
+        compose.onRoot().tryPerformAccessibilityChecks()
+        shot("candidates_endpoints_small_large_text")
     }
 
     @Test fun loadingLight() { render(CandidatesState.Loading(com.sunseat.app.domain.TravelMode.TRANSIT), false); shot("candidates_loading_light") }

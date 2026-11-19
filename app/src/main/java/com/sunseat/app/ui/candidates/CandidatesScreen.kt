@@ -76,6 +76,8 @@ import com.valentinilk.shimmer.shimmer
 import java.time.format.DateTimeFormatter
 
 data class CandidatesActions(
+    val onEditEndpoint: (com.sunseat.app.ui.input.EndpointField) -> Unit = {},
+    val onSwap: () -> Unit = {},
     val onHighlight: (CandidateUi) -> Unit = {},
     val onSort: (CandidateSort) -> Unit = {},
     val onFilter: (TransitRouteType) -> Unit = {},
@@ -112,7 +114,14 @@ fun CandidatesScreen(
                 Column(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = Spacing.screen, vertical = Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = actions.onBack) { Icon(painterResource(R.drawable.ic_ms_arrow_back), stringResource(R.string.common_back)) }
-                        Text("${request.origin.name} → ${request.destination.name}", Modifier.weight(1f).heightIn(min = Spacing.touch).clickable(role = Role.Button, onClick = actions.onBack), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Column(Modifier.weight(1f)) {
+                            com.sunseat.app.ui.input.EndpointRow(stringResource(R.string.input_origin), request.origin.name, stringResource(R.string.input_origin_placeholder), R.drawable.ic_ms_search) { actions.onEditEndpoint(com.sunseat.app.ui.input.EndpointField.ORIGIN) }
+                            HorizontalDivider(color = scheme.outlineVariant)
+                            com.sunseat.app.ui.input.EndpointRow(stringResource(R.string.input_destination), request.destination.name, stringResource(R.string.input_destination_placeholder), R.drawable.ic_ms_search) { actions.onEditEndpoint(com.sunseat.app.ui.input.EndpointField.DESTINATION) }
+                        }
+                        IconButton(onClick = actions.onSwap, enabled = request.origin.location != request.destination.location) {
+                            Icon(painterResource(R.drawable.ic_ms_swap_vert), stringResource(R.string.input_swap))
+                        }
                     }
                     NeutralTabs(listOf(stringResource(R.string.input_mode_transit), stringResource(R.string.common_taxi), stringResource(R.string.common_car)), request.mode.ordinal) { actions.onRequestChange(request.copy(mode = TravelMode.entries[it])) }
                     QuietButton(onClick = { showTime = true }) { Text(scheduleLabel(request.departure, request.timeMode)); Icon(painterResource(R.drawable.ic_ms_chevron_right), null, Modifier.size(Sizes.iconSmall).rotate(90f)) }
