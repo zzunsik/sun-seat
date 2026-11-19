@@ -1,5 +1,15 @@
 package com.sunseat.app.ui.candidates
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.layout.navigationBarsPadding
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.first
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.layout.onSizeChanged
@@ -97,7 +107,7 @@ data class CandidatesActions(
 private val ArrivalFormat = DateTimeFormatter.ofPattern("HH:mm")
 
 /** 경로 후보 화면. 상태 없음(미리보기·스크린샷용). */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, kotlinx.coroutines.FlowPreview::class)
 @Composable
 fun CandidatesScreen(
     request: TripRequest,
@@ -110,18 +120,53 @@ fun CandidatesScreen(
     val scheme = SunSeatTheme.scheme
     var showTime by rememberSaveable { mutableStateOf(false) }
     val options = state as? CandidatesState.Options
+    var showPreview by rememberSaveable(request.origin, request.destination, request.mode) { mutableStateOf(false) }
+    val previewCandidate = options?.visible?.firstOrNull { it.id == options.selectedId }
+    val preview = showPreview && previewCandidate != null
+    val listScroll = rememberLazyListState()
+    val sortScroll = rememberScrollState(initial = if ((options?.sort?.ordinal ?: 0) >= 3) Int.MAX_VALUE else 0)
+    val filterScroll = rememberScrollState()
+    val scope = rememberCoroutineScope()
+    var fitTrigger by remember { mutableLongStateOf(0L) }
+    var fitRevision by remember { mutableLongStateOf(0L) }
+    var userMoved by remember { mutableStateOf(false) }
+    val mapCandidates = options?.visible?.sortedBy { it.id }.orEmpty()
+    val routes = mapCandidates.map { it.chosen.route }
+    fun closePreview() { showPreview = false; scope.launch { scaffoldState.bottomSheetState.partialExpand() } }
+    BackHandler(enabled = preview) { closePreview() }
+    LaunchedEffect(routes, options?.selectedId) { userMoved = false; fitTrigger++ }
+    LaunchedEffect(preview) {
+        if (preview) { androidx.compose.runtime.withFrameNanos { }; scaffoldState.bottomSheetState.partialExpand(); fitTrigger++ }
+    }
     val density = LocalDensity.current
     var headerHeight by remember { mutableStateOf(0.dp) }
+    var mapTop by remember { mutableStateOf(0.dp) }
+    var mapHeight by remember { mutableStateOf(0.dp) }
+    var mapWidth by remember { mutableStateOf(0.dp) }
+    var scaffoldTop by remember { mutableStateOf(0.dp) }
     BoxWithConstraints(modifier.fillMaxSize()) {
+    val viewportHeight = maxHeight
     val headerLimit = (maxHeight - Spacing.touch * 3).coerceAtLeast(Spacing.touch)
-    val peek = (Sizes.mapHeight + Sizes.mapHeight / 2 + Spacing.touch + Spacing.xxl)
+    val peek = (if (preview) Sizes.mapHeight.coerceAtMost((maxHeight - headerHeight).coerceAtLeast(Spacing.touch) / 2) else Sizes.mapHeight + Sizes.mapHeight / 2 + Spacing.touch + Spacing.xxl)
         .coerceAtMost((maxHeight - headerHeight).coerceAtLeast(Spacing.touch))
+    val offset = runCatching { with(density) { scaffoldState.bottomSheetState.requireOffset().toDp() } }.getOrDefault(maxHeight - peek)
+    val mapPadding = com.sunseat.app.ui.map.sheetMapPadding(mapTop, mapHeight, scaffoldTop + offset)
+    LaunchedEffect(fitTrigger, mapHeight, mapWidth) {
+        snapshotFlow { runCatching { scaffoldState.bottomSheetState.requireOffset() }.getOrDefault(Float.NaN) }
+            .debounce(com.sunseat.app.ui.theme.Motion.CAMERA_SETTLE_MS)
+            .first { value -> value.isFinite() && !scaffoldState.bottomSheetState.isAnimationRunning &&
+                mapHeight - com.sunseat.app.ui.map.sheetMapPadding(mapTop, mapHeight, scaffoldTop + with(density) { value.toDp() }).bottom > Sizes.mapInset * 2 }
+        if (!userMoved) fitRevision++
+    }
     BottomSheetScaffold(
-        modifier = Modifier.fillMaxSize(), scaffoldState = scaffoldState, containerColor = scheme.background,
+        modifier = Modifier.fillMaxSize().onGloballyPositioned { scaffoldTop = with(density) { it.positionInRoot().y.toDp() } }, scaffoldState = scaffoldState, containerColor = scheme.background,
         sheetContainerColor = scheme.surface, sheetPeekHeight = peek,
         topBar = {
-            Surface(color = scheme.surface) {
-                Column(Modifier.fillMaxWidth().heightIn(max = headerLimit).verticalScroll(rememberScrollState()).onSizeChanged { headerHeight = with(density) { it.height.toDp() } }.statusBarsPadding().padding(horizontal = Spacing.screen, vertical = Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+            Surface(color = scheme.surface, modifier = Modifier.onSizeChanged { headerHeight = with(density) { it.height.toDp() } }) {
+                if (preview) Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = Spacing.s), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = ::closePreview) { Icon(painterResource(R.drawable.ic_ms_arrow_back), stringResource(R.string.candidates_preview_close)) }
+                    Text("${request.origin.name} → ${request.destination.name}", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                } else Column(Modifier.fillMaxWidth().heightIn(max = headerLimit).verticalScroll(rememberScrollState()).statusBarsPadding().padding(horizontal = Spacing.screen, vertical = Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = actions.onBack) { Icon(painterResource(R.drawable.ic_ms_arrow_back), stringResource(R.string.common_back)) }
                         Column(Modifier.weight(1f)) {
@@ -139,12 +184,23 @@ fun CandidatesScreen(
             }
         },
         sheetContent = {
-            Column(Modifier.fillMaxWidth().heightIn(max = Sizes.mapHeight * 3), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+            if (preview && previewCandidate != null) {
+                Column(Modifier.fillMaxWidth().heightIn(max = viewportHeight - headerHeight).verticalScroll(rememberScrollState()).navigationBarsPadding().padding(Spacing.screen), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(stringResource(R.string.candidates_preview_title), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
+                            Text(formatDuration(previewCandidate.totalDuration), style = MaterialTheme.typography.bodyMedium)
+                        }
+                        IconButton(onClick = ::closePreview) { Icon(painterResource(R.drawable.ic_ms_close), stringResource(R.string.candidates_preview_close)) }
+                    }
+                    PrimaryButton(onClick = { showPreview = false; actions.onSelect(previewCandidate) }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.candidates_view_seat)) }
+                }
+            } else Column(Modifier.fillMaxWidth().heightIn(max = Sizes.mapHeight * 3).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                 if (options != null && request.mode == TravelMode.TRANSIT) {
-                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState(initial = if (options.sort.ordinal >= 3) Int.MAX_VALUE else 0)).padding(horizontal = Spacing.screen), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
+                    Row(Modifier.fillMaxWidth().horizontalScroll(sortScroll).padding(horizontal = Spacing.screen), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
                         CandidateSort.entries.forEach { sort -> NeutralFilterChip(options.sort == sort, sortLabel(sort, request.goal)) { actions.onSort(sort) } }
                     }
-                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = Spacing.screen), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
+                    Row(Modifier.fillMaxWidth().horizontalScroll(filterScroll).padding(horizontal = Spacing.screen), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
                         listOf(TransitRouteType.BUS, TransitRouteType.SUBWAY, TransitRouteType.BUS_AND_SUBWAY).forEach { type ->
                             NeutralFilterChip(type in options.filters, stringResource(when (type) {
                                 TransitRouteType.BUS -> R.string.candidates_filter_bus
@@ -158,19 +214,36 @@ fun CandidatesScreen(
                 when (state) {
                     is CandidatesState.Loading -> Loading(content, state.mode, animateLoader)
                     is CandidatesState.Options -> if (state.visible.isEmpty()) Message(content, R.drawable.ic_ms_search, stringResource(R.string.candidates_filtered_empty), null, stringResource(R.string.candidates_clear_filters) to actions.onClearFilters, stringResource(R.string.candidates_edit_input) to actions.onBack)
-                        else OptionList(state.visible, state.selectedId, request, content, actions)
+                        else OptionList(state.visible, state.selectedId, request, content, actions.copy(onHighlight = {
+                            showPreview = state.selectedId != it.id
+                            actions.onHighlight(it)
+                        }), listScroll)
                     is CandidatesState.NoRoute -> Message(content, R.drawable.ic_ms_directions_bus, stringResource(state.titleRes), state.detailRes?.let { stringResource(it) }, if (state.suggestCar) stringResource(R.string.candidates_search_by_car) to actions.onSearchByCar else null, stringResource(R.string.candidates_edit_input) to actions.onBack)
                     is CandidatesState.Error -> Message(content, state.iconRes, stringResource(state.messageRes), null, if (state.canRetry) stringResource(R.string.search_retry) to actions.onRetry else null, stringResource(R.string.candidates_edit_input) to actions.onBack)
                 }
             }
         },
     ) { _ ->
+        // The map fills the scaffold body below topBar; measured sheet overlap supplies its bottom inset.
+        Box(Modifier.fillMaxSize()) {
         com.sunseat.app.ui.map.SunSeatMap(com.sunseat.app.ui.map.MapState(
-            routes = options?.items?.map { it.chosen.route }.orEmpty(),
-            selectedRoute = options?.items?.indexOfFirst { it.id == options.selectedId } ?: -1,
+            routes = routes,
+            selectedRoute = mapCandidates.indexOfFirst { it.id == options?.selectedId },
             origin = request.origin, destination = request.destination,
-            padding = com.sunseat.app.ui.map.MapPadding(bottom = peek), showDecorations = false,
-        ), Modifier.fillMaxSize())
+            padding = mapPadding, showDecorations = false,
+            automaticFit = false, cameraRevision = fitRevision,
+            fitEnabled = mapHeight - mapPadding.bottom > Sizes.mapInset * 2,
+            onGesture = { userMoved = true },
+        ), Modifier.fillMaxSize().testTag("candidate_map").semantics {
+            this[com.sunseat.app.ui.map.MapCameraRevisionKey] = fitRevision
+            this[com.sunseat.app.ui.map.MapVisibleHeightKey] = (mapHeight - mapPadding.bottom).value
+        }.onGloballyPositioned {
+            with(density) { mapTop = it.positionInRoot().y.toDp(); mapHeight = it.size.height.toDp(); mapWidth = it.size.width.toDp() }
+        })
+        if (preview) Surface(color = scheme.surface, shape = CapsuleShape, modifier = Modifier.align(Alignment.TopEnd).padding(Spacing.s)) {
+            QuietButton(onClick = { userMoved = false; fitTrigger++ }) { Text(stringResource(R.string.candidates_fit_route)) }
+        }
+        }
     }
     }
     if (showTime) TimeSheet(request.departure, request.timeMode, request.mode, { showTime = false }, { value, mode -> actions.onRequestChange(request.copy(departure = value, timeMode = mode)) })
@@ -226,9 +299,9 @@ private fun Bar(width: Dp, height: Dp, shape: androidx.compose.ui.graphics.Shape
 }
 
 @Composable
-private fun OptionList(items: List<CandidateUi>, selectedId: Int?, request: TripRequest, content: PaddingValues, actions: CandidatesActions) {
+private fun OptionList(items: List<CandidateUi>, selectedId: Int?, request: TripRequest, content: PaddingValues, actions: CandidatesActions, listState: LazyListState) {
     val haptics = rememberSunSeatHaptics()
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = content, verticalArrangement = Arrangement.spacedBy(Spacing.m)) {
+    LazyColumn(Modifier.fillMaxSize().testTag("candidate_list"), state = listState, contentPadding = content, verticalArrangement = Arrangement.spacedBy(Spacing.m)) {
         items(items, key = { it.id }) { item ->
             CandidateCard(item, item.id == selectedId, request, onClick = { haptics.selectionChanged(); actions.onHighlight(item) }, onView = { haptics.press(); actions.onSelect(item) })
         }
@@ -240,7 +313,7 @@ private fun CandidateCard(item: CandidateUi, selected: Boolean, request: TripReq
     val scheme = SunSeatTheme.scheme
     Surface(color = if (selected) scheme.surfaceContainerHigh else scheme.surface,
         shape = MaterialTheme.shapes.large,
-        modifier = Modifier.fillMaxWidth().semantics { this.selected = selected }
+        modifier = Modifier.fillMaxWidth().testTag("candidate_${item.id}").semantics { this.selected = selected }
             .then(if (selected) Modifier.border(Sizes.hairline, scheme.onSurface, MaterialTheme.shapes.large) else Modifier)
             .clickable(role = Role.Button, onClickLabel = stringResource(R.string.candidates_highlight), onClick = onClick)) {
         Column(Modifier.padding(Spacing.l), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {

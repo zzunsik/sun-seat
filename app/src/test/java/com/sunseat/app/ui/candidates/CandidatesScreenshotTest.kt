@@ -5,6 +5,9 @@ import androidx.compose.runtime.*
 import kotlinx.coroutines.launch
 import androidx.compose.ui.test.junit4.accessibility.enableAccessibilityChecks
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onRoot
@@ -25,6 +28,7 @@ import org.robolectric.annotation.GraphicsMode
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(application = android.app.Application::class, sdk = [36], qualifiers = "w390dp-h844dp-xxhdpi")
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 class CandidatesScreenshotTest {
     @get:Rule
     val compose = createComposeRule(effectContext = object : androidx.compose.ui.MotionDurationScale { override val scaleFactor = 0f })
@@ -38,20 +42,21 @@ class CandidatesScreenshotTest {
     private val noRoute = R.string.candidates_no_transit.let { CandidatesState.NoRoute(it, R.string.candidates_no_transit_detail, suggestCar = true) }
 
     @OptIn(ExperimentalMaterial3Api::class)
-    private fun render(state: CandidatesState, dark: Boolean, request: com.sunseat.app.domain.TripRequest = transitRequest, fontScale: Float = 1f) {
+    private fun render(state: CandidatesState, dark: Boolean, request: com.sunseat.app.domain.TripRequest = transitRequest, fontScale: Float = 1f): Pair<BottomSheetScaffoldState, kotlinx.coroutines.CoroutineScope> {
         // 로딩 애니메이션(Lottie)을 미리 읽어 둔다. 비동기 로딩이 캡처보다 늦으면 해가 빠진 화면이 찍힌다(#59).
         com.airbnb.lottie.LottieCompositionFactory.fromRawResSync(org.robolectric.RuntimeEnvironment.getApplication(), R.raw.sun_loading)
         android.provider.Settings.Global.putFloat(org.robolectric.RuntimeEnvironment.getApplication().contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 0f)
         compose.mainClock.autoAdvance = true
         lateinit var sheet: BottomSheetScaffoldState
         lateinit var scope: kotlinx.coroutines.CoroutineScope
+        var current by mutableStateOf(state)
         compose.setContent {
             sheet = rememberBottomSheetScaffoldState()
             scope = rememberCoroutineScope()
             androidx.compose.runtime.CompositionLocalProvider(com.sunseat.app.ui.map.LocalMapRenderer provides com.sunseat.app.ui.map.MapRenderer.PREVIEW) {
                 val density = androidx.compose.ui.platform.LocalDensity.current
                 androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, fontScale)) {
-                    SunSeatTheme(darkTheme = dark) { CandidatesScreen(request, state, CandidatesActions(), animateLoader = false, scaffoldState = sheet) }
+                    SunSeatTheme(darkTheme = dark) { CandidatesScreen(request, current, CandidatesActions(onHighlight = { current = (current as CandidatesState.Options).copy(selectedId = it.id) }), animateLoader = false, scaffoldState = sheet) }
                 }
             }
         }
@@ -60,6 +65,38 @@ class CandidatesScreenshotTest {
         compose.mainClock.advanceTimeBy(5000)
         compose.waitForIdle()
         if (state is CandidatesState.Options) org.junit.Assert.assertEquals(SheetValue.PartiallyExpanded, sheet.bottomSheetState.currentValue)
+        return sheet to scope
+    }
+
+    private fun preview(dark: Boolean, name: String, fontScale: Float = 1f) {
+        compose.enableAccessibilityChecks()
+        render(list, dark, fontScale = fontScale)
+        compose.onNodeWithTag("candidate_${list.items.first().id}").performSemanticsAction(SemanticsActions.OnClick)
+        compose.mainClock.advanceTimeBy(5000)
+        compose.waitUntil(10_000) { compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey] > 0 }
+        compose.onRoot().tryPerformAccessibilityChecks()
+        compose.onNodeWithText("자리 보기").assertIsDisplayed()
+        shot(name)
+    }
+    @Test fun previewLight() = preview(false, "candidates_preview_light")
+    @Test fun previewDark() = preview(true, "candidates_preview_dark")
+    @Test @Config(qualifiers = "w320dp-h640dp-xxhdpi")
+    fun previewSmallLargeText() = preview(false, "candidates_preview_small_large_text", 1.5f)
+    @Test @Config(qualifiers = "w844dp-h390dp-xxhdpi")
+    fun previewLandscape() = preview(false, "candidates_preview_landscape")
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Test fun expandedList() {
+        val (sheet, scope) = render(list, false)
+        compose.runOnIdle { scope.launch { sheet.bottomSheetState.expand() } }
+        compose.mainClock.advanceTimeBy(5000)
+        compose.waitForIdle()
+        org.junit.Assert.assertEquals(SheetValue.Expanded, sheet.bottomSheetState.currentValue)
+        shot("candidates_expanded_light")
+        compose.runOnIdle { scope.launch { sheet.bottomSheetState.partialExpand() } }
+        compose.mainClock.advanceTimeBy(5000)
+        compose.waitForIdle()
+        org.junit.Assert.assertEquals(SheetValue.PartiallyExpanded, sheet.bottomSheetState.currentValue)
     }
 
     @Test

@@ -121,7 +121,7 @@ class SunSeatFlowTest {
         clickText(text(R.string.candidates_filter_subway))
         waitForTextGone("40분")
         compose.onNode(hasClickAction() and hasText("30분")).tap()
-        compose.onNode(hasClickAction() and hasText("30분")).assertIsSelected()
+        compose.onNodeWithText(text(R.string.candidates_preview_title)).assertExists()
         clickText(text(R.string.candidates_view_seat))
 
         // 결과 → 햇빛 따라가기
@@ -189,6 +189,7 @@ class SunSeatFlowTest {
         clickText(text(R.string.candidates_filter_subway))
         compose.onNode(hasClickAction() and hasText("30분")).tap()
         val placeCalls = graph.server.placeRequests
+        back() // Close selected-route preview, retaining the chosen card.
         clickText(ORIGIN)
         compose.onNode(hasSetTextAction() and hasText(ORIGIN)).assertExists()
         assertEquals(placeCalls, graph.server.placeRequests)
