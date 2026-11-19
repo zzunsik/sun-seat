@@ -137,6 +137,7 @@ internal fun PtRoute.toOption(): TransitRouteOption? {
             transitStepIndex = stepIndex,
             mode = mode,
             busType = if (mode == Mode.BUS) p.vehicles.firstOrNull()?.type else null,
+            lineName = p.vehicles.map { it.name }.filter { it.isNotBlank() }.distinct().joinToString(" / ").takeIf { mode != Mode.WALK && it.isNotBlank() },
             path = step.path?.points.orEmpty().mapNotNull { it.toLatLng() },
             duration = Duration.ofSeconds(p.time.roundToLong()),
             startName = stopNames.firstOrNull().orEmpty(),

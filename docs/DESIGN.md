@@ -80,7 +80,7 @@
 | `selectionIndicator` | — | `onSurface` | `onSurface` | 현재 선택 행 왼쪽 막대(`Sizes.selectionBar`) | 배경 대비 3:1 이상 |
 
 - 선택 경로의 구간 색: 지하철 = 노선 공식 색(없으면 `routeTransit`), 버스 = `routeTransit`, 도보 = `routeWalk` 점선, 자가용·택시 = `routeTransit`. 버스 유형별 색(간선·지선 등)은 이번 계약에서 만들지 않는다.
-- 버스(`routeTransit` 청록)와 일부 노선 색(4호선·경의중앙)은 색상이 가깝다. 구분은 수단 글자 라벨·정류장 표식·막대 라벨로 하며, #100은 실제 지도에서 나란히 놓고 확인한다.
+- 버스(`routeTransit` 청록)와 일부 노선 색(4호선·경의중앙)은 색상이 가깝다. 구분은 수단 글자 라벨·정류장 표식·막대 라벨로 하며, #100은 실제 지도에서 나란히 놓고 확인한다. 〔#100 결정: 값 유지〕 실기기(서울역→강남역 4호선 경로와 버스 경로)에서 청록 `#0B6E75`(흰 대비 6.0, 흰 테두리)는 4호선 `#00A5DE`(2.8, 어두운 테두리)와 명도·테두리가 모두 달라 혼동되지 않았다. 경의중앙(`#77C4A3`, 2.1)도 같은 명도·테두리 차이라 값을 바꾸지 않는다(경의중앙 실경로는 미확인).
 - `routeTransit`은 의미가 "경로"다. 버튼·선택 표시·장식에 쓰지 않는다.
 - 어두운 화면의 시간 막대는 `routeTransit` 어두운 값과 노선 공식 색을 쓰되, 공식 색이 어두운 `surface` 대비 3:1 미만이면 막대 띠 위에 1dp `outline` 테두리를 둔다.
 
@@ -162,8 +162,9 @@
 | `Sizes.mapStopMarker` | 14 | 승차·환승·하차 정류장 표식(흰 채움 + 구간 색 2dp 테두리) |
 | `Sizes.mapMarker` (기존) | 32 | 출발·도착 표식(글자 "출발"·"도착" 포함) |
 
-- 지도 선 두께는 **논리 dp**다. SDK가 내부에서 밀도를 다시 곱하는지(이중 스케일)는 #100이 실제 렌더로 확인해 같은 논리 두께가 1x·중간·고밀도에서 나오게 맞춘다. 임의 상수로 나누지 않는다.
-- 기존 `Sizes.mapRoute 5`·`mapSubway 7`·`mapWalk 3`은 위 값으로 대체 예정이다(16장).
+- 지도 선 두께는 **논리 dp**다. 〔#100 확정〕 Kakao SDK 2.15.2는 RouteLineStyle의 lineWidth/strokeWidth에 `KakaoMap.getMapDpScale()`을 다시 곱한다(공식 주의사항 "API에서 입력받는 모든 pixel 값과 이미지 크기는 dp 값에 영향을 받는다"). SM-S936N(density 3.75)에서 mapDpScale은 1.6977이었고, 수정 전 7dp 지하철선 인자 26.25px가 실측 45px, 5dp 버스선 18.75px가 실측 약 31px로 렌더됐다(인자 × 1.70). 그래서 선 두께 인자는 `dp × density ÷ mapDpScale`로 넘긴다(`RouteLinePolicy.sdkWidth`, 상수로 나누지 않고 지도에서 읽은 값). 수정 후 같은 기기에서 6dp 선택선 22px(속 15 + 양쪽 3~4), 줌을 3단계 바꿔도 같다. 라벨 이미지는 `setApplyDpScale(false)`에 픽셀 크기를 넘긴다.
+- 〔#100〕 SDK 2.15.2의 `RouteLinePattern` 이미지는 실기기에서 그려지지 않았다(공식 예제 그대로도 무표시/흰 선). 그래서 도보 점선과 진행 방향 쉐브론은 현재 줌의 미터/픽셀로 좌표에서 만든다: 도보 = 선 두께만큼의 짧은 선(둥근 끝)을 `mapRouteWalk + mapRouteWalkGap` 간격으로, 쉐브론 = `mapRouteArrowSpacing` 72 간격(첫 표식은 절반 지점, 구간이 간격보다 짧으면 없음)의 회전 라벨. 줌 단계가 바뀔 때만 다시 만든다. 재생 중에는 쉐브론을 숨긴다(차량 표식과 혼동 방지).
+- 기존 `Sizes.mapRoute 5`·`mapSubway 7`·`mapWalk 3`은 위 값으로 대체했다(#100).
 
 ### 4.3 행동 크기 단계
 
@@ -300,20 +301,21 @@
 
 ### 11.1 경로선과 표식 〔이행: #100, 노출 정책은 #99〕
 
-현재 코드는 모든 선택 경로를 `LightScheme.onSurface`, 대안을 `outline`으로 굵게(5~7dp × SDK 배율) 그린다. 새 계약:
+#100 이전 코드는 모든 선택 경로를 `LightScheme.onSurface`, 대안을 `outline`으로 굵게(5~7dp × SDK 배율 1.7) 그렸다. 계약(`RouteLinePolicy`가 네이티브와 테스트 렌더러에 같은 값을 준다):
 
 | 대상 | 모양 | 레이어(아래→위) |
 |---|---|---|
 | 다른 후보(목록 개요만) | `routeAlternate` 3dp, 테두리 없음 | 1 |
 | 선택 경로 도보 | `routeWalk` 점선 3dp | 2 |
 | 선택 경로 탑승 구간 | 구간 색(2.5) 속 4dp + `routeCasing` 1dp 양쪽, 진행 방향 화살표(구간 길이가 충분할 때) | 3 |
-| 승차·환승·하차 표식 | `Sizes.mapStopMarker` 흰 원 + 구간 색 2dp 테두리. 환승 표식에 다음 노선 이름 라벨(겹치면 숨기고 TalkBack 요약으로 제공) | 4 |
+| 승차·환승·하차 표식 | `Sizes.mapStopMarker` 흰 원 + 구간 색 2dp 테두리. 환승 표식에 다음 노선 이름 라벨(겹치면 숨기고 TalkBack 요약으로 제공). 〔#100〕 환승은 다음 탑승 지점의 표식 하나로 나타낸다(짧은 환승 도보에서 하차·승차 원 두 개가 겹치던 실기기 결과). 같은 탑승의 역 구간(`transitStepIndex` 같음)은 묶는다 | 4 |
 | 출발·도착 | `Sizes.mapMarker` 글자 표식 "출발"(흰 채움 + `routeTransit` 테두리)·"도착"(`routeTransit` 채움 + 흰 글자). 원/네모 모양만으로 구분하지 않는다 | 5 |
 | 현재 위치 | 기존 현재 위치 표식. 출발 표식과 모양·라벨이 다르다(#68) | 5 |
 
 - **노출 정책(#99):** 후보 목록 개요에서는 다른 후보를 `routeAlternate`로 함께 그릴 수 있다. **선택 미리보기와 결과·시뮬레이션은 선택 경로만** 그린다. "전체 경로 보기"는 선택 경로 전체에 카메라를 맞추는 행동이며 다른 후보를 다시 불러오지 않는다.
 - 근거 없는 정류장 표식은 만들지 않는다. 지도선과 목록의 탑승 단계가 같은 경로여야 한다.
-- TalkBack: 지도에 "선택 경로: 1호선 서울역 승차 → 시청 환승 → 2호선 강남역 하차" 같은 요약을 둔다.
+- TalkBack: 지도에 "선택 경로: 1호선 서울역 승차 → 시청 2호선 환승 → 강남역 하차" 같은 요약을 지도 설명과 별도 노드로 둔다(#100). 노선 이름이 없으면 "버스"·"지하철"로 읽는다.
+- 〔#100〕 출발·도착 표식이 글자를 품으므로 지도 왼쪽 위의 별도 범례(원/네모 + 출발·도착)는 없앴다. 범례 상자가 출발 표식을 가리던 결과 화면 실기기 결과.
 - PREVIEW(Compose 대체 렌더)와 네이티브 SDK의 단위·패턴·레이어 순서를 같은 계약으로 맞춘다(#100).
 
 ### 햇빛 따라가기 (#42)
@@ -547,7 +549,7 @@ stateDiagram-v2
 |---|---|---|---|
 | `LightScheme.onSurface`(지도 `ink`) | 선택 경로선, 출발/도착/차량 표식 | 경로선 → `routeTransit`·노선 색, 표식 → 11.1 표 | 차량 표식 윤곽은 잉크 유지 가능 |
 | `LightScheme.outline`(지도 `muted`) | 대안 경로, 재생 남은 구간 | `routeAlternate`(목록 개요만), `routePassed`(지난 구간) | 남은 구간은 경로 색 |
-| `Sizes.mapRoute 5`·`mapSubway 7`·`mapWalk 3` | 지도선 두께 | `mapRouteSelected 6`·`mapRouteWalk 3`·`mapRouteAlternate 3` | #100에서 SDK 배율 검증 |
+| `Sizes.mapRoute 5`·`mapSubway 7`·`mapWalk 3` | 지도선 두께 | `mapRouteSelected 6`·`mapRouteWalk 3`·`mapRouteAlternate 3` | #100: SDK가 mapDpScale(실측 1.70)을 다시 곱함을 확인, 인자에서 나눔 |
 | `NeutralFilterChip`(정렬·범주) | 후보 칩 두 줄 | 범주 = `CategoryTabs`, 정렬 = 드롭다운 버튼 | 입력의 햇빛 목적 시트 칩은 유지 |
 | `PrimaryButton`(후보 카드) | 카드마다 자리 보기 | 행 안 보조 테두리 버튼 | 미리보기에서는 주 행동 유지 |
 | `ExposurePill`(후보) | 큰 햇빛/그늘 알약 | 작은 변형(`compactPillHeight 28`) | 결과 화면 알약은 유지 |

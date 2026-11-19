@@ -2,9 +2,6 @@ package com.sunseat.app.ui.map
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -28,14 +25,15 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import com.sunseat.app.R
 import com.sunseat.app.domain.Mode
+import com.sunseat.app.ui.theme.MapRouteColors
 import com.sunseat.app.ui.theme.Sizes
 import com.sunseat.app.ui.theme.Spacing
-import com.sunseat.app.ui.theme.SunSeatTheme
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -50,19 +48,9 @@ fun SunSeatMap(state: MapState, modifier: Modifier = Modifier) {
     Box(modifier.semantics { contentDescription = description }) {
         if (LocalMapRenderer.current == MapRenderer.PREVIEW) MapPlaceholder(state, Modifier.fillMaxSize())
         else NativeMap(state, Modifier.fillMaxSize())
-        if (state.showDecorations && (state.origin != null || state.destination != null)) {
-            Row(Modifier.align(Alignment.TopStart).background(SunSeatTheme.scheme.surface).padding(Spacing.s), horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalAlignment = Alignment.CenterVertically) {
-                val ink = SunSeatTheme.scheme.onSurface
-                if (state.origin != null) {
-                    Canvas(Modifier.size(Sizes.iconSmall)) { drawCircle(ink, size.minDimension / 3, style = Stroke(Sizes.mapWalk.toPx())) }
-                    Text(stringResource(R.string.input_origin), color = ink, style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
-                }
-                if (state.destination != null) {
-                    Canvas(Modifier.size(Sizes.iconSmall)) { drawRect(ink, Offset(size.width / 6, size.height / 6), androidx.compose.ui.geometry.Size(size.width * 2 / 3, size.height * 2 / 3)) }
-                    Text(stringResource(R.string.input_destination), color = ink, style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
-                }
-            }
-        }
+        // Separate node so the existing map description stays stable; colour/line shape is never the only cue.
+        routeSummary(state.routes.getOrNull(state.selectedRoute))?.let { summary -> Box(Modifier.matchParentSize().semantics { contentDescription = summary }) }
+        // No separate legend: the 출발/도착 markers carry their own text (DESIGN 11.1) and a legend box covered them.
     }
 }
 
@@ -75,6 +63,13 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
     val camera = remember { PreviewCamera() }
     var pan by remember { mutableStateOf(Offset.Zero) }
     val onGesture by rememberUpdatedState(state.onGesture)
+    val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
+    val labelStyle = androidx.compose.material3.MaterialTheme.typography.labelMedium
+    val originLabel = stringResource(R.string.input_origin)
+    val destinationLabel = stringResource(R.string.input_destination)
+    val busLabel = stringResource(R.string.common_bus)
+    val subwayLabel = stringResource(R.string.common_subway)
+    val moreLines = stringResource(R.string.map_line_more)
     if (fitPolicy.shouldFit(state)) { camera.points = state.points(); camera.padding = state.padding; camera.revision++ }
     LaunchedEffect(camera.revision) { pan = Offset.Zero }
     Box(modifier.pointerInput(Unit) { detectDragGestures { change, drag -> change.consume(); pan += drag; onGesture() } }) {
@@ -88,15 +83,17 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
         while (x < size.width) { drawLine(scheme.outlineVariant, Offset(x, 0f), Offset(x, size.height), Sizes.hairline.toPx()); x += grid }
         var y = 0f
         while (y < size.height) { drawLine(scheme.outlineVariant, Offset(0f, y), Offset(size.width, y), Sizes.hairline.toPx()); y += grid }
-        state.routes.withIndex().sortedBy { it.index == state.selectedRoute }.forEach { (index, route) -> route.legs.forEach { leg ->
-            if (leg.path.size > 1) {
-                val path = Path().apply { leg.path.forEachIndexed { i, p -> val at = position(p); if (i == 0) moveTo(at.x, at.y) else lineTo(at.x, at.y) } }
-                val width = when (leg.mode) { Mode.WALK -> Sizes.mapWalk; Mode.SUBWAY -> Sizes.mapSubway; else -> Sizes.mapRoute }.toPx()
-                drawPath(path, if (index == state.selectedRoute && state.routeProgress == null) scheme.onSurface else scheme.outline, style = Stroke(width, cap = StrokeCap.Round, pathEffect = if (leg.mode == Mode.WALK) PathEffect.dashPathEffect(floatArrayOf(grid / 4, grid / 5)) else null))
-            }
+        fun legPath(points: List<com.sunseat.app.domain.LatLng>) = Path().apply { points.forEachIndexed { i, p -> val at = position(p); if (i == 0) moveTo(at.x, at.y) else lineTo(at.x, at.y) } }
+        // Same contract and layer order as the native SDK (RouteLinePolicy, DESIGN 11.1).
+        val selected = state.routes.getOrNull(state.selectedRoute)
+        state.routes.forEachIndexed { index, route -> if (index != state.selectedRoute) route.legs.forEach { leg ->
+            if (leg.path.size > 1) drawRouteLine(legPath(leg.path), RouteLinePolicy.forLeg(leg.mode, leg.lineName, RouteRole.ALTERNATE))
         } }
+        selected?.legs?.sortedBy { if (it.mode == Mode.WALK) 0 else 1 }?.forEach { leg ->
+            if (leg.path.size > 1) drawRouteLine(legPath(leg.path), RouteLinePolicy.forLeg(leg.mode, leg.lineName, RouteRole.SELECTED))
+        }
         state.routeProgress?.let { progress ->
-            val legs = state.routes.getOrNull(state.selectedRoute)?.legs.orEmpty()
+            val legs = selected?.legs.orEmpty()
             val total = legs.sumOf { leg -> leg.path.zipWithNext { a, b -> com.sunseat.app.domain.ExposureAnalyzer.distanceMeters(a, b) }.sum() }
             var remaining = total * progress.coerceIn(0f, 1f)
             legs.forEach { leg ->
@@ -112,19 +109,40 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
                     }
                     remaining -= distance
                 }
-                if (started) drawPath(path, scheme.onSurface, style = Stroke(Sizes.mapRoute.toPx(), cap = StrokeCap.Round))
+                if (started) drawRouteLine(path, RouteLinePolicy.forLeg(leg.mode, leg.lineName, RouteRole.PASSED))
             }
         }
-        state.origin?.let { drawCircle(scheme.surface, Sizes.mapMarker.toPx() / 3, position(it.location)); drawCircle(scheme.onSurface, Sizes.mapMarker.toPx() / 3, position(it.location), style = Stroke(Sizes.mapWalk.toPx())) }
-        state.destination?.let { val p = position(it.location); val radius = Sizes.mapMarker.toPx() / 3; drawRect(scheme.onSurface, p - Offset(radius, radius), androidx.compose.ui.geometry.Size(radius * 2, radius * 2)) }
-        state.focus?.let { val p = position(it.location); val radius = Sizes.mapMarker.toPx() / 3; drawCircle(scheme.surface, radius, p); drawCircle(scheme.onSurface, radius, p, style = Stroke(Sizes.mapWalk.toPx())); drawCircle(scheme.onSurface, radius / 3, p) }
+        selected?.let { route -> RouteLinePolicy.stops(route).forEach { stop ->
+            val p = position(stop.location)
+            val radius = Sizes.mapStopMarker.toPx() / 2 - Sizes.mapStopBorder.toPx() / 2
+            drawCircle(MapRouteColors.casing, radius, p)
+            drawCircle(stop.color, radius, p, style = Stroke(Sizes.mapStopBorder.toPx()))
+            if (stop.labeled) {
+                val name = when {
+                    stop.lines.isEmpty() -> if (stop.mode == Mode.SUBWAY) subwayLabel else busLabel
+                    stop.lines.size == 1 -> stop.lines.first()
+                    else -> String.format(moreLines, stop.lines.first(), stop.lines.size - 1)
+                }
+                val text = textMeasurer.measure(name, labelStyle.copy(color = scheme.onSurface))
+                val pad = Spacing.xs.toPx()
+                val box = androidx.compose.ui.geometry.Size(text.size.width + pad * 2, maxOf(Sizes.mapLabelHeight.toPx(), text.size.height.toFloat()))
+                val left = if (stop.labelOnLeft) p.x - Sizes.mapStopMarker.toPx() / 2 - box.width else p.x + Sizes.mapStopMarker.toPx() / 2
+                val corner = androidx.compose.ui.geometry.CornerRadius(box.height / 2)
+                drawRoundRect(MapRouteColors.casing, Offset(left, p.y - box.height / 2), box, corner)
+                drawRoundRect(stop.color, Offset(left, p.y - box.height / 2), box, corner, style = Stroke(Sizes.mapStopBorder.toPx() / 2))
+                drawText(text, topLeft = Offset(left + pad, p.y - text.size.height / 2f))
+            }
+        } }
+        state.origin?.let { drawPlaceMarker(position(it.location), textMeasurer.measure(originLabel, labelStyle.copy(color = MapRouteColors.transit)), filled = false, surface = MapRouteColors.casing) }
+        state.destination?.let { drawPlaceMarker(position(it.location), textMeasurer.measure(destinationLabel, labelStyle.copy(color = MapRouteColors.casing)), filled = true, surface = MapRouteColors.casing) }
+        state.focus?.let { val p = position(it.location); val radius = Sizes.mapMarker.toPx() / 3; drawCircle(scheme.surface, radius, p); drawCircle(scheme.onSurface, radius, p, style = Stroke(Sizes.mapRouteWalk.toPx())); drawCircle(scheme.onSurface, radius / 3, p) }
         state.cursor?.let { cursor ->
             val p = position(cursor.position)
             if (cursor.sunAltitude > 0) {
                 val angle = Math.toRadians(cursor.sunAzimuth)
                 val length = (if(state.routeProgress!=null) Sizes.simulationSunRay else Sizes.mapSunRay).toPx() * (1 - cursor.sunAltitude.coerceIn(0.0, 90.0) / 120).toFloat()
                 val end = p + Offset(sin(angle).toFloat(), -cos(angle).toFloat()) * length
-                drawLine(sun.copy(alpha = sunRayOpacity(cursor.sunAltitude)), p, end, Sizes.mapRoute.toPx(), StrokeCap.Round)
+                drawLine(sun.copy(alpha = sunRayOpacity(cursor.sunAltitude)), p, end, Sizes.mapSunRayStroke.toPx(), StrokeCap.Round)
                 drawCircle(com.sunseat.app.ui.theme.LightSunSeatColors.sun,Sizes.mapMarker.toPx()*.16f,end)
                 drawCircle(scheme.onSurface,Sizes.mapMarker.toPx()*.16f,end,style=Stroke(Sizes.hairline.toPx()))
                 val inward=(p-end)*.2f
@@ -165,4 +183,62 @@ private class PreviewCamera {
     var revision = 0L
     var points: List<com.sunseat.app.domain.LatLng> = emptyList()
     var padding: MapPadding = MapPadding()
+}
+
+/** [RouteLineSpec]을 테스트 렌더러에 그린다. 테두리 → 속 선 → 진행 방향 쉐브론 순서(네이티브와 같은 모양). */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRouteLine(path: Path, spec: RouteLineSpec) {
+    val core = spec.core.toPx()
+    if (spec.pattern == LinePattern.DOTTED) {
+        drawPath(path, spec.color, style = Stroke(core, cap = StrokeCap.Round, pathEffect = PathEffect.dashPathEffect(floatArrayOf(0.01f, core + Sizes.mapRouteWalkGap.toPx()))))
+        return
+    }
+    spec.edgeColor?.let { drawPath(path, it, style = Stroke(spec.total.toPx(), cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round)) }
+    drawPath(path, spec.color, style = Stroke(core, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+    val chevron = spec.edgeColor ?: return
+    if (!spec.arrows) return
+    val measure = androidx.compose.ui.graphics.PathMeasure().apply { setPath(path, false) }
+    val spacing = Sizes.mapRouteArrowSpacing.toPx()
+    val half = Sizes.mapRouteArrow.toPx() * .3f
+    var at = spacing / 2
+    while (at < measure.length - spacing / 4) {
+        val p = measure.getPosition(at)
+        val t = measure.getTangent(at)
+        val n = Offset(-t.y, t.x)
+        drawPath(Path().apply { moveTo(p.x - t.x * half + n.x * half, p.y - t.y * half + n.y * half); lineTo(p.x + t.x * half * .6f, p.y + t.y * half * .6f); lineTo(p.x - t.x * half - n.x * half, p.y - t.y * half - n.y * half) },
+            chevron, style = Stroke(Sizes.mapRouteArrow.toPx() / 4, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+        at += spacing
+    }
+}
+
+/** 출발(흰 채움 + 경로 색 테두리)·도착(경로 색 채움) 글자 표식. 꼬리 끝이 좌표다. */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPlaceMarker(tip: Offset, text: androidx.compose.ui.text.TextLayoutResult, filled: Boolean, surface: androidx.compose.ui.graphics.Color) {
+    val tail = Sizes.mapMarkerTail.toPx()
+    val height = Sizes.mapMarker.toPx() - tail
+    val width = maxOf(height, text.size.width + Spacing.xs.toPx() * 4)
+    val top = tip.y - Sizes.mapMarker.toPx()
+    val body = Path().apply {
+        addRoundRect(androidx.compose.ui.geometry.RoundRect(tip.x - width / 2, top, tip.x + width / 2, top + height, androidx.compose.ui.geometry.CornerRadius(height / 2)))
+        moveTo(tip.x - tail, top + height - 1); lineTo(tip.x, tip.y); lineTo(tip.x + tail, top + height - 1); close()
+    }
+    drawPath(body, if (filled) MapRouteColors.transit else surface)
+    drawPath(body, MapRouteColors.transit, style = Stroke(Sizes.mapStopBorder.toPx(), join = androidx.compose.ui.graphics.StrokeJoin.Round))
+    drawText(text, topLeft = Offset(tip.x - text.size.width / 2f, top + (height - text.size.height) / 2))
+}
+
+/** "선택 경로: 1호선 서울역 승차 → 시청 2호선 환승 → 강남 하차". 탑승 구간이 없으면 null. */
+@Composable
+internal fun routeSummary(route: com.sunseat.app.domain.Route?): String? {
+    val steps = route?.let { RouteLinePolicy.rideSteps(it) }.orEmpty()
+    if (steps.isEmpty()) return null
+    val bus = stringResource(R.string.common_bus)
+    val subway = stringResource(R.string.common_subway)
+    val parts = steps.map { step ->
+        val line = step.line?.takeIf { it.isNotBlank() } ?: if (step.mode == Mode.SUBWAY) subway else bus
+        when (step.kind) {
+            StopKind.BOARD -> stringResource(R.string.map_route_board, line, step.stop)
+            StopKind.TRANSFER -> stringResource(R.string.map_route_transfer, step.stop, line)
+            StopKind.ALIGHT -> stringResource(R.string.map_route_alight, step.stop)
+        }
+    }
+    return stringResource(R.string.map_route_summary, parts.joinToString(stringResource(R.string.map_route_separator)))
 }
