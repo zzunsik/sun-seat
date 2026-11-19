@@ -125,7 +125,7 @@ RELEASE_KEY_PASSWORD=<키 비밀번호>
 
 ## 작업 흐름
 
-이슈 → 이슈별 브랜치와 worktree → PR → CI(`ci-passed`) 통과 → squash 머지 순서로 진행합니다. `main`은 GitHub ruleset으로 보호되어 CI가 통과하고 최신 `main`을 포함한 PR만 머지됩니다. 자세한 규칙과 공개 저장소에서 지킬 것은 [AGENTS.md](AGENTS.md)에 있습니다.
+평소 작업은 `develop`에 모으고 릴리스할 때만 `main`으로 올립니다. 이슈 → 이슈별 브랜치와 worktree → `develop`으로 PR → CI(`ci-passed`) 통과 → squash 머지 순서로 진행합니다. `develop`과 `main`은 GitHub ruleset으로 보호되어 CI가 통과한 PR만 머지됩니다. 자세한 규칙과 공개 저장소에서 지킬 것은 [AGENTS.md](AGENTS.md)에 있습니다.
 
 보안 문제는 공개 이슈 대신 [SECURITY.md](SECURITY.md)의 방법으로 알려 주세요.
 
