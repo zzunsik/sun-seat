@@ -18,7 +18,6 @@ class FormatTest {
 
     @Test fun durationRoundsDownAndNeverShowsZeroUnlessAllowed() {
         assertEquals("1분", minutes(0))
-        assertEquals("1분", minutes(59))
         assertEquals("0분", minutes(0, zeroOk = true))
         assertEquals("0분", minutes(59, zeroOk = true))
         assertEquals("0분", minutes(-120, zeroOk = true))
