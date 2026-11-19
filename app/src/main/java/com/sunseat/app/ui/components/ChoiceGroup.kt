@@ -6,6 +6,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -14,7 +20,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -44,9 +54,27 @@ fun ChoiceGroup(
 ) {
     val scheme = SunSeatTheme.scheme
     val haptics = rememberSunSeatHaptics()
+    val density = LocalDensity.current
+    val measurer = rememberTextMeasurer()
+    val style = MaterialTheme.typography.labelLarge
+    // Reserve the check even for an unselected option so selection never squeezes its label.
+    val widths = options.map {
+        (with(density) { measurer.measure(it.label, style, softWrap = false).size.width.toDp() } +
+            Sizes.iconSmall + Spacing.xs + Spacing.l * 2).coerceAtLeast(Spacing.touch)
+    }
+    val scroll = rememberScrollState()
     Column(modifier, verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = scheme.onSurface)
-        Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val gaps = ButtonGroupDefaults.ConnectedSpaceBetween * (options.size - 1).coerceAtLeast(0)
+        val total = widths.sumOf { it.value.toDouble() }.toFloat().dp
+        val scrollable = total + gaps > maxWidth
+        val equal = (widths.maxOrNull() ?: 0.dp) * options.size + gaps <= maxWidth
+        LaunchedEffect(selected, widths, maxWidth) {
+            val offset = with(density) { (widths.take(selected).fold(0.dp) { sum, width -> sum + width } + ButtonGroupDefaults.ConnectedSpaceBetween * selected).roundToPx() }
+            scroll.scrollTo(if (scrollable) offset else 0)
+        }
+        Row(Modifier.fillMaxWidth().then(if (scrollable) Modifier.horizontalScroll(scroll) else Modifier), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
             options.forEachIndexed { i, o ->
                 val checked = i == selected
                 ToggleButton(
@@ -68,16 +96,19 @@ fun ChoiceGroup(
                         checkedContainerColor = scheme.inverseSurface,
                         checkedContentColor = scheme.inverseOnSurface,
                     ),
-                    modifier = Modifier.weight(1f).heightIn(min = Spacing.touch).semantics { role = Role.RadioButton },
+                    contentPadding = PaddingValues(horizontal = Spacing.l),
+                    modifier = (if (scrollable) Modifier.width(widths[i]) else Modifier.weight(if (equal) 1f else widths[i].value))
+                        .heightIn(min = Spacing.touch).semantics { role = Role.RadioButton },
                 ) {
                     val icon = if (checked) painterResource(R.drawable.ic_ms_check) else o.icon
                     if (icon != null) {
                         Icon(icon, contentDescription = null, modifier = Modifier.size(Sizes.iconSmall))
                         Spacer(Modifier.size(Spacing.xs))
                     }
-                    Text(o.label, style = MaterialTheme.typography.labelLarge)
+                    Text(o.label, style = style, maxLines = 1, softWrap = false)
                 }
             }
+        }
         }
     }
 }
