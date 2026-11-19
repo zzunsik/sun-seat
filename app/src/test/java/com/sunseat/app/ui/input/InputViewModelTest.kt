@@ -57,6 +57,74 @@ class InputViewModelTest {
     @After fun tearDown() = Dispatchers.resetMain()
 
     @Test
+    fun immediateSearchDeduplicatesInFlightAndClearInvalidatesResponse() = runTest(dispatcher) {
+        var calls = 0
+        val api = object : PlaceSearchApi {
+            override suspend fun search(query: String, near: LatLng?, size: Int): ApiResult<List<Place>> {
+                calls++
+                kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { kotlinx.coroutines.delay(500) }
+                return ApiResult.Success(listOf(seoul))
+            }
+        }
+        val vm = vm(api)
+        vm.openSearch(EndpointField.ORIGIN)
+        vm.onQueryChange("A"); vm.searchNow(); dispatcher.scheduler.runCurrent()
+        vm.searchNow(); dispatcher.scheduler.runCurrent()
+        assertEquals(1, calls)
+        vm.onQueryChange(" ")
+        advanceUntilIdle()
+        assertTrue(vm.state.value.search!!.results.isEmpty())
+        assertFalse(vm.state.value.search!!.loading)
+        assertNull(vm.state.value.search!!.messageRes)
+    }
+
+    @Test
+    fun lateResponseCannotOverwriteSameQueryInReopenedField() = runTest(dispatcher) {
+        var calls = 0
+        val api = object : PlaceSearchApi {
+            override suspend fun search(query: String, near: LatLng?, size: Int): ApiResult<List<Place>> {
+                val old = ++calls == 1
+                try {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                        kotlinx.coroutines.delay(if (old) 1000 else 10)
+                    }
+                } catch (_: kotlinx.coroutines.CancellationException) {
+                    // Deliberately return even when the caller has cancelled.
+                }
+                return ApiResult.Success(listOf(if (old) seoul else busan))
+            }
+        }
+        val vm = vm(api)
+        vm.openSearch(EndpointField.ORIGIN)
+        vm.onQueryChange("same")
+        vm.searchNow()
+        dispatcher.scheduler.runCurrent()
+        vm.closeSearch()
+        vm.openSearch(EndpointField.DESTINATION)
+        vm.onQueryChange("same")
+        vm.searchNow()
+        advanceUntilIdle()
+        assertEquals(EndpointField.DESTINATION, vm.state.value.search!!.field)
+        assertEquals(listOf(busan), vm.state.value.search!!.results)
+    }
+
+    @Test
+    fun changedQueryImmediatelyRemovesOldSelectableResults() = runTest(dispatcher) {
+        val api = FakePlaces(ApiResult.Success(listOf(seoul)))
+        val vm = vm(api)
+        vm.openSearch(EndpointField.ORIGIN)
+        vm.onQueryChange("A")
+        advanceUntilIdle()
+        assertEquals(listOf(seoul), vm.state.value.search!!.results)
+        vm.onQueryChange("B")
+        assertTrue(vm.state.value.search!!.results.isEmpty())
+        assertTrue(vm.state.value.search!!.loading)
+        api.result = ApiResult.Success(listOf(busan))
+        advanceUntilIdle()
+        assertEquals(listOf(busan), vm.state.value.search!!.results)
+    }
+
+    @Test
     fun defaultsArriveWithoutOverwritingUserChoices() = runTest(dispatcher) {
         val settings = kotlinx.coroutines.flow.MutableStateFlow(com.sunseat.app.data.settings.Settings.DEFAULT)
         val vm = InputViewModel(FakePlaces(), LocationProvider { LocationResult.Unavailable }, currentLocationName = "현재 위치", settings = settings)

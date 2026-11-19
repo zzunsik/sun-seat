@@ -97,6 +97,12 @@ class PlaceSearchScreenTest {
         compose.onNodeWithContentDescription("검색어 지우기").assertExists()
     }
 
+    @Test fun loadingNeverOffersPreviousResults() {
+        show(SearchState(EndpointField.ORIGIN, query = "새 검색", loading = true, results = listOf(station)))
+        compose.onNodeWithText(station.name).assertDoesNotExist()
+        compose.onNode(progress).assertExists()
+    }
+
     @Test fun resultsChooseAndStarReflectSavedState() {
         val saved = Favorite("s", FavoriteKind.CUSTOM, "견본 카페", "견본 카페", "가상구 2", 37.5, 127.0, 0)
         show(SearchState(EndpointField.DESTINATION, query = "예", results = listOf(station, cafe)), favorites = listOf(saved), near = LatLng(37.5, 127.0))

@@ -33,6 +33,32 @@ class FavoritesViewModelTest {
         override suspend fun search(query: String, near: LatLng?, size: Int): ApiResult<List<Place>> { calls++; return ApiResult.Success(listOf(result)) }
     }
     private fun repository(scope: kotlinx.coroutines.CoroutineScope) = DataStoreFavoritesRepository(PreferenceDataStoreFactory.create(storage = OkioStorage(FileSystem.SYSTEM, PreferencesSerializer) { File(temporary.root, "favorites.preferences_pb").absolutePath.toPath() }, scope = scope), scope)
+    @Test fun cancelledHomeResponseCannotOverwriteWorkSearch() = runTest(dispatcher) {
+        var calls = 0
+        val api = object : PlaceSearchApi {
+            override suspend fun search(query: String, near: LatLng?, size: Int): ApiResult<List<Place>> {
+                val old = ++calls == 1
+                try {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                        kotlinx.coroutines.delay(if (old) 1000 else 10)
+                    }
+                } catch (_: kotlinx.coroutines.CancellationException) {
+                    // Deliberately return even when the caller has cancelled.
+                }
+                return ApiResult.Success(listOf(if (old) place else office))
+            }
+        }
+        val model = FavoritesViewModel(repository(backgroundScope), api, FavoriteKind.HOME)
+        model.onQueryChange("same"); model.searchNow(); runCurrent()
+        model.closeSearch(); model.openSearch(FavoriteKind.WORK)
+        model.onQueryChange("same"); model.searchNow()
+        advanceUntilIdle()
+        assertEquals(listOf(office), model.state.value.search!!.results)
+        model.onQueryChange("new")
+        assertTrue(model.state.value.search!!.results.isEmpty())
+        assertTrue(model.state.value.search!!.loading)
+    }
+
     @Test fun selectingSavedPlaceSetsDestinationImmediatelyWithoutSearch() = runTest(dispatcher) {
         val favorites = repository(backgroundScope)
         favorites.put(place, FavoriteKind.HOME)
