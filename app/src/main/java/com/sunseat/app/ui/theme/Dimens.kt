@@ -28,6 +28,9 @@ object Sizes {
     val simulationMapInfo = 84.dp
     val simulationSunRay = 56.dp
     val mapHeight = 240.dp
+
+    /** 축약 여정 바 최소 높이(DESIGN 4.2, 5.1) */
+    val journeyBar = 56.dp
     val mapMarker = 32.dp
     /** 지도 경로선(논리 dp, docs/DESIGN.md 4.2·11.1). 선택 = 속 4 + 양쪽 테두리 1 */
     val mapRouteSelected = 6.dp
@@ -61,6 +64,9 @@ object Sizes {
 
     /** 목록 한 줄 최소 높이 */
     val listRow = 44.dp
+
+    /** 터치하는 한 줄 행(설정 선택 행 등) 최소 높이. docs/DESIGN.md 4.2 */
+    val listRowInteractive = 56.dp
 
     /** 타임라인 줄 라벨 폭과 막대 높이 */
     val timelineLabel = 56.dp

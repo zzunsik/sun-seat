@@ -300,7 +300,24 @@
     <string name="seat_diagram_bus">위에서 본 버스 · 위쪽이 앞, 가운데가 중간, 아래쪽이 뒤 · 바깥이 창가, 안쪽이 통로</string>
     <string name="simulation_cabin_profile">표준 %1$s · 3D 햇빛</string>
     <string name="simulation_bus">시내버스</string>
-    <string name="simulation_coach">광역버스</string>
+    <string name="simulation_coach">40인승 고속버스</string>
+    <string name="simulation_bus_model_estimated">추정한 모형: %1$s</string>
+    <string name="simulation_bus_name_estimated">%1$s(추정)</string>
+    <string name="simulation_bus_name_manual">%1$s(직접 고름)</string>
+    <string name="simulation_bus_model_manual">직접 고른 모형: %1$s</string>
+    <string name="simulation_bus_basis_none">노선 유형 정보가 없어 시내버스로 추정했어요.</string>
+    <string name="simulation_bus_basis_city">노선 유형 ‘%1$s’ 기준 추정이에요.</string>
+    <string name="simulation_bus_basis_coach">노선 유형 ‘%1$s’ 기준 추정이에요. 실제 차량·정원은 알 수 없어요.</string>
+    <string name="simulation_bus_basis_unknown">알 수 없는 노선 유형 ‘%1$s’이라 시내버스로 보여 줘요.</string>
+    <string name="simulation_bus_manual_scope">이 구간에만 적용돼요.</string>
+    <string name="simulation_change_model">모형 바꾸기</string>
+    <string name="simulation_model_city_option">시내버스 · 앞문·중간문, 앞보기·옆보기 좌석</string>
+    <string name="simulation_model_coach_option">40인승 고속버스 · 2+2 앞보기, 운전석 제외 40석</string>
+    <string name="simulation_seat_carried">모형을 바꿔 같은 위치(%1$s)의 자리로 옮겼어요.</string>
+    <string name="simulation_seat_not_carried">이 모형에는 %1$s 자리가 없어 추천 자리를 보여 줘요. 자리 고르기로 다시 골라 주세요.</string>
+    <string name="simulation_bus_note">모형 번호는 실제 좌석 번호가 아니에요. 저상·좌석 수 등 실제 차종 차이는 반영하지 않아요.</string>
+    <string name="simulation_coach_note">모형 번호는 실제 좌석 번호가 아니에요. 우등·프리미엄 등 실제 차종은 반영하지 않으며 고속버스 노선 검색을 지원하지는 않아요.</string>
+    <string name="simulation_side_facing">옆보기</string>
     <string name="simulation_subway">지하철</string>
     <string name="simulation_taxi">택시</string>
     <string name="simulation_car">자가용</string>
@@ -341,4 +358,5 @@
     <string name="candidates_preview_title">선택한 경로</string>
     <string name="candidates_preview_close">경로 목록으로 돌아가기</string>
     <string name="candidates_fit_route">전체 경로 보기</string>
+    <string name="candidates_journey_expand">여정 펼쳐서 바꾸기</string>
 </resources>

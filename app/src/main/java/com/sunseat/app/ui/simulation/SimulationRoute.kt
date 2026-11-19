@@ -41,5 +41,5 @@ fun SimulationRoute(
     }
     val point = remember(state.elapsedMillis, timeline) { timeline.at(result.departure.plusMillis(state.elapsedMillis)) }
     SimulationScreen(request, route, result, state, point, timeline.boundaries,
-        SimulationActions(onBack, vm::seek, vm::toggle, vm::setSpeed, { vm.follow(false) }, { vm.follow(true) }, vm::seat, vm::camera), modifier)
+        SimulationActions(onBack, vm::seek, vm::toggle, vm::setSpeed, { vm.follow(false) }, { vm.follow(true) }, vm::seat, vm::camera, vm::busModel), modifier)
 }

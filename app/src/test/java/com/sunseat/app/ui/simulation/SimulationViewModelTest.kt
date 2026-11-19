@@ -114,4 +114,29 @@ class SimulationViewModelTest {
         assertEquals(1, state.speed)
         assertTrue(state.playing)
     }
+
+    /** #76: the bus model is chosen per leg, kept across view/seat/playback changes and restore, and never copied to the next bus. */
+    @Test fun busModelIsPerLegAndSurvivesOtherTransitions() {
+        val saved = SavedStateHandle()
+        val vm = SimulationViewModel(timeline(), saved)
+        vm.enter(false); vm.advance(1000); vm.follow(false)
+        val before = vm.state.value
+        vm.busModel(0, CabinKind.COACH, SeatCarry("coach-1", SeatSpot(Side.LEFT, SeatZone.FRONT, SeatPosition.WINDOW), true))
+        assertEquals(mapOf(0 to CabinKind.COACH), vm.state.value.models)
+        assertEquals("coach-1", vm.state.value.seats[0])
+        assertEquals(0, vm.state.value.notice?.leg)
+        assertEquals(before.elapsedMillis, vm.state.value.elapsedMillis)
+        assertEquals(before.playing, vm.state.value.playing); assertFalse(vm.state.value.following)
+        assertNull("another bus leg keeps its own estimate", vm.state.value.models[1])
+        vm.camera(true); vm.camera(false); vm.toggle(); vm.toggle()
+        assertEquals(mapOf(0 to CabinKind.COACH), vm.state.value.models)
+        val restored = SimulationViewModel(timeline(), SavedStateHandle(saved.keys().associateWith { saved.get<Any>(it) })).state.value
+        assertEquals(mapOf(0 to CabinKind.COACH), restored.models)
+        assertEquals("coach-1", restored.seats[0])
+        // Picking a seat yourself acknowledges the model-change notice.
+        vm.seat(0, "coach-5"); assertNull(vm.state.value.notice)
+        // A model without an equivalent seat forgets the old choice instead of moving it.
+        vm.busModel(0, CabinKind.BUS, SeatCarry(null, SeatSpot(Side.LEFT, SeatZone.FRONT, SeatPosition.AISLE), false))
+        assertNull(vm.state.value.seats[0]); assertEquals(false, vm.state.value.notice?.carry?.carried)
+    }
 }
