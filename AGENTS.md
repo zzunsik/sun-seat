@@ -63,6 +63,7 @@
 ## 테스트
 
 - 검사 명령: `./gradlew assembleDebug lint verifyRoborazziDebug` (CI와 같다. `verifyRoborazziDebug`는 단위 테스트 전체를 돌리며 스크린샷도 비교한다)
+  - CI는 테스트를 빌드 캐시 결과로 대신하지 않고 매번 실제로 돌린다(`testDebugUnitTest --rerun`). 실행한 테스트 수는 CI 실행 요약에 나오고, 0건이면 실패한다(#116).
 - **버그 수정 PR은 먼저 실패하는 재현 테스트를 넣고 고친다.** 고치기 전 코드에서 그 테스트가 실패하는 것을 확인하고 PR 본문에 적는다.
 - 기능 PR은 영향받는 기존 흐름 테스트(`ui/navigation/SunSeatFlowTest` 등)가 통과해야 한다. 흐름을 일부러 바꿨으면 테스트도 같은 PR에서 고친다.
 - 화면 흐름 테스트는 `FlowTestGraph`(가짜 설정·임시 DataStore·가짜 카카오 서버·고정 시각)를 쓴다. 지도는 `LocalMapRenderer`의 테스트 렌더러로 그린다.

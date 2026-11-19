@@ -56,7 +56,10 @@ data class CandidateUi(
     /** 경로 조회 시점 또는 확정 출발 시각에 소요시간을 더한 예상값. */
     val arrival: LocalDateTime?,
     val transfers: Int,
-    /** 환승 도보 합(분). 출발지→첫 정류장, 마지막 정류장→도착지 도보는 응답에 없어 빠진다 */
+    /**
+     * 응답에 있는 도보 구간 합(분, 내림)으로 '최소 도보' 정렬 기준이다. 승차~하차 사이 환승 도보만이며
+     * 출발지→첫 정류장, 마지막 정류장→도착지 도보는 응답에 없어 빠진다(#105). 화면 표시는 [providedWalk]를 쓴다.
+     */
     val walkMinutes: Long,
     val fare: Int?,
     val fastest: Boolean,
@@ -66,6 +69,15 @@ data class CandidateUi(
     val chosen: ChosenRoute,
     val type: TransitRouteType = TransitRouteType.OTHER,
 )
+
+/**
+ * 응답이 알려 준 도보 구간의 합(#105). 승차~하차 사이 환승 도보만이고 접근 도보는 포함하지 않는다.
+ * 도보 구간이 하나도 없으면 null이다. '0분'(알려진 0)과 구별하며, 전체 소요시간과 구간 합의 차이를
+ * 도보나 대기로 배분하지 않는다.
+ */
+val CandidateUi.providedWalk: Duration?
+    get() = chosen.route.legs.filter { it.mode == Mode.WALK }.takeIf { it.isNotEmpty() }
+        ?.fold(Duration.ZERO) { sum, leg -> sum + leg.duration }
 
 sealed interface CandidatesState {
     data class Loading(val mode: TravelMode) : CandidatesState
@@ -102,7 +114,7 @@ internal fun TransitRouteOption.toUi(id: Int, now: LocalDateTime?, fastest: Bool
         totalDuration = totalDuration,
         arrival = now?.plus(totalDuration),
         transfers = transfers,
-        walkMinutes = route.legs.filter { it.mode == Mode.WALK }.sumOf { it.duration.toMinutes() },
+        walkMinutes = route.legs.filter { it.mode == Mode.WALK }.fold(Duration.ZERO) { sum, leg -> sum + leg.duration }.toMinutes(),
         fare = fare,
         fastest = fastest,
         chips = chips,
@@ -276,7 +288,8 @@ fun orderCandidates(items: List<CandidateUi>, sort: CandidateSort, filters: Set<
         CandidateSort.RECOMMENDED -> visible
         CandidateSort.TIME -> visible.sortedBy { it.totalDuration }
         CandidateSort.TRANSFERS -> visible.sortedBy { it.transfers }
-        CandidateSort.WALK -> visible.sortedBy { it.walkMinutes }
+        // 같은 분이면 응답 도보의 초 단위 합으로 가른다. 도보 구간 없음(null)은 0으로 본다(#105).
+        CandidateSort.WALK -> visible.sortedWith(compareBy<CandidateUi> { it.walkMinutes }.thenBy { it.providedWalk ?: Duration.ZERO })
         CandidateSort.SUN -> visible.sortedWith(compareBy<CandidateUi> { !it.comparableSun() }.thenComparator { a, b ->
             val av = a.chosen.cachedResult?.sunIfFollowed ?: Duration.ZERO
             val bv = b.chosen.cachedResult?.sunIfFollowed ?: Duration.ZERO

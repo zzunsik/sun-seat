@@ -25,7 +25,14 @@ import com.sunseat.app.ui.theme.SunSeatTheme
 fun RouteSegmentBar(item: CandidateUi, modifier: Modifier = Modifier, taxi: Boolean = false) {
     val scheme = SunSeatTheme.scheme
     val labels = item.chips.mapIndexed { index, chip -> when (chip.mode) {
-        Mode.WALK -> if (item.chosen.route.legs.getOrNull(index)?.duration?.let { !it.isZero && it < java.time.Duration.ofMinutes(1) } == true) stringResource(R.string.candidates_walk_under_minute) else stringResource(R.string.candidates_walk, chip.walkMinutes)
+        Mode.WALK -> {
+            val duration = item.chosen.route.legs.getOrNull(index)?.duration
+            when {
+                duration?.isZero == true -> stringResource(R.string.candidates_walk, 0L) // 알려진 0초를 1분으로 부풀리지 않는다(#105)
+                duration != null && duration < java.time.Duration.ofMinutes(1) -> stringResource(R.string.candidates_walk_under_minute)
+                else -> stringResource(R.string.candidates_walk, chip.walkMinutes)
+            }
+        }
         Mode.SUBWAY -> listOf(stringResource(R.string.common_subway), chip.lineName).filter { it.isNotBlank() }.joinToString(" ")
         Mode.BUS -> listOf(stringResource(R.string.common_bus), chip.lineName).filter { it.isNotBlank() }.joinToString(" ")
         Mode.CAR -> stringResource(if (taxi) R.string.common_taxi else R.string.common_car)
