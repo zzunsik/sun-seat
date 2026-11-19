@@ -182,6 +182,7 @@ class CandidatesScreenshotTest {
         shot("candidates_readable_${if (dark) "dark" else "light"}${if (large) "_large" else ""}${if (missing) "_missing" else ""}")
         compose.onNodeWithText("자리 보기").performScrollTo().assertIsDisplayed()
         compose.onRoot().tryPerformAccessibilityChecks()
+        if (large) shot("candidates_readable_${if (dark) "dark" else "light"}_large_bottom")
     }
     @Test fun readableLight() = readableCard(false)
     @Test fun readableDark() = readableCard(true)
