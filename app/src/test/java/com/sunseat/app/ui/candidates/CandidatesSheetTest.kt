@@ -53,7 +53,8 @@ class CandidatesSheetTest {
     @Test fun previewCloseRestoresSelectionSortFiltersAndNonzeroScroll() {
         val base = CandidatesFixtures.options.toUi(java.time.LocalDateTime.of(2026, 11, 15, 9, 0)).first()
         var state by mutableStateOf(CandidatesState.Options((0..9).map { base.copy(id = it) }, sort = CandidateSort.WALK, filters = setOf(base.type)))
-        compose.setContent {
+        val restoration = androidx.compose.ui.test.junit4.StateRestorationTester(compose)
+        restoration.setContent {
             CompositionLocalProvider(LocalMapRenderer provides MapRenderer.PREVIEW) {
                 SunSeatTheme { CandidatesScreen(CandidatesFixtures.transitRequest, state, CandidatesActions(onHighlight = { state = state.copy(selectedId = it.id) }, onSort = { state = state.copy(sort = it) })) }
             }
@@ -64,8 +65,14 @@ class CandidatesSheetTest {
         compose.onNodeWithTag("candidate_5").performSemanticsAction(SemanticsActions.OnClick)
         compose.onNodeWithText("선택한 경로").assertExists()
         compose.onNodeWithText("전체 경로 보기").assertExists()
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithText("선택한 경로").assertExists()
         compose.waitUntil(10_000) { compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey] > 0 }
-        val revision = compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey]
+        var revision = compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey]
+        compose.onNodeWithTag("candidate_map").performTouchInput { swipeLeft() }
+        compose.onNodeWithText("전체 경로 보기").performSemanticsAction(SemanticsActions.OnClick)
+        compose.waitUntil(10_000) { compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey] > revision }
+        revision = compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey]
         compose.onNodeWithTag("candidate_map").performTouchInput { swipeLeft() }
         compose.onAllNodesWithContentDescription("경로 목록으로 돌아가기")[0].performSemanticsAction(SemanticsActions.OnClick)
         compose.waitForIdle()
