@@ -70,16 +70,29 @@ class CandidatesScreenshotTest {
         return sheet to scope
     }
 
-    private fun preview(dark: Boolean, name: String, fontScale: Float = 1f) {
+    private fun preview(dark: Boolean, name: String, fontScale: Float = 1f, state: CandidatesState.Options = list) {
         compose.enableAccessibilityChecks()
-        render(list, dark, fontScale = fontScale)
-        compose.onNodeWithTag("candidate_${list.items.first().id}").performSemanticsAction(SemanticsActions.OnClick)
+        render(state, dark, fontScale = fontScale)
+        compose.onNodeWithTag("candidate_${state.items.first().id}").performSemanticsAction(SemanticsActions.OnClick)
         compose.mainClock.advanceTimeBy(5000)
         compose.waitUntil(10_000) { compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey] > 0 }
         compose.onRoot().tryPerformAccessibilityChecks()
         compose.onNodeWithText("자리 보기").assertIsDisplayed()
         shot(name)
     }
+    /** #99: 같은 출발·도착에서 멀리 갈라지는 후보. 미리보기는 선택 경로만, 개요는 비교용 전체를 그린다. */
+    private val branching = list.copy(items = list.items.mapIndexed { index, item ->
+        val origin = transitRequest.origin.location
+        val destination = transitRequest.destination.location
+        val via = com.sunseat.app.domain.LatLng(origin.latitude - 0.12 * index, origin.longitude + 0.1 - 0.06 * index)
+        item.copy(chosen = item.chosen.copy(route = item.chosen.route.copy(legs = item.chosen.route.legs.mapIndexed { legIndex, leg ->
+            leg.copy(path = if (legIndex == 0) listOf(origin, via) else listOf(via, destination))
+        })))
+    }, selectedId = list.items.first().id)
+    @Test fun previewBranchingLight() = preview(false, "candidates_preview_branching_light", state = branching)
+    @Test fun previewBranchingDark() = preview(true, "candidates_preview_branching_dark", state = branching)
+    @Test fun listBranchingLight() { render(branching, false); shot("candidates_list_branching_light") }
+
     @Test fun previewLight() = preview(false, "candidates_preview_light")
     @Test fun previewDark() = preview(true, "candidates_preview_dark")
     @Test @Config(qualifiers = "w320dp-h640dp-xxhdpi")
