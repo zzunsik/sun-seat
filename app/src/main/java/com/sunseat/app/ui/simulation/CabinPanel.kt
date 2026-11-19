@@ -13,6 +13,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
@@ -85,9 +87,10 @@ internal fun CabinPanel(point: TimelinePoint, mode: TravelMode, state: Simulatio
     Text(summary,style=MaterialTheme.typography.bodySmall)
     val description=stringResource(R.string.simulation_scene_description,chosen.label(),summary,
         point.sun?.azimuth?.toInt() ?: 0,point.sun?.altitude?.toInt() ?: 0)
+    var toggle by remember { mutableStateOf(IntSize.Zero) }
     Box {
-        CabinScene(profile,light,chosen.id,state.interior,description,preview)
-        Surface(Modifier.align(Alignment.TopEnd),color=SunSeatTheme.scheme.surface,shape=MaterialTheme.shapes.small) {
+        CabinScene(profile,light,chosen.id,state.interior,description,preview,toggle)
+        Surface(Modifier.align(Alignment.TopEnd).onSizeChanged { toggle=it },color=SunSeatTheme.scheme.surface,shape=MaterialTheme.shapes.small) {
             QuietButton(onClick={actions.camera(!state.interior)}) { Text(stringResource(if(state.interior) R.string.simulation_overview else R.string.simulation_inside)) }
         }
     }
@@ -123,7 +126,7 @@ private fun CabinSeat.label(): String {
 }
 
 @Composable
-private fun CabinScene(profile: CabinProfile, light: CabinLight, selected: String, interior: Boolean, summary: String, preview: Boolean) {
+private fun CabinScene(profile: CabinProfile, light: CabinLight, selected: String, interior: Boolean, summary: String, preview: Boolean, overlay: IntSize) {
     val configuration=LocalConfiguration.current
     val height=if(configuration.screenWidthDp>configuration.screenHeightDp) Sizes.cabinLandscapeHeight else Sizes.cabinHeight
     val modifier=Modifier.fillMaxWidth().height(height).semantics { contentDescription=summary }
@@ -153,7 +156,7 @@ private fun CabinScene(profile: CabinProfile, light: CabinLight, selected: Strin
                 catch(_: LinkageError) { failed=true }
             }
         },modifier=modifier,update={
-            try { renderer?.update(profile,light,selected,interior,palette) }
+            try { renderer?.update(profile,light,selected,interior,palette,overlay.width,overlay.height) }
             catch(_: Exception) { failed=true;renderer=null }
         })
     }
