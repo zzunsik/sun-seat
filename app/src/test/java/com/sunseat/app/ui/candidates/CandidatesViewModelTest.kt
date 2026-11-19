@@ -121,6 +121,17 @@ class CandidatesViewModelTest {
     }
 
     @Test
+    fun readableItineraryKeepsAlternativesAndMissingData() {
+        val item = CandidatesFixtures.readable.toUi(0, null, false)
+        assertEquals("견본 광역급행 아주 긴 노선 이름 12345 / 대체노선 67890", item.chips.first().lineName)
+        assertEquals("", item.chips.last().lineName)
+        assertEquals(null, item.fare)
+        assertEquals("견본 출발 정류장 이름이 아주 긴 곳", item.boardAt)
+        assertEquals("견본 도착 정류장", item.alightAt)
+        assertEquals(java.time.Duration.ofSeconds(20), item.chosen.route.legs[1].duration)
+    }
+
+    @Test
     fun transitOptionsMapToCards() = runTest(dispatcher) {
         val vm = CandidatesViewModel(transitRequest, FakeTransit(ApiResult.Success(TransitRoutes(options))), noCar, now = { java.time.LocalDateTime.of(2026, 11, 15, 9, 0) }, compute = dispatcher)
         advanceUntilIdle()

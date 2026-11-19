@@ -53,7 +53,7 @@ data class LegChip(val mode: Mode, val lineName: String = "", val walkMinutes: L
 data class CandidateUi(
     val id: Int,
     val totalDuration: Duration,
-    /** 지금 출발 기준 도착 예상 시각. 출발 시각을 정했으면 null(경로가 지금 기준이라 맞지 않음) */
+    /** 경로 조회 시점 또는 확정 출발 시각에 소요시간을 더한 예상값. */
     val arrival: LocalDateTime?,
     val transfers: Int,
     /** 환승 도보 합(분). 출발지→첫 정류장, 마지막 정류장→도착지 도보는 응답에 없어 빠진다 */
@@ -93,7 +93,7 @@ sealed interface CandidatesState {
 
 internal fun TransitRouteOption.toUi(id: Int, now: LocalDateTime?, fastest: Boolean): CandidateUi {
     val chips = route.legs.mapIndexed { i, leg ->
-        val name = legDetails.getOrNull(i)?.vehicles?.firstOrNull()?.name.orEmpty()
+        val name = legDetails.getOrNull(i)?.vehicles?.map { it.name }?.filter { it.isNotBlank() }?.distinct()?.joinToString(" / ").orEmpty()
         LegChip(leg.mode, lineName = name, walkMinutes = leg.duration.toMinutes().coerceAtLeast(1))
     }
     val rides = route.legs.filter { it.mode != Mode.WALK }
