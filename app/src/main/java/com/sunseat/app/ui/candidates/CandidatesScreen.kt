@@ -108,6 +108,22 @@ data class CandidatesActions(
     val onSearchByCar: () -> Unit = {},
 )
 
+/** 지도에 넘길 후보 ID·경로와 그 목록 안의 선택 index. [selectedRoute]는 항상 [routes] 기준이다. */
+internal data class CandidateMapRoutes(val ids: List<Int>, val routes: List<com.sunseat.app.domain.Route>, val selectedRoute: Int)
+
+/**
+ * 목록 개요는 비교용으로 모든 후보를 id 순으로 넘기고, 선택 경로 미리보기는 선택 경로만 넘긴다(#99).
+ * 다른 후보가 미리보기에서 현재 여정의 분기처럼 보이지 않게 하고, 줄어든 목록에 예전 index를 쓰지 않는다.
+ */
+internal fun candidateMapRoutes(visible: List<CandidateUi>, selectedId: Int?, preview: Boolean): CandidateMapRoutes {
+    val shown = if (preview) visible.filter { it.id == selectedId } else visible.sortedBy { it.id }
+    return CandidateMapRoutes(shown.map { it.id }, shown.map { it.chosen.route }, shown.indexOfFirst { it.id == selectedId })
+}
+
+/** 지도에 실제로 넘긴 후보 ID와 선택 index(테스트 관측용). */
+internal val CandidateMapRouteIdsKey = androidx.compose.ui.semantics.SemanticsPropertyKey<List<Int>>("CandidateMapRouteIds")
+internal val CandidateMapSelectedRouteKey = androidx.compose.ui.semantics.SemanticsPropertyKey<Int>("CandidateMapSelectedRoute")
+
 private val ArrivalFormat = DateTimeFormatter.ofPattern("HH:mm")
 
 /** 경로 후보 화면. 상태 없음(미리보기·스크린샷용). */
@@ -136,8 +152,9 @@ fun CandidatesScreen(
     var fitRevision by remember { mutableLongStateOf(0L) }
     var fittedTrigger by remember { mutableLongStateOf(-1L) }
     var userMoved by remember { mutableStateOf(false) }
-    val mapCandidates = options?.visible?.sortedBy { it.id }.orEmpty()
-    val routes = mapCandidates.map { it.chosen.route }
+    // 카메라 맞춤 트리거는 목록 개요의 후보 집합 기준이라 미리보기 진입·닫기만으로 다시 맞추지 않는다.
+    val routes = options?.visible?.sortedBy { it.id }.orEmpty().map { it.chosen.route }
+    val mapRoutes = candidateMapRoutes(options?.visible.orEmpty(), options?.selectedId, preview)
     fun closePreview() { showPreview = false; scope.launch { scaffoldState.bottomSheetState.partialExpand() } }
     BackHandler(enabled = preview) { closePreview() }
     LaunchedEffect(routes, options?.selectedId) { userMoved = false; fitTrigger++ }
@@ -266,8 +283,8 @@ fun CandidatesScreen(
         // The map fills the scaffold body below topBar; measured sheet overlap supplies its bottom inset.
         Box(Modifier.fillMaxSize()) {
         com.sunseat.app.ui.map.SunSeatMap(com.sunseat.app.ui.map.MapState(
-            routes = routes,
-            selectedRoute = mapCandidates.indexOfFirst { it.id == options?.selectedId },
+            routes = mapRoutes.routes,
+            selectedRoute = mapRoutes.selectedRoute,
             origin = request.origin, destination = request.destination,
             padding = mapPadding, showDecorations = false,
             automaticFit = false, cameraRevision = fitRevision,
@@ -275,6 +292,8 @@ fun CandidatesScreen(
             onGesture = { userMoved = true },
         ), Modifier.fillMaxSize().testTag("candidate_map").semantics {
             this[com.sunseat.app.ui.map.MapCameraRevisionKey] = fitRevision
+            this[CandidateMapRouteIdsKey] = mapRoutes.ids
+            this[CandidateMapSelectedRouteKey] = mapRoutes.selectedRoute
             this[com.sunseat.app.ui.map.MapVisibleHeightKey] = (mapHeight - mapPadding.bottom).value
         }.onGloballyPositioned {
             with(density) { mapTop = it.positionInRoot().y.toDp(); mapHeight = it.size.height.toDp(); mapWidth = it.size.width.toDp() }
