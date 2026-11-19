@@ -1,152 +1,146 @@
 package com.sunseat.app.ui.input
 
 import android.app.Application
-import androidx.compose.material3.Text
+import androidx.compose.runtime.*
 import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.test.assertIsNotSelected
-import androidx.compose.ui.test.assertIsSelected
-import androidx.compose.ui.test.hasClickAction
-import androidx.compose.ui.test.hasText
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performSemanticsAction
-import com.sunseat.app.domain.TimeMode
 import com.sunseat.app.domain.TravelMode
 import com.sunseat.app.ui.theme.SunSeatTheme
 import java.time.LocalDateTime
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
+import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
-/** 시각 시트: 출발/도착 전환·날짜 칩은 적용을 눌러야 반영된다. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [36], qualifiers = "w390dp-h844dp-xxhdpi")
 class TimeSheetTest {
     @get:Rule val compose = createComposeRule()
-    private val now = LocalDateTime.of(2026, 11, 16, 8, 30)
-    private var applied: Pair<LocalDateTime?, TimeMode>? = null
+    private val now = LocalDateTime.of(2026, 12, 31, 8, 30)
+    private var applied: LocalDateTime? = null
+    private var applies = 0
     private var dismissed = false
 
-    private fun show(value: LocalDateTime? = null, mode: TimeMode = TimeMode.DEPART, travel: TravelMode = TravelMode.TRANSIT) {
-        compose.setContent {
-            SunSeatTheme(darkTheme = false) {
-                TimeSheet(value, mode, travel, onDismiss = { dismissed = true }, onApply = { v, m -> applied = v to m }, now = now)
-            }
-        }
+    private fun show(value: LocalDateTime? = null, travel: TravelMode = TravelMode.TRANSIT) {
+        compose.setContent { SunSeatTheme { TimeSheet(value, travel, { dismissed = true }, { applied = it; applies++ }, now = now) } }
         compose.waitForIdle()
     }
-
+    private fun select(tag: String, index: Int) {
+        compose.onNodeWithTag(tag).performScrollToIndex(index)
+        compose.waitForIdle()
+    }
     private fun tap(label: String) {
-        compose.onNode(hasClickAction() and hasText(label)).performSemanticsAction(SemanticsActions.OnClick)
+        compose.onNode(hasClickAction() and hasText(label)).performClick()
         compose.waitForIdle()
     }
+    private fun current(tag: String) = compose.onNodeWithTag(tag).fetchSemanticsNode().config[SemanticsProperties.StateDescription]
 
-    @Test fun dropdownSelectionPreservesDraftUntilConfirmation() {
+    @Test fun departurePickerHasFourWheelsAndNoArrivalInput() {
         show()
-        compose.onNodeWithTag("schedule_hour").performSemanticsAction(SemanticsActions.OnClick)
-        tap("23시")
-        compose.onNodeWithTag("schedule_minute").performSemanticsAction(SemanticsActions.OnClick)
-        tap("59분")
-        assertNull(applied)
-        tap("적용")
-        assertEquals(now.withHour(23).withMinute(59) to TimeMode.DEPART, applied)
+        listOf("schedule_date", "schedule_period", "schedule_hour", "schedule_minute").forEach { compose.onNodeWithTag(it).assertExists() }
+        compose.onNodeWithText("도착 시각").assertDoesNotExist()
+        compose.onNodeWithText("완료").assertExists()
     }
-
-    @Test fun midnightCanBeSelectedWithoutRounding() {
-        show(now.withHour(23).withMinute(59), TimeMode.ARRIVE)
-        compose.onNodeWithTag("schedule_hour").performSemanticsAction(SemanticsActions.OnClick)
-        tap("00시")
-        compose.onNodeWithTag("schedule_minute").performSemanticsAction(SemanticsActions.OnClick)
-        tap("00분")
-        tap("적용")
-        assertEquals(now.toLocalDate().atStartOfDay() to TimeMode.ARRIVE, applied)
-    }
-
-    @Test fun savedDateOutsideQuickChoicesAndArbitraryMinuteSurviveModeChange() {
-        val saved = now.minusDays(8).withHour(12).withMinute(37)
-        show(saved, TimeMode.ARRIVE)
-        compose.onNodeWithText("12시").assertExists()
-        compose.onNodeWithText("37분").assertExists()
-        tap("출발 시각")
-        tap("적용")
-        assertEquals(saved to TimeMode.DEPART, applied)
-    }
-
-    @Test fun dismissingSheetDoesNotApplyDraft() {
-        compose.setContent {
-            SunSeatTheme { TimeSheet(now, TimeMode.DEPART, TravelMode.CAR,
-                onDismiss = { dismissed = true }, onApply = { v, m -> applied = v to m }, now = now) }
-        }
-        compose.waitForIdle()
-        compose.onNodeWithTag("schedule_hour").performSemanticsAction(SemanticsActions.OnClick)
-        tap("23시")
-        compose.onNode(androidx.compose.ui.test.SemanticsMatcher.keyIsDefined(SemanticsActions.Dismiss))
-            .performSemanticsAction(SemanticsActions.Dismiss)
-        compose.waitForIdle()
-        assertNull(applied)
-        assertTrue(dismissed)
-    }
-
-    @Test fun switchingToArrivalAndTomorrowAppliesOnlyOnConfirm() {
+    @Test fun wheelsKeepDraftUntilCompletionAndPreserveArbitraryMinute() {
         show()
-        compose.onNodeWithText("출발 시각").assertIsSelected()
-        compose.onNodeWithText("오늘").assertExists()
-        tap("도착 시각")
-        compose.onNodeWithTag("schedule_date").performSemanticsAction(SemanticsActions.OnClick)
-        tap("내일")
-        compose.onNodeWithText("도착 시각").assertIsSelected()
-        compose.onNodeWithText("출발 시각").assertIsNotSelected()
-        compose.onNodeWithText("11월 17일").assertExists()
+        select("schedule_date", 1)
+        select("schedule_period", 1)
+        select("schedule_hour", 10)
+        select("schedule_minute", 37)
+        assertEquals(0, applies)
+        tap("완료")
+        assertEquals(LocalDateTime.of(2027, 1, 1, 23, 37), applied)
+        assertEquals(1, applies)
+        assertTrue(dismissed)
+    }
+    @Test fun midnightNoonAndLastMinuteUseTwelveHourConversion() {
+        show(now.withHour(0).withMinute(5))
+        assertEquals("12", current("schedule_hour"))
+        assertEquals("오전", current("schedule_period"))
+        tap("완료")
+        assertEquals(now.withHour(0).withMinute(5), applied)
+    }
+    @Test fun noonAnd59ArePreserved() {
+        show(now.withHour(12).withMinute(59))
+        assertEquals("12", current("schedule_hour"))
+        assertEquals("오후", current("schedule_period"))
+        tap("완료")
+        assertEquals(now.withHour(12).withMinute(59), applied)
+    }
+    @Test fun savedDateOutsideDefaultWindowIsNotClamped() {
+        val saved = now.plusYears(2).withHour(23).withMinute(59)
+        show(saved)
+        tap("완료")
+        assertEquals(saved, applied)
+    }
+    @Test fun savedPastDateAnd37ArePreserved() {
+        val saved = now.minusYears(2).withHour(12).withMinute(37)
+        show(saved)
+        tap("완료")
+        assertEquals(saved, applied)
+    }
+    @Test fun dismissDiscardsDraftAndReopeningStartsAtConfirmedValue() {
+        var open by mutableStateOf(true)
+        val saved = now.withMinute(5)
+        compose.setContent { SunSeatTheme { if (open) TimeSheet(saved, TravelMode.CAR, { open = false }, { applies++ }, now = now) } }
+        select("schedule_minute", 37)
+        compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.Dismiss)).performSemanticsAction(SemanticsActions.Dismiss)
+        compose.waitForIdle()
+        assertEquals(0, applies)
+        compose.runOnIdle { open = true }
+        assertEquals("05", current("schedule_minute"))
+    }
+    @Test fun rowTapAndAccessibilityIncrementSelectRealValues() {
+        show(now.withMinute(37))
+        compose.onNodeWithTag("schedule_minute_38").performClick()
+        compose.waitForIdle()
+        assertEquals("38", current("schedule_minute"))
+        val increment = compose.onNodeWithTag("schedule_minute").fetchSemanticsNode().config[SemanticsActions.CustomActions].last()
+        compose.runOnIdle { assertTrue(increment.action()) }
+        compose.waitForIdle()
+        assertEquals("39", current("schedule_minute"))
+        tap("완료")
+        assertEquals(now.withMinute(39), applied)
+    }
+    @Test fun draggingDisablesCompletionUntilSnapThenAppliesVisibleValue() {
+        show(now.withMinute(30))
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("schedule_minute").performTouchInput { swipeUp(durationMillis = 180) }
+        compose.mainClock.advanceTimeByFrame()
+        compose.onNodeWithText("완료").assertIsNotEnabled()
+        assertEquals(0, applies)
+        compose.mainClock.autoAdvance = true
+        compose.waitForIdle()
+        val visible = current("schedule_minute").toInt()
+        compose.onNodeWithText("완료").assertIsEnabled()
+        tap("완료")
+        assertEquals(now.withMinute(visible), applied)
+    }
+    @Test fun dateWindowDoesNotShiftWhileOpenAcrossMidnight() {
+        var clock by mutableStateOf(now)
+        compose.setContent { SunSeatTheme { TimeSheet(null, TravelMode.CAR, {}, { applied = it }, now = clock) } }
+        select("schedule_date", 1)
+        compose.runOnIdle { clock = now.plusDays(1) }
+        tap("완료")
+        assertEquals(now.plusDays(1), applied)
+    }
+    @Test fun nowCommitsNullOnce() {
+        show(now.plusDays(1))
+        tap("지금 출발")
         assertNull(applied)
-
-        tap("적용")
-        assertEquals(LocalDateTime.of(2026, 11, 17, 8, 30) to TimeMode.ARRIVE, applied)
+        assertEquals(1, applies)
         assertTrue(dismissed)
     }
-
-    @Test fun savedArrivalOpensOnArrivalAndCanSwitchBackToDeparture() {
-        show(LocalDateTime.of(2026, 11, 18, 19, 5), TimeMode.ARRIVE)
-        compose.onNodeWithText("도착 시각").assertIsSelected()
-        compose.onNodeWithText("모레").assertExists()
-        tap("출발 시각")
-        tap("적용")
-        assertEquals(LocalDateTime.of(2026, 11, 18, 19, 5) to TimeMode.DEPART, applied)
-    }
-
-    @Test fun nowClearsTimeAndReturnsToDeparture() {
-        show(LocalDateTime.of(2026, 11, 17, 7, 0), TimeMode.ARRIVE)
-        tap("지금")
-        assertEquals(null to TimeMode.DEPART, applied)
-        assertTrue(dismissed)
-    }
-
     @Test fun routeTimeNoteOnlyForTransit() {
         show(travel = TravelMode.CAR)
         compose.onNodeWithText("경로는 지금 기준으로 찾아요.", substring = true).assertDoesNotExist()
     }
-
     @Test fun transitShowsRouteTimeNote() {
         show()
         compose.onNodeWithText("경로는 지금 기준으로 찾아요.", substring = true).assertExists()
-    }
-
-    @Test fun scheduleLabelNamesDayAndDirection() {
-        val labels = listOf(
-            null to TimeMode.DEPART,
-            now.withHour(9).withMinute(0) to TimeMode.DEPART,
-            now.plusDays(1).withHour(9).withMinute(0) to TimeMode.ARRIVE,
-            now.plusDays(2).withHour(21).withMinute(45) to TimeMode.DEPART,
-            // 저장된 값이 없으면 도착 모드여도 "지금 출발"이다
-            null to TimeMode.ARRIVE,
-        )
-        compose.setContent { SunSeatTheme { labels.forEach { (value, mode) -> Text(scheduleLabel(value, mode, now)) } } }
-        listOf("오늘 09:00 출발", "내일 09:00 도착", "11월 18일 21:45 출발").forEach { compose.onNodeWithText(it).assertExists() }
-        assertEquals(2, compose.onAllNodes(hasText("지금 출발")).fetchSemanticsNodes().size)
     }
 }

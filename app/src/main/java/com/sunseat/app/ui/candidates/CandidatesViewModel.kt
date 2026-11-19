@@ -158,7 +158,7 @@ class CandidatesViewModel(
         val version = ++generation
         val base = now().atZone(zone).toInstant()
         val refreshed = options.copy(goal = value.goal, items = options.items.map { item ->
-            item.copy(arrival = (value.departureInstant(item.totalDuration, base, zone) + item.totalDuration).atZone(zone).toLocalDateTime(),
+            item.copy(arrival = (value.departureInstant(base, zone) + item.totalDuration).atZone(zone).toLocalDateTime(),
                 chosen = item.chosen.copy(cachedResult = null))
         })
         _state.value = refreshed
@@ -186,7 +186,7 @@ class CandidatesViewModel(
                     is ApiResult.Success -> when {
                         r.value.options.isNotEmpty() ->
                             CandidatesState.Options(r.value.options.toUi(sampledNow).map { item ->
-                                item.copy(arrival = (request.departureInstant(item.totalDuration, base, zone) + item.totalDuration).atZone(zone).toLocalDateTime())
+                                item.copy(arrival = (request.departureInstant(base, zone) + item.totalDuration).atZone(zone).toLocalDateTime())
                             }, goal = request.goal)
                         else -> r.value.noRouteReason.toNoRoute()
                     }
@@ -199,7 +199,7 @@ class CandidatesViewModel(
                             currentCoroutineContext().ensureActive()
                             if (version != generation) return@launch
                             if (request.mode == TravelMode.TAXI) CandidatesState.Options(listOf(CandidateUi(
-                                id = 0, totalDuration = option.duration, arrival = (request.departureInstant(option.duration, base, zone) + option.duration).atZone(zone).toLocalDateTime(),
+                                id = 0, totalDuration = option.duration, arrival = (request.departureInstant(base, zone) + option.duration).atZone(zone).toLocalDateTime(),
                                 transfers = 0, walkMinutes = 0, fare = option.taxiFare.takeIf { it > 0 }, fastest = false,
                                 chips = listOf(LegChip(Mode.CAR)), boardAt = request.origin.name, alightAt = request.destination.name,
                                 chosen = ChosenRoute(option.route, option.duration),
@@ -227,7 +227,7 @@ class CandidatesViewModel(
         sunJob = viewModelScope.launch {
             coroutineScope {
                 options.items.map { item -> async(compute) {
-                    val result = calculate(item.chosen.route, activeRequest.departureInstant(item.totalDuration, base, zone), activeRequest.goal, preference, item.totalDuration)
+                    val result = calculate(item.chosen.route, activeRequest.departureInstant(base, zone), activeRequest.goal, preference, item.totalDuration)
                     currentCoroutineContext().ensureActive()
                     if (version == generation) _state.update { current ->
                         if (current is CandidatesState.Options) current.copy(items = current.items.map {

@@ -70,7 +70,7 @@ data class InputActions(
     val swap: () -> Unit = {},
     val setMode: (TravelMode) -> Unit = {},
     val setDeparture: (LocalDateTime?) -> Unit = {},
-    val setSchedule: (LocalDateTime?, com.sunseat.app.domain.TimeMode) -> Unit = { _, _ -> },
+    val setSchedule: (LocalDateTime?) -> Unit = {},
     val setGoal: (SunGoal) -> Unit = {},
     val submit: () -> Unit = {},
 )
@@ -82,6 +82,7 @@ fun InputScreen(
     state: InputUiState,
     actions: InputActions,
     modifier: Modifier = Modifier,
+    now: java.time.LocalDateTime = java.time.LocalDateTime.now(),
 ) {
     val scheme = SunSeatTheme.scheme
     var showTime by rememberSaveable { mutableStateOf(false) }
@@ -101,7 +102,7 @@ fun InputScreen(
                     Column(Modifier.padding(Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                         NeutralTabs(listOf(stringResource(R.string.input_mode_transit), stringResource(R.string.common_taxi), stringResource(R.string.common_car)), state.mode.ordinal) { actions.setMode(TravelMode.entries[it]) }
                         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                            QuietButton(onClick = { showTime = true }) { Text(scheduleLabel(state.departure, state.timeMode)); DropArrow() }
+                            QuietButton(onClick = { showTime = true }) { Text(scheduleLabel(state.departure, now)); DropArrow() }
                             QuietButton(onClick = { showGoal = true }) { Text(stringResource(if (state.goal == SunGoal.AVOID) R.string.input_goal_chip_avoid else R.string.input_goal_chip_seek)); DropArrow() }
                         }
                     }
@@ -119,7 +120,7 @@ fun InputScreen(
             if (state.search != null) PlaceSearchScreen(state.search, actions, favorites = state.favorites, noticeRes = state.favoriteMessageRes ?: state.recentMessageRes, recent = state.recent, showRecent = true, near = state.origin?.takeIf { it.isCurrentLocation }?.place?.location)
         }
     }
-    if (showTime) TimeSheet(state.departure, state.timeMode, state.mode, onDismiss = { showTime = false }, onApply = actions.setSchedule)
+    if (showTime) TimeSheet(state.departure, state.mode, onDismiss = { showTime = false }, onApply = actions.setSchedule, now = now)
     if (showGoal) GoalSheet(state.goal, onDismiss = { showGoal = false }, onSelect = { actions.setGoal(it); showGoal = false })
 }
 

@@ -79,7 +79,7 @@ class CandidatesViewModelTest {
         vm.toggleFilter(TransitRouteType.SUBWAY)
         vm.highlight(0)
         val arrival = clock.withHour(23).withMinute(37)
-        vm.updateRequest(transitRequest.copy(departure = arrival, timeMode = com.sunseat.app.domain.TimeMode.ARRIVE), 1)
+        vm.updateRequest(transitRequest.copy(departure = arrival), 1)
         assertTrue((vm.state.value as CandidatesState.Options).items.all { it.chosen.cachedResult == null })
         advanceUntilIdle()
         val state = vm.state.value as CandidatesState.Options
@@ -87,7 +87,7 @@ class CandidatesViewModelTest {
         assertEquals(CandidateSort.WALK, state.sort)
         assertEquals(setOf(TransitRouteType.SUBWAY), state.filters)
         assertEquals(0, state.selectedId)
-        assertTrue(state.items.all { it.arrival == arrival })
+        assertTrue(state.items.all { it.arrival == arrival.plus(it.totalDuration) })
         clock = clock.plusHours(1)
         vm.updateRequest(transitRequest, 2)
         advanceUntilIdle()
@@ -113,11 +113,11 @@ class CandidatesViewModelTest {
         val vm = CandidatesViewModel(transitRequest, transit, noCar, compute = dispatcher)
         runCurrent()
         val arrival = java.time.LocalDateTime.of(2026, 11, 19, 12, 37)
-        vm.updateRequest(transitRequest.copy(departure = arrival, timeMode = com.sunseat.app.domain.TimeMode.ARRIVE), 1)
+        vm.updateRequest(transitRequest.copy(departure = arrival), 1)
         response.complete(ApiResult.Success(TransitRoutes(options)))
         advanceUntilIdle()
         assertEquals(1, calls)
-        assertTrue((vm.state.value as CandidatesState.Options).items.all { it.arrival == arrival })
+        assertTrue((vm.state.value as CandidatesState.Options).items.all { it.arrival == arrival.plus(it.totalDuration) })
     }
 
     @Test

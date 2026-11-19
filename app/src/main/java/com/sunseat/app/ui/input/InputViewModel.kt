@@ -52,7 +52,6 @@ data class InputUiState(
     val mode: TravelMode = TravelMode.TRANSIT,
     /** null이면 "지금" */
     val departure: LocalDateTime? = null,
-    val timeMode: com.sunseat.app.domain.TimeMode = com.sunseat.app.domain.TimeMode.DEPART,
     val goal: SunGoal = SunGoal.AVOID,
     val search: SearchState? = null,
     val locating: Boolean = false,
@@ -123,7 +122,7 @@ class InputViewModel(
         _state.update { state -> state.copy(
             origin = state.origin?.takeIf { it.place == request.origin } ?: Endpoint(request.origin),
             destination = state.destination?.takeIf { it.place == request.destination } ?: Endpoint(request.destination),
-            mode = request.mode, departure = request.departure, timeMode = request.timeMode, goal = request.goal,
+            mode = request.mode, departure = request.departure, goal = request.goal,
         ) }
     }
     fun automaticRequest(): TripRequest? {
@@ -134,8 +133,8 @@ class InputViewModel(
         return request
     }
 
-    fun setSchedule(value: LocalDateTime?, mode: com.sunseat.app.domain.TimeMode) {
-        _state.update { it.copy(departure = value, timeMode = if (value == null) com.sunseat.app.domain.TimeMode.DEPART else mode) }
+    fun setSchedule(value: LocalDateTime?) {
+        _state.update { it.copy(departure = value) }
     }
 
     private var searchJob: Job? = null
@@ -369,7 +368,7 @@ class InputViewModel(
         val s = _state.value
         if (!s.canSubmit) return null
         val departure = s.departure
-        return TripRequest(s.origin!!.place, s.destination!!.place, s.mode, departure, s.goal, s.timeMode)
+        return TripRequest(s.origin!!.place, s.destination!!.place, s.mode, departure, s.goal)
     }
 
     companion object {

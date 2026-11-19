@@ -22,6 +22,7 @@ fun InputRoute(
     graph: AppGraph,
     onSubmit: (TripRequest) -> Unit,
     modifier: Modifier = Modifier,
+    onSchedule: (com.sunseat.app.domain.TripRequest) -> Unit = {},
     onSettings: () -> Unit = {},
     onFavorites: (com.sunseat.app.data.favorites.FavoriteKind?) -> Unit = {},
     currentLocationName: String = androidx.compose.ui.res.stringResource(com.sunseat.app.R.string.location_use_current),
@@ -35,7 +36,7 @@ fun InputRoute(
     val context = LocalContext.current
     val permission = rememberLocationPermissionState(onResult = viewModel::onLocationPermission)
 
-    LaunchedEffect(state.origin, state.destination, state.mode, state.departure, state.timeMode, state.goal, state.search, state.locating) {
+    LaunchedEffect(state.origin, state.destination, state.mode, state.departure, state.goal, state.search, state.locating) {
         viewModel.automaticRequest()?.let(onSubmit)
     }
     LaunchedEffect(permission.status) {
@@ -43,6 +44,7 @@ fun InputRoute(
     }
 
     InputScreen(
+        now = java.time.LocalDateTime.now(graph.clock),
         state = state,
         modifier = modifier,
         actions = InputActions(
@@ -79,7 +81,13 @@ fun InputRoute(
             swap = viewModel::swap,
             setMode = viewModel::setMode,
             setDeparture = viewModel::setDeparture,
-            setSchedule = viewModel::setSchedule,
+            setSchedule = { value ->
+                viewModel.setSchedule(value)
+                viewModel.buildRequest()?.let { request ->
+                    viewModel.acceptRequest(request)
+                    onSchedule(request)
+                }
+            },
             setGoal = viewModel::setGoal,
             submit = { viewModel.submit()?.let(onSubmit) },
         ),

@@ -40,7 +40,7 @@ class ResultViewModel(
     settings: kotlinx.coroutines.flow.Flow<com.sunseat.app.data.settings.Settings> = kotlinx.coroutines.flow.flowOf(com.sunseat.app.data.settings.Settings.DEFAULT),
 ) : ViewModel() {
 
-    private val departure: Instant = request.departureInstant(chosen.totalDuration, chosen.cachedResult?.departure ?: now(), zone)
+    private val departure: Instant = request.departureInstant(chosen.cachedResult?.departure ?: now(), zone)
     private val cached = chosen.cachedResult?.takeIf { it.goal == request.goal && it.departure == departure }
     private val _state = MutableStateFlow(ResultUiState(goal = request.goal, departure = departure, result = cached))
     val state: StateFlow<ResultUiState> = _state.asStateFlow()

@@ -36,7 +36,7 @@ fun ResultRoute(
     modifier: Modifier = Modifier,
     onSettings: () -> Unit = {},
     onSimulation: (TripResult) -> Unit = {},
-    onSchedule: (java.time.LocalDateTime?, com.sunseat.app.domain.TimeMode, SunGoal) -> Unit = { _, _, _ -> },
+    onSchedule: (java.time.LocalDateTime?, SunGoal) -> Unit = { _, _ -> },
     calculationRevision: Long = 0,
     viewModel: ResultViewModel = viewModel(
         key = request.toString() + chosen.hashCode() + ":" + calculationRevision,
@@ -46,13 +46,14 @@ fun ResultRoute(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     ResultScreen(
+        now = java.time.LocalDateTime.now(graph.clock),
         request = request,
         state = state,
         modifier = modifier,
         actions = ResultActions(
             onSettings = onSettings,
             onSimulation = { state.result?.let(onSimulation) },
-            onSchedule = { value, mode -> onSchedule(value, mode, state.goal) },
+            onSchedule = { value -> onSchedule(value, state.goal) },
             onBack = onBack,
             onRestart = onRestart,
             onShare = { state.result?.let { share(context, request, it) } },

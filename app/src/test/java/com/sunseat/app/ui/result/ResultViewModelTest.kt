@@ -76,14 +76,14 @@ class ResultViewModelTest {
     }
 
     @Test
-    fun arrivalModeUsesTotalRouteDuration() = runTest(dispatcher) {
+    fun departureKeepsTotalArrivalAndModeledArrival() = runTest(dispatcher) {
         val at = LocalDateTime.of(2026, 11, 17, 9, 0)
         val duration = java.time.Duration.ofMinutes(90)
-        val vm = ResultViewModel(transitRequest.copy(departure = at, timeMode = com.sunseat.app.domain.TimeMode.ARRIVE),
+        val vm = ResultViewModel(transitRequest.copy(departure = at),
             com.sunseat.app.ui.candidates.ChosenRoute(transitRoute, duration), advisor(90.0, 30.0), now = { departure }, zone = zone, compute = dispatcher)
         advanceUntilIdle()
-        assertEquals(at.atZone(zone).toInstant() - duration, vm.state.value.result!!.departure)
-        assertEquals(at.atZone(zone).toInstant(), vm.state.value.result!!.arrival)
+        assertEquals(at.atZone(zone).toInstant(), vm.state.value.result!!.departure)
+        assertEquals(at.atZone(zone).toInstant() + duration, vm.state.value.result!!.arrival)
         assertEquals(vm.state.value.result!!.departure + transitRoute.duration, vm.state.value.result!!.modeledArrival)
     }
 

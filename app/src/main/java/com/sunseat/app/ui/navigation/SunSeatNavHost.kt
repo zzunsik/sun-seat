@@ -68,6 +68,7 @@ fun SunSeatNavHost(graph: AppGraph, modifier: Modifier = Modifier, navigation: S
             }
             entry<Screen.Input> {
                 InputRoute(graph = graph, viewModel = input,
+                    onSchedule = navigation::updateRequest,
                     onSubmit = { navigation.updateRequest(it); backStack.add(Screen.Candidates(it)) },
                     onSettings = { backStack.add(Screen.Settings) }, onFavorites = { backStack.add(Screen.Favorites(it)) })
             }
@@ -112,7 +113,7 @@ fun SunSeatNavHost(graph: AppGraph, modifier: Modifier = Modifier, navigation: S
                     chosen = chosen,
                     calculationRevision = navigation.revision,
                     onSimulation = { result -> backStack.add(Screen.Simulation(request.copy(goal = result.goal), chosen, result)) },
-                    onSchedule = { value, mode, goal -> updateRequest(request.copy(departure = value, timeMode = mode, goal = goal)) },
+                    onSchedule = { value, goal -> updateRequest(request.copy(departure = value, goal = goal)) },
                     onBack = { backStack.removeAt(backStack.lastIndex) },
                     // 다시 찾기: 입력 화면으로 돌아간다(입력 내용은 입력 화면 상태에 남아 있다)
                     onRestart = { while (backStack.size > 1) backStack.removeAt(backStack.lastIndex) },
