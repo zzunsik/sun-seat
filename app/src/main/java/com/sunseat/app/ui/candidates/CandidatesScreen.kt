@@ -117,7 +117,7 @@ fun CandidatesScreen(
     val peek = (Sizes.mapHeight + Sizes.mapHeight / 2 + Spacing.touch + Spacing.xxl)
         .coerceAtMost((maxHeight - headerHeight).coerceAtLeast(Spacing.touch))
     BottomSheetScaffold(
-        modifier = modifier.fillMaxSize(), scaffoldState = scaffoldState, containerColor = scheme.background,
+        modifier = Modifier.fillMaxSize(), scaffoldState = scaffoldState, containerColor = scheme.background,
         sheetContainerColor = scheme.surface, sheetPeekHeight = peek,
         topBar = {
             Surface(color = scheme.surface) {
