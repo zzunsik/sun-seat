@@ -56,7 +56,7 @@ internal object CabinCamera {
 
     fun seat(p: CabinProfile, seat: CabinSeat, aspect: Double, inset: CabinInset = CabinInset.NONE): CabinView {
         val r = seat.right
-        // Cushion, backrest top and the selection check must all be readable.
+        // Cushion (with its selection outline) and backrest top. The floating check badge may crop in this close-up.
         val frame = listOf(0.0 to 0.0, 1.0 to 0.0, 0.0 to 1.0, 1.0 to 1.0).map { (u, v) -> seat.sample(SeatSurface.CUSHION, u, v) } +
             listOf(0.0, 1.0).map { seat.sample(SeatSurface.BACK, it, 1.0) }
         val lateral = if (abs(seat.facing.z) > .5) r * (if (seat.center.x * r.x > 0) -1.0 else 1.0)
@@ -74,20 +74,18 @@ internal object CabinCamera {
             while (distance(view) > limit && fov < MAX_FOV) {
                 fov += 2.0; view = fit(frame, frame, dir, fov, aspect, inset, SEAT_MARGIN, near = .03)
             }
-            if (fallback == null) fallback = view
-            if (distance(view) > limit) continue
+            val inside = distance(view) <= limit && insideCabin(p, view.eye, blockers)
+            if (fallback == null || (inside && !insideCabin(p, fallback.eye, blockers))) fallback = view
+            if (!inside) continue
             if (samples.all { visible(it, view.eye, blockers) }) return view
         }
+        // Unreachable for current profiles (CabinCameraTest); otherwise prefer a camera that is at least inside.
         return fallback!!
     }
 
     /** Calculation blockers that are not part of [seat] itself (its own back/headrest sit behind its surfaces). */
     internal fun othersBlockers(p: CabinProfile, seat: CabinSeat): List<CabinBox> {
-        val own = buildList {
-            add(seat.backBox)
-            val head = seat.center + seat.facing * (-seat.depth / 2) + V3(0.0, .66, 0.0)
-            add(CabinBox(head - V3(.15, .1, .06), head + V3(.15, .1, .06)))
-        }
+        val own = listOf(seat.backBox, seat.headrestBox)
         return p.blockers.filter { it !in own }
     }
 
@@ -123,20 +121,25 @@ internal object CabinCamera {
         val center = points.fold(V3(0.0, 0.0, 0.0)) { a, b -> a + b } * (1.0 / points.size)
         val f = dir * -1.0; val r = f.cross(UP).unit(); val u = r.cross(f)
         val t = tan(Math.toRadians(fov / 2))
+        // Axes depend only on dir; re-centring shifts the target sideways, so project with a fixed basis.
+        fun ndc(eye: V3, p: V3): Pair<Double, Double>? {
+            val q = p - eye; val z = q.dot(f)
+            return if (z <= 1e-6) null else q.dot(r) / (z * t * aspect) to q.dot(u) / (z * t)
+        }
         fun at(d: Double): Pair<CabinView, Boolean> {
             var target = center
             var view = CabinView(target + dir * d, target, fov, near, d * 3 + 10)
             repeat(4) {
-                val ps = points.mapNotNull { project(view, aspect, it) }
+                val ps = points.mapNotNull { ndc(view.eye, it) }
                 if (ps.size < points.size) return view to false
                 val cx = (ps.maxOf { it.first } + ps.minOf { it.first }) / 2
                 val cy = (ps.maxOf { it.second } + ps.minOf { it.second }) / 2
                 target += r * (cx * d * t * aspect) + u * (cy * d * t)
                 view = CabinView(target + dir * d, target, fov, near, d * 3 + 10)
             }
-            val ps = points.map { project(view, aspect, it) ?: return view to false }
+            val ps = points.map { ndc(view.eye, it) ?: return view to false }
             val fits = ps.all { abs(it.first) <= margin && abs(it.second) <= margin } && guarded.none { g ->
-                project(view, aspect, g)?.let { it.first > 1 - 2 * inset.width && it.second > 1 - 2 * inset.height } ?: true
+                ndc(view.eye, g)?.let { it.first > 1 - 2 * inset.width && it.second > 1 - 2 * inset.height } ?: true
             }
             return view to fits
         }
