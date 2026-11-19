@@ -128,6 +128,9 @@ class CandidatesSheetTest {
     private fun expandAndCheckCompactBar(request: com.sunseat.app.domain.TripRequest = CandidatesFixtures.transitRequest, fontScale: Float = 1f) {
         var backs = 0
         val (sheet, scope) = renderSheet(request, fontScale) { backs++ }
+        fun cameraRevision() = compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey]
+        // 헤더 전환으로 지도 크기가 바뀌어도 카메라를 다시 맞추지 않는다(#71 계약).
+        val revision = cameraRevision()
         assertHeaderNotCut("collapsed")
         compose.onNodeWithText("출발", useUnmergedTree = true).assertExists()
         compose.runOnIdle { scope.launch { sheet.bottomSheetState.expand() } }
@@ -148,6 +151,7 @@ class CandidatesSheetTest {
         compose.waitForIdle()
         assertEquals(androidx.compose.material3.SheetValue.PartiallyExpanded, sheet.bottomSheetState.currentValue)
         assertHeaderNotCut("restored")
+        assertEquals(revision, cameraRevision())
         compose.onNodeWithContentDescription("출발지와 도착지 바꾸기").assertIsDisplayed()
         compose.onNodeWithText("지금 출발", useUnmergedTree = true).assertIsDisplayed()
     }
@@ -164,9 +168,14 @@ class CandidatesSheetTest {
     @Test @Config(qualifiers = "w844dp-h390dp-xxhdpi")
     fun expandedSheetLandscape() = expandAndCheckCompactBar()
 
-    @Test fun draggingSheetNeverLeavesHeaderFragment() {
-        renderSheet()
-        val step = with(androidx.compose.ui.unit.Density(3f)) { 40.dp.toPx() }
+    @Test fun draggingSheetNeverLeavesHeaderFragment() = dragAcrossHeader()
+
+    @Test @Config(qualifiers = "w320dp-h640dp-xxhdpi")
+    fun draggingSheetSmallScreenLargeText() = dragAcrossHeader(1.5f)
+
+    private fun dragAcrossHeader(fontScale: Float = 1f) {
+        renderSheet(fontScale = fontScale)
+        val step = with(compose.density) { 40.dp.toPx() }
         compose.onNodeWithTag("candidate_list").performTouchInput { down(topCenter + androidx.compose.ui.geometry.Offset(0f, 10f)) }
         repeat(10) { index ->
             compose.onNodeWithTag("candidate_list").performTouchInput { moveBy(androidx.compose.ui.geometry.Offset(0f, -step)) }
@@ -202,5 +211,11 @@ class CandidatesSheetTest {
         assertEquals(androidx.compose.material3.SheetValue.Expanded, sheet.bottomSheetState.currentValue)
         assertHeaderNotCut("recreated")
         compose.onNodeWithTag("candidates_journey_bar").assertIsDisplayed()
+        compose.onNodeWithTag("candidates_journey_bar").performSemanticsAction(SemanticsActions.OnClick)
+        compose.mainClock.advanceTimeBy(5000)
+        compose.waitForIdle()
+        assertEquals(androidx.compose.material3.SheetValue.PartiallyExpanded, sheet.bottomSheetState.currentValue)
+        assertHeaderNotCut("recreated then restored")
+        compose.onNodeWithContentDescription("출발지와 도착지 바꾸기").assertIsDisplayed()
     }
 }

@@ -53,6 +53,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.platform.LocalContext
 import com.sunseat.app.ui.input.NeutralTabs
@@ -152,6 +155,13 @@ fun CandidatesScreen(
     var journeyBarHeight by remember { mutableStateOf(0.dp) }
     var dragHandleHeight by remember { mutableStateOf(0.dp) }
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    // 가로 화면 옆 컷아웃 아래로 뒤로·편집 컨트롤이 들어가지 않게 한다.
+    val cutoutSides = WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal)
+    // 펼친 헤더가 접혔다 다시 보여도 스크롤 위치를 유지한다.
+    val headerScroll = rememberScrollState()
+    // 축약 여정 바를 재기 전 어림값: 제목 2줄 + 보조 1줄(현재 글자 크기). 실제보다 작게 어림하면 시트가 바를 덮는다.
+    val typography = MaterialTheme.typography
+    val journeyBarEstimate = statusBarTop + with(density) { maxOf(Sizes.journeyBar, (typography.titleMedium.lineHeight * 2).toDp() + typography.bodySmall.lineHeight.toDp() + Spacing.xs * 2) }
     BoxWithConstraints(modifier.fillMaxSize()) {
     val viewportHeight = maxHeight
     val headerLimit = (maxHeight - Spacing.touch * 3).coerceAtLeast(Spacing.touch)
@@ -161,7 +171,7 @@ fun CandidatesScreen(
     val peek = (if (preview) Sizes.mapHeight.coerceAtMost((maxHeight - peekTop).coerceAtLeast(Spacing.touch) / 2) else Sizes.mapHeight + Sizes.mapHeight / 2 + Spacing.touch + Spacing.xxl)
         .coerceAtMost((maxHeight - peekTop).coerceAtLeast(Spacing.touch))
     // 완전 확장한 시트(손잡이 포함)의 위끝은 축약 여정 바 바로 아래다. 바·손잡이를 재기 전에는 최소 높이로 어림한다.
-    val listSheetMax = (maxHeight - (if (journeyBarHeight > 0.dp) journeyBarHeight else statusBarTop + Sizes.journeyBar) - (if (dragHandleHeight > 0.dp) dragHandleHeight else Spacing.touch)).coerceAtLeast(Spacing.touch)
+    val listSheetMax = (maxHeight - (if (journeyBarHeight > 0.dp) journeyBarHeight else journeyBarEstimate) - (if (dragHandleHeight > 0.dp) dragHandleHeight else Spacing.touch)).coerceAtLeast(Spacing.touch)
     // 시트가 펼친 헤더 아래끝보다 올라오면(완전 확장·중간 드래그) 펼친 헤더를 통째로 접고 축약 여정 바로 바꾼다.
     // 시트 앵커는 헤더 높이와 무관하므로 바뀌어도 시트가 움직이지 않는다.
     val fullHeaderPx = with(density) { listHeader.toPx() }
@@ -188,13 +198,13 @@ fun CandidatesScreen(
         sheetDragHandle = { Box(Modifier.testTag("candidates_sheet_handle").onSizeChanged { dragHandleHeight = with(density) { it.height.toDp() } }) { BottomSheetDefaults.DragHandle() } },
         topBar = {
             Surface(color = scheme.surface, modifier = Modifier.testTag("candidates_header").onSizeChanged { headerHeight = with(density) { it.height.toDp() } }) {
-                if (preview) Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = Spacing.s), verticalAlignment = Alignment.CenterVertically) {
+                if (preview) Row(Modifier.fillMaxWidth().statusBarsPadding().windowInsetsPadding(cutoutSides).padding(horizontal = Spacing.s), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = ::closePreview) { Icon(painterResource(R.drawable.ic_ms_arrow_back), stringResource(R.string.candidates_preview_close)) }
                     Text("${request.origin.name} → ${request.destination.name}", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     QuietButton(onClick = { userMoved = false; fitTrigger++ }) { Text(stringResource(R.string.candidates_fit_route)) }
-                } else if (compactHeader) JourneyBar(request, now, actions.onBack, Modifier.onSizeChanged { journeyBarHeight = with(density) { it.height.toDp() } }) {
+                } else if (compactHeader) JourneyBar(request, now, actions.onBack, Modifier.windowInsetsPadding(cutoutSides).onSizeChanged { journeyBarHeight = with(density) { it.height.toDp() } }) {
                     scope.launch { scaffoldState.bottomSheetState.partialExpand() }
-                } else Column(Modifier.onSizeChanged { fullHeaderHeight = with(density) { it.height.toDp() } }.fillMaxWidth().heightIn(max = headerLimit).verticalScroll(rememberScrollState()).statusBarsPadding().padding(horizontal = Spacing.screen, vertical = Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+                } else Column(Modifier.onSizeChanged { fullHeaderHeight = with(density) { it.height.toDp() } }.fillMaxWidth().heightIn(max = headerLimit).verticalScroll(headerScroll).statusBarsPadding().windowInsetsPadding(cutoutSides).padding(horizontal = Spacing.screen, vertical = Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = actions.onBack) { Icon(painterResource(R.drawable.ic_ms_arrow_back), stringResource(R.string.common_back)) }
                         Column(Modifier.weight(1f)) {
