@@ -46,10 +46,7 @@ fun CandidatesRoute(
             onBack = onBack,
             onSelect = { onSelect(it.chosen) },
             onRetry = viewModel::load,
-            onHighlight = { item ->
-                if ((viewModel.state.value as? CandidatesState.Options)?.selectedId == item.id) onSelect(item.chosen)
-                else viewModel.highlight(item.id)
-            },
+            onHighlight = { item -> viewModel.highlight(item.id) },
             onSort = viewModel::setSort, onFilter = viewModel::toggleFilter, onClearFilters = viewModel::clearFilters,
             onRequestChange = onRequestChange,
             onSearchByCar = onSearchByCar,

@@ -81,6 +81,17 @@ class CandidatesSheetTest {
         assertEquals(before, after, 0.001f)
         assertEquals(CandidateSort.WALK, state.sort)
         assertEquals(setOf(base.type), state.filters)
+        // Reopening the same card requests one settled route fit, preserving the list.
+        compose.onNodeWithTag("candidate_5").performSemanticsAction(SemanticsActions.OnClick)
+        compose.onNodeWithText("선택한 경로").assertExists()
+        compose.waitUntil(10_000) { compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey] > revision }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.waitForIdle()
+        assertEquals(revision + 1, compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey])
+        revision++
+        compose.onAllNodesWithContentDescription("경로 목록으로 돌아가기")[0].performSemanticsAction(SemanticsActions.OnClick)
+        compose.waitForIdle()
+        assertEquals(before, compose.onNodeWithTag("candidate_list").fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value(), 0.001f)
         compose.onNodeWithText("최소 시간").performSemanticsAction(SemanticsActions.OnClick)
         compose.mainClock.advanceTimeBy(1000)
         compose.waitForIdle()

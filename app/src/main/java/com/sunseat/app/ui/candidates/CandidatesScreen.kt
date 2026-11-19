@@ -216,7 +216,8 @@ fun CandidatesScreen(
                     is CandidatesState.Loading -> Loading(content, state.mode, animateLoader)
                     is CandidatesState.Options -> if (state.visible.isEmpty()) Message(content, R.drawable.ic_ms_search, stringResource(R.string.candidates_filtered_empty), null, stringResource(R.string.candidates_clear_filters) to actions.onClearFilters, stringResource(R.string.candidates_edit_input) to actions.onBack)
                         else OptionList(state.visible, state.selectedId, request, content, actions.copy(onHighlight = {
-                            showPreview = state.selectedId != it.id
+                            userMoved = false
+                            showPreview = true
                             actions.onHighlight(it)
                         }), listScroll)
                     is CandidatesState.NoRoute -> Message(content, R.drawable.ic_ms_directions_bus, stringResource(state.titleRes), state.detailRes?.let { stringResource(it) }, if (state.suggestCar) stringResource(R.string.candidates_search_by_car) to actions.onSearchByCar else null, stringResource(R.string.candidates_edit_input) to actions.onBack)

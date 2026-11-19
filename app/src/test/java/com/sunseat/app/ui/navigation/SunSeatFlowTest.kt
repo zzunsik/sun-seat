@@ -160,6 +160,28 @@ class SunSeatFlowTest {
         compose.onNodeWithText(text(R.string.candidates_view_seat)).assertDoesNotExist()
     }
 
+    @Test fun repeatedSelectedCardAlwaysPreviewsUntilExplicitSeatAction() {
+        val graph = launch()
+        enterTrip()
+        waitForText("30분")
+        clickText(text(R.string.candidates_sort_walk))
+        clickText(text(R.string.candidates_filter_subway))
+        repeat(3) {
+            compose.onNode(hasClickAction() and hasText("30분")).tap()
+            compose.onNodeWithText(text(R.string.candidates_preview_title)).assertExists()
+            compose.onNodeWithText(text(R.string.result_legs)).assertDoesNotExist()
+            assertEquals(1, graph.server.transitRequests)
+            back()
+            compose.onNodeWithText(text(R.string.candidates_sort_walk)).assertIsSelected()
+            compose.onNodeWithText(text(R.string.candidates_filter_subway)).assertIsSelected()
+            compose.onNode(hasClickAction() and hasText("30분")).assertIsSelected()
+        }
+        compose.onNode(hasClickAction() and hasText("30분")).tap()
+        clickText(text(R.string.candidates_view_seat))
+        waitForText(text(R.string.result_legs))
+        assertEquals(1, graph.server.transitRequests)
+    }
+
     @Test fun failedCurrentLocationEditDoesNotConfirmOldLocationOnDismiss() {
         shadowOf(compose.activity.application).grantPermissions(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
         var calls = 0
