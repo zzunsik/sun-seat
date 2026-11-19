@@ -416,16 +416,18 @@ class SunSeatFlowTest {
         clickText(text(R.string.input_now_depart))
         compose.onNodeWithTag("schedule_minute").performSemanticsAction(SemanticsActions.ScrollToIndex) { it(37) }
         compose.waitForIdle()
+        val selectedLabel = java.time.LocalDateTime.now(graph.clock).withMinute(37)
+            .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")) + " 출발"
         clickText(text(R.string.input_time_apply))
         compose.onNodeWithText("30분").assertDoesNotExist()
         compose.onNodeWithText(ORIGIN).assertExists()
         compose.onNodeWithText(DESTINATION).assertExists()
-        compose.onNodeWithText("10:37 출발", substring = true).assertExists()
+        compose.onNodeWithText(selectedLabel, substring = true).assertExists()
         assertEquals(1, graph.server.transitRequests)
-        compose.onNode(hasClickAction() and hasText("10:37 출발", substring = true)).tap()
+        compose.onNode(hasClickAction() and hasText(selectedLabel, substring = true)).tap()
         compose.onNodeWithTag("schedule_minute").assertExists()
         back()
-        compose.onNodeWithText("10:37 출발", substring = true).assertExists()
+        compose.onNodeWithText(selectedLabel, substring = true).assertExists()
         assertEquals(1, graph.server.transitRequests)
     }
 
