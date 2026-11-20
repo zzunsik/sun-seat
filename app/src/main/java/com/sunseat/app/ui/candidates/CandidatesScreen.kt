@@ -58,6 +58,9 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.ui.platform.LocalContext
 import com.sunseat.app.ui.input.NeutralTabs
 import com.sunseat.app.ui.components.CategoryTab
@@ -87,7 +90,6 @@ import com.sunseat.app.ui.components.PrimaryButton
 import com.sunseat.app.ui.components.QuietButton
 import com.sunseat.app.ui.components.SunLoader
 import com.sunseat.app.ui.formatDuration
-import com.sunseat.app.ui.formatWon
 import com.sunseat.app.ui.theme.CapsuleShape
 import com.sunseat.app.ui.theme.Sizes
 import com.sunseat.app.ui.theme.Spacing
@@ -126,8 +128,6 @@ internal fun candidateMapRoutes(visible: List<CandidateUi>, selectedId: Int?, pr
 /** 지도에 실제로 넘긴 후보 ID와 선택 index(테스트 관측용). */
 internal val CandidateMapRouteIdsKey = androidx.compose.ui.semantics.SemanticsPropertyKey<List<Int>>("CandidateMapRouteIds")
 internal val CandidateMapSelectedRouteKey = androidx.compose.ui.semantics.SemanticsPropertyKey<Int>("CandidateMapSelectedRoute")
-
-private val ArrivalFormat = DateTimeFormatter.ofPattern("HH:mm")
 
 /** 경로 후보 화면. 상태 없음(미리보기·스크린샷용). */
 @OptIn(ExperimentalMaterial3Api::class, kotlinx.coroutines.FlowPreview::class)
@@ -173,6 +173,9 @@ fun CandidatesScreen(
     var fullHeaderHeight by remember { mutableStateOf(0.dp) }
     var journeyBarHeight by remember { mutableStateOf(0.dp) }
     var dragHandleHeight by remember { mutableStateOf(0.dp) }
+    var previewSummaryHeight by remember { mutableStateOf(0.dp) }
+    var fitActionBottom by remember { mutableStateOf(0.dp) }
+    val navigationBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     // 가로 화면 옆 컷아웃 아래로 뒤로·편집 컨트롤이 들어가지 않게 한다.
     val cutoutSides = WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal)
@@ -187,7 +190,9 @@ fun CandidatesScreen(
     // 펼친 헤더를 재기 전에는 가장 큰 경우(headerLimit)로 보아 기본 시트가 헤더를 덮지 않게 한다.
     val listHeader = if (fullHeaderHeight > 0.dp) fullHeaderHeight else headerLimit
     val peekTop = if (preview) headerHeight else listHeader
-    val peek = (if (preview) Sizes.mapHeight.coerceAtMost((maxHeight - peekTop).coerceAtLeast(Spacing.touch) / 2) else Sizes.mapHeight + Sizes.mapHeight / 2 + Spacing.touch + Spacing.xxl)
+    // #102: 미리보기 접힌 높이는 실제로 잰 요약(총시간·막대·노선 조합·자리 보기) 높이이며, 상단 아래 영역의 절반을 넘지 않는다.
+    val previewPeek = if (previewSummaryHeight > 0.dp) (if (dragHandleHeight > 0.dp) dragHandleHeight else Spacing.touch) + previewSummaryHeight + navigationBottom else Sizes.mapHeight
+    val peek = (if (preview) previewPeek.coerceAtMost((maxHeight - peekTop).coerceAtLeast(Spacing.touch) / 2) else Sizes.mapHeight + Sizes.mapHeight / 2 + Spacing.touch + Spacing.xxl)
         .coerceAtMost((maxHeight - peekTop).coerceAtLeast(Spacing.touch))
     // 완전 확장한 시트(손잡이 포함)의 위끝은 축약 여정 바 바로 아래다. 바·손잡이를 재기 전에는 최소 높이로 어림한다.
     val listSheetMax = (maxHeight - (if (journeyBarHeight > 0.dp) journeyBarHeight else journeyBarEstimate) - (if (dragHandleHeight > 0.dp) dragHandleHeight else Spacing.touch)).coerceAtLeast(Spacing.touch)
@@ -201,7 +206,9 @@ fun CandidatesScreen(
         }
     }
     val offset = runCatching { with(density) { scaffoldState.bottomSheetState.requireOffset().toDp() } }.getOrDefault(maxHeight - peek)
+    // 미리보기의 지도 맞춤 행동 아래로 경로를 맞춰 출발·도착 표식이 행동에 가리지 않게 한다. 가로 화면은 지도가 낮아 위 여백을 빼면 경로가 거의 안 보이므로 주지 않는다.
     val mapPadding = com.sunseat.app.ui.map.sheetMapPadding(mapTop, mapHeight, scaffoldTop + offset)
+        .let { if (preview && mapHeight >= mapWidth) it.copy(top = fitActionBottom) else it }
     LaunchedEffect(fitTrigger, mapHeight, mapWidth) {
         if (fittedTrigger == fitTrigger) return@LaunchedEffect
         snapshotFlow { runCatching { scaffoldState.bottomSheetState.requireOffset() }.getOrDefault(Float.NaN) }
@@ -217,11 +224,9 @@ fun CandidatesScreen(
         sheetDragHandle = { Box(Modifier.testTag("candidates_sheet_handle").onSizeChanged { dragHandleHeight = with(density) { it.height.toDp() } }) { BottomSheetDefaults.DragHandle() } },
         topBar = {
             Surface(color = scheme.surface, modifier = Modifier.testTag("candidates_header").onSizeChanged { headerHeight = with(density) { it.height.toDp() } }) {
-                if (preview) Row(Modifier.fillMaxWidth().statusBarsPadding().windowInsetsPadding(cutoutSides).padding(horizontal = Spacing.s), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = ::closePreview) { Icon(painterResource(R.drawable.ic_ms_arrow_back), stringResource(R.string.candidates_preview_close)) }
-                    Text("${request.origin.name} → ${request.destination.name}", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    QuietButton(onClick = { userMoved = false; fitTrigger++ }) { Text(stringResource(R.string.candidates_fit_route)) }
-                } else if (compactHeader) JourneyBar(request, now, actions.onBack, Modifier.windowInsetsPadding(cutoutSides).onSizeChanged { journeyBarHeight = with(density) { it.height.toDp() } }) {
+                // #102: 미리보기 상단은 축약 여정 바(뒤로 하나 + 2줄까지 여정). 편집은 목록에서 하므로 누름 동작은 없다(DESIGN 12.3).
+                if (preview) JourneyBar(request, now, ::closePreview, Modifier.windowInsetsPadding(cutoutSides), backLabel = stringResource(R.string.candidates_preview_close), onExpand = null)
+                else if (compactHeader) JourneyBar(request, now, actions.onBack, Modifier.windowInsetsPadding(cutoutSides).onSizeChanged { journeyBarHeight = with(density) { it.height.toDp() } }) {
                     scope.launch { scaffoldState.bottomSheetState.partialExpand() }
                 } else Column(Modifier.onSizeChanged { fullHeaderHeight = with(density) { it.height.toDp() } }.fillMaxWidth().heightIn(max = headerLimit).verticalScroll(headerScroll).statusBarsPadding().windowInsetsPadding(cutoutSides).padding(horizontal = Spacing.screen, vertical = Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -242,15 +247,9 @@ fun CandidatesScreen(
         },
         sheetContent = {
             if (preview && previewCandidate != null) {
-                Column(Modifier.fillMaxWidth().heightIn(max = (viewportHeight - headerHeight - (if (dragHandleHeight > 0.dp) dragHandleHeight else Spacing.touch)).coerceAtLeast(Spacing.touch)).verticalScroll(rememberScrollState()).navigationBarsPadding().padding(Spacing.screen), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(stringResource(R.string.candidates_preview_title), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
-                            Text(formatDuration(previewCandidate.totalDuration), style = MaterialTheme.typography.bodyMedium)
-                        }
-                        IconButton(onClick = ::closePreview) { Icon(painterResource(R.drawable.ic_ms_close), stringResource(R.string.candidates_preview_close)) }
-                    }
-                    PrimaryButton(onClick = { showPreview = false; actions.onSelect(previewCandidate) }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.candidates_view_seat)) }
+                val paneTitle = stringResource(R.string.candidates_preview_title)
+                Column(Modifier.testTag("candidates_preview_sheet").semantics { this.paneTitle = paneTitle }.fillMaxWidth().heightIn(max = (viewportHeight - headerHeight - (if (dragHandleHeight > 0.dp) dragHandleHeight else Spacing.touch)).coerceAtLeast(Spacing.touch)).verticalScroll(rememberScrollState()).navigationBarsPadding()) {
+                    RoutePreviewSheet(previewCandidate, request, onSeat = { showPreview = false; actions.onSelect(previewCandidate) }) { previewSummaryHeight = with(density) { it.toDp() } }
                 }
             } else Column(Modifier.testTag("candidates_sheet").fillMaxWidth().heightIn(max = listSheetMax).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                 if (options != null && request.mode == TravelMode.TRANSIT) {
@@ -296,6 +295,18 @@ fun CandidatesScreen(
         }.onGloballyPositioned {
             with(density) { mapTop = it.positionInRoot().y.toDp(); mapHeight = it.size.height.toDp(); mapWidth = it.size.width.toDp() }
         })
+        // #102: 선택 경로 맞춤은 카메라만 옮기는 조용한 행동이다(DESIGN 13). 다른 후보를 다시 그리지 않는다(#99).
+        if (preview) {
+            val fitLabel = stringResource(R.string.candidates_fit_route_action)
+            FloatingCapsule(Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)).padding(Spacing.s)
+                .onGloballyPositioned { fitActionBottom = with(density) { (it.positionInRoot().y + it.size.height).toDp() } - mapTop }) {
+                QuietButton(onClick = { userMoved = false; fitTrigger++ }, modifier = Modifier.semantics { onClick(label = fitLabel) { userMoved = false; fitTrigger++; true } }) {
+                    Icon(painterResource(R.drawable.ic_ms_fit_screen), null, Modifier.size(Sizes.iconSmall))
+                    Spacer(Modifier.width(Spacing.xs))
+                    Text(stringResource(R.string.candidates_fit_route), style = MaterialTheme.typography.labelLarge)
+                }
+            }
+        }
         }
     }
     }
@@ -320,9 +331,10 @@ fun CandidatesScreen(
 /**
  * 축약 여정 바(DESIGN 5.1): 시트를 완전히 펼쳤을 때 펼친 헤더 대신 보인다.
  * 뒤로 + "출발 → 도착" / "수단 · 출발 시각". 바를 누르면 시트를 기본 높이로 내려 펼친 헤더(편집·맞바꾸기·시각)로 돌아간다.
+ * 선택 미리보기(#102)도 같은 바를 쓰되 [onExpand] 없이(누름 동작 없음) 뒤로가 목록 복귀다.
  */
 @Composable
-private fun JourneyBar(request: TripRequest, now: java.time.LocalDateTime, onBack: () -> Unit, modifier: Modifier = Modifier, onExpand: () -> Unit) {
+private fun JourneyBar(request: TripRequest, now: java.time.LocalDateTime, onBack: () -> Unit, modifier: Modifier = Modifier, backLabel: String = stringResource(R.string.common_back), onExpand: (() -> Unit)?) {
     val scheme = SunSeatTheme.scheme
     val mode = stringResource(when (request.mode) {
         TravelMode.TRANSIT -> R.string.input_mode_transit
@@ -330,10 +342,11 @@ private fun JourneyBar(request: TripRequest, now: java.time.LocalDateTime, onBac
         TravelMode.CAR -> R.string.common_car
     })
     Row(modifier.fillMaxWidth().statusBarsPadding().heightIn(min = Sizes.journeyBar).padding(horizontal = Spacing.s), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onBack) { Icon(painterResource(R.drawable.ic_ms_arrow_back), stringResource(R.string.common_back)) }
+        IconButton(onClick = onBack) { Icon(painterResource(R.drawable.ic_ms_arrow_back), backLabel) }
+        val expandLabel = stringResource(R.string.candidates_journey_expand)
         Column(
             Modifier.weight(1f).heightIn(min = Spacing.touch).testTag("candidates_journey_bar")
-                .clickable(role = Role.Button, onClickLabel = stringResource(R.string.candidates_journey_expand), onClick = onExpand)
+                .then(if (onExpand != null) Modifier.clickable(role = Role.Button, onClickLabel = expandLabel, onClick = onExpand) else Modifier)
                 .padding(horizontal = Spacing.s, vertical = Spacing.xs),
             verticalArrangement = Arrangement.Center,
         ) {
@@ -439,17 +452,7 @@ internal fun CandidateCard(item: CandidateUi, selected: Boolean, request: TripRe
                         Text(stringResource(R.string.candidates_fastest), Modifier.heightIn(min = Sizes.badgeHeight).padding(horizontal = Spacing.xs), style = MaterialTheme.typography.labelMedium)
                     }
                 }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                    item.arrival?.let { arrival ->
-                        val departure = arrival.minus(item.totalDuration)
-                        val arrivalLabel = if (arrival.toLocalDate() > departure.toLocalDate())
-                            stringResource(R.string.candidates_next_day, arrival.format(ArrivalFormat)) else arrival.format(ArrivalFormat)
-                        Text(stringResource(R.string.candidates_compact_schedule, departure.format(ArrivalFormat), arrivalLabel),
-                            style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
-                    }
-                    item.fare?.let { Text(if (taxi) stringResource(R.string.candidates_taxi_fare, formatWon(it)) else formatWon(it),
-                        style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant) }
-                }
+                CandidateScheduleFare(item, taxi)
                 RouteSegmentBar(item, taxi = taxi)
                 if (request.mode == TravelMode.TRANSIT) {
                     val walkLabel = item.providedWalk?.let { walking ->

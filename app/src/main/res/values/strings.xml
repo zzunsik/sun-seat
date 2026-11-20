@@ -365,7 +365,8 @@
     <string name="simulation_route_overview">출발 %1$s → 도착 %2$s</string>
     <string name="candidates_preview_title">선택한 경로</string>
     <string name="candidates_preview_close">경로 목록으로 돌아가기</string>
-    <string name="candidates_fit_route">전체 경로 보기</string>
+    <string name="candidates_fit_route">지도 맞춤</string>
+    <string name="candidates_fit_route_action">선택 경로가 보이게 지도 맞추기</string>
     <string name="candidates_journey_expand">여정 펼쳐서 바꾸기</string>
     <string name="candidates_compact_schedule">%1$s → %2$s</string>
     <string name="candidates_next_day">다음 날 %1$s</string>

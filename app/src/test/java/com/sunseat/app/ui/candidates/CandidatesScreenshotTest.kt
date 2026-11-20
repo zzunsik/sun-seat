@@ -273,5 +273,49 @@ class CandidatesScreenshotTest {
         shot("candidates_same_line_reboarding_light")
     }
 
+    /** #102: 접힌 요약(총시간·환승·막대·노선 조합·자리 보기)과 펼친 상세(시각·요금·전체 장소명·타임라인). */
+    private val longRequest = transitRequest.copy(origin = transitRequest.origin.copy(name = "아주 긴 견본 출발지 이름과 부가 설명"),
+        destination = transitRequest.destination.copy(name = "아주 긴 견본 목적지 이름과 부가 설명"))
+    private val readableList = list.copy(items = listOf(CandidatesFixtures.readable.toUi(0, java.time.LocalDateTime.of(2026, 11, 15, 9, 0), false)) + list.items.map { it.copy(id = it.id + 1) })
+
+    private fun previewSummary(dark: Boolean, name: String, fontScale: Float = 1f, state: CandidatesState.Options = list,
+                               request: com.sunseat.app.domain.TripRequest = transitRequest, expand: Boolean = false) {
+        compose.enableAccessibilityChecks()
+        val (sheet, scope) = render(state, dark, request, fontScale)
+        compose.onNodeWithTag("candidate_${state.items.first().id}").performSemanticsAction(SemanticsActions.OnClick)
+        compose.mainClock.advanceTimeBy(5000)
+        compose.waitUntil(10_000) { compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey] > 0 }
+        if (expand) {
+            compose.runOnIdle { scope.launch { sheet.bottomSheetState.expand() } }
+            compose.mainClock.advanceTimeBy(5000)
+            compose.waitForIdle()
+            org.junit.Assert.assertEquals(SheetValue.Expanded, sheet.bottomSheetState.currentValue)
+        } else compose.onNodeWithText("자리 보기").assertIsDisplayed()
+        compose.onRoot().tryPerformAccessibilityChecks()
+        shot(name)
+    }
+
+    @Test @Config(qualifiers = "w320dp-h640dp-xxhdpi")
+    fun previewSmallLargeTextDark() = previewSummary(true, "candidates_preview_small_large_text_dark", 1.5f)
+    @Test @Config(qualifiers = "w320dp-h640dp-xxhdpi")
+    fun previewLongNamesTransfersSmallLargeText() = previewSummary(false, "candidates_preview_long_small_large_text", 1.5f, readableList, longRequest)
+    @Test fun previewTransfersLight() = previewSummary(false, "candidates_preview_transfers_light", state = readableList)
+    @Test fun previewExpandedLight() = previewSummary(false, "candidates_preview_expanded_light", expand = true)
+    @Test fun previewExpandedDark() = previewSummary(true, "candidates_preview_expanded_dark", expand = true)
+    @Test @Config(qualifiers = "w320dp-h640dp-xxhdpi")
+    fun previewExpandedSmallLargeTextLongNames() = previewSummary(false, "candidates_preview_expanded_small_large_text", 1.5f, readableList, longRequest, expand = true)
+
+    @Test fun previewTaxiLight() {
+        val route = com.sunseat.app.ui.result.ResultFixtures.carRoute
+        val item = list.items.first().copy(totalDuration = route.duration, arrival = null, transfers = 0, walkMinutes = 0, fare = 14500, chips = listOf(LegChip(com.sunseat.app.domain.Mode.CAR)), boardAt = "", alightAt = "", chosen = ChosenRoute(route, route.duration))
+        previewSummary(false, "candidates_preview_taxi_light", state = CandidatesState.Options(listOf(item)), request = transitRequest.copy(mode = com.sunseat.app.domain.TravelMode.TAXI))
+    }
+    @Test fun previewWalkOnlyLight() {
+        val base = list.items.first()
+        val walk = com.sunseat.app.domain.Leg(com.sunseat.app.domain.Mode.WALK, base.chosen.route.legs.first().path, java.time.Duration.ofMinutes(25), "", "")
+        val item = base.copy(totalDuration = java.time.Duration.ofMinutes(25), transfers = 0, walkMinutes = 25, chips = listOf(LegChip(com.sunseat.app.domain.Mode.WALK)), boardAt = "", alightAt = "", chosen = base.chosen.copy(route = com.sunseat.app.domain.Route(listOf(walk)), cachedResult = null))
+        previewSummary(false, "candidates_preview_walk_light", state = CandidatesState.Options(listOf(item)))
+    }
+
     private fun shot(name: String) = compose.onRoot().captureRoboImage("src/test/screenshots/$name.png")
 }
