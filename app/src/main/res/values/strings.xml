@@ -34,7 +34,7 @@
     <string name="map_pick_open">지도에서 선택</string>
     <string name="map_pick_title_origin">지도에서 출발지 선택</string>
     <string name="map_pick_title_destination">지도에서 도착지 선택</string>
-    <string name="map_pick_close">지도 선택 닫기</string>
+    <string name="map_pick_close">검색으로 돌아가기</string>
     <string name="map_pick_guide">지도를 움직여 핀을 원하는 위치에 맞춰 주세요.</string>
     <string name="map_pick_loading">주소를 확인하는 중…</string>
     <string name="map_pick_unnamed">지도에서 선택한 위치</string>

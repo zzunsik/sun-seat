@@ -90,27 +90,27 @@ internal fun MapPickScreen(
                 // The edited endpoint's marker is replaced by the pin; the other endpoint stays for context.
                 val description = stringResource(R.string.map_pick_description, title, headline)
                 Box(Modifier.fillMaxSize().clearAndSetSemantics { if (!pick.mapUnavailable) contentDescription = description }) {
-                SunSeatMap(
-                    MapState(
-                        origin = origin.takeUnless { isOrigin },
-                        destination = destination.takeIf { isOrigin },
-                        showDecorations = false,
-                        fitEnabled = false,
-                        // Current pin position with the request sequence: a recreated map opens where the pin was.
-                        center = com.sunseat.app.ui.map.MapFocus(pick.center, pick.camera.sequence),
-                        focus = null,
-                        onGesture = actions.onPickCameraMoving,
-                        onCameraIdle = actions.onPickCameraIdle,
-                        onUnavailable = actions.onPickMapUnavailable,
-                    ),
-                    Modifier.fillMaxSize(),
-                )
+                    SunSeatMap(
+                        MapState(
+                            origin = origin.takeUnless { isOrigin },
+                            destination = destination.takeIf { isOrigin },
+                            showDecorations = false,
+                            fitEnabled = false,
+                            // Current pin position with the request sequence: a recreated map opens where the pin was.
+                            center = com.sunseat.app.ui.map.MapFocus(pick.center, pick.camera.sequence),
+                            focus = null,
+                            onGesture = actions.onPickCameraMoving,
+                            onCameraIdle = actions.onPickCameraIdle,
+                            onUnavailable = actions.onPickMapUnavailable,
+                        ),
+                        Modifier.fillMaxSize(),
+                    )
                 }
                 if (!pick.mapUnavailable) {
                     PickPin(isOrigin, Modifier.fillMaxSize())
                     Surface(
                         Modifier.align(Alignment.TopEnd).padding(Spacing.m),
-                        shape = CircleShape, color = scheme.surface, contentColor = scheme.onSurface, shadowElevation = Sizes.hairline,
+                        shape = CircleShape, color = scheme.surface, contentColor = scheme.onSurface,
                     ) {
                         IconButton(onClick = actions.showCurrentLocationOnMap, enabled = !mapLocating, modifier = Modifier.size(Spacing.touch)) {
                             Icon(painterResource(R.drawable.ic_ms_my_location), stringResource(R.string.map_pick_recenter), tint = scheme.onSurface)
@@ -124,21 +124,23 @@ internal fun MapPickScreen(
                 verticalArrangement = Arrangement.spacedBy(Spacing.s),
             ) {
                 if (pick.mapUnavailable) {
-                    Text(stringResource(R.string.map_pick_unavailable), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurface)
+                    Text(stringResource(R.string.map_pick_unavailable), Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurface)
                 } else {
                     Column(Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
                         Text(headline, style = MaterialTheme.typography.titleMedium, color = scheme.onSurface)
                         val detail = when (pick.status) {
                             PickAddressStatus.NONE -> stringResource(R.string.map_pick_no_address)
                             PickAddressStatus.FAILED -> stringResource(R.string.map_pick_address_error)
-                            else -> stringResource(R.string.map_pick_guide)
+                            else -> stringResource(R.string.map_pick_guide).takeIf { pick.messageRes == null }
                         }
-                        Text(detail, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                        // The same-endpoint warning replaces the guide line so the panel stays short.
+                        if (detail != null) Text(detail, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                     }
                     if (pick.status == PickAddressStatus.FAILED && pick.canRetry) {
                         QuietButton(onClick = actions.retryPickAddress) {
                             Icon(painterResource(R.drawable.ic_ms_refresh), contentDescription = null, modifier = Modifier.size(Sizes.iconMedium))
-                            Text(stringResource(R.string.search_retry), Modifier.padding(start = Spacing.s), style = MaterialTheme.typography.labelLarge)
+                            androidx.compose.foundation.layout.Spacer(Modifier.size(Spacing.s))
+                            Text(stringResource(R.string.search_retry), style = MaterialTheme.typography.labelLarge)
                         }
                     }
                     pick.messageRes?.let {

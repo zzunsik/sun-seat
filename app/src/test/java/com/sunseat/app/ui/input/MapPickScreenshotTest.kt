@@ -84,6 +84,7 @@ class MapPickScreenshotTest {
     @Test fun movingDisablesConfirm() {
         render(pick(status = PickAddressStatus.LOADING).copy(moving = true), false)
         compose.onNode(hasClickAction() and hasText(text(R.string.map_pick_confirm_destination))).assertIsNotEnabled()
+        shot("map_pick_moving_light")
     }
 
     @Test fun backButtonAndRecenterAreSeparateActions() {
