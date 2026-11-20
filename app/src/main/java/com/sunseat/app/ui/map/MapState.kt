@@ -82,3 +82,23 @@ internal val MapCameraRevisionKey = androidx.compose.ui.semantics.SemanticsPrope
 internal val MapVisibleHeightKey = androidx.compose.ui.semantics.SemanticsPropertyKey<Float>("MapVisibleHeight")
 /** 지도 위쪽 여백(dp, 테스트 관측용). 입력 화면은 헤더의 실제 측정 높이다(#103). */
 internal val MapTopPaddingKey = androidx.compose.ui.semantics.SemanticsPropertyKey<Float>("MapTopPadding")
+
+/** 카메라 맞춤 틀(px): 지도 위·아래 여백과 맞춤 inset. 실제 SDK 지도와 테스트 지도가 같은 값을 쓴다. */
+internal data class FitFrame(val top: Float, val bottom: Float, val inset: Float)
+
+/**
+ * [top]·[bottom]은 지도 위·아래 여백(헤더·시트 겹침), [inset]은 기본 맞춤 inset, [minInset]은 좌우 표식 절반 폭,
+ * [marker]는 좌표 위로 솟는 출발·도착 표식 높이다.
+ *
+ * #138: 맞춤 inset은 네 변에 같이 들어가므로 낮은 지도 띠(후보 목록 기본 상태 약 110dp)에서는 기본 inset 두 배가
+ * 높이 대부분을 차지해 지도가 크게 축소됐다. inset을 보이는 영역의 [FIT_INSET_RATIO] 이하로 줄이되 [minInset]보다
+ * 작게 하지 않고, 위로 솟는 표식이 위 여백(헤더 등) 밑에 숨지 않게 모자라는 만큼만 위 여백에 더한다. 넉넉한 영역은 지금과 같다.
+ */
+internal fun fitFrame(top: Float, bottom: Float, width: Float, height: Float, inset: Float, minInset: Float, marker: Float): FitFrame {
+    val visible = (height - top - bottom).coerceAtLeast(0f)
+    val fitted = minOf(inset, maxOf(minInset, minOf(width, visible) * FIT_INSET_RATIO))
+    return FitFrame(top + (marker - fitted).coerceAtLeast(0f), bottom, fitted)
+}
+
+/** 맞춤 inset이 보이는 지도 짧은 변에서 차지할 수 있는 최대 비율(한 변). */
+internal const val FIT_INSET_RATIO = 0.2f

@@ -78,18 +78,19 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
         // Uses the same projection as drawing, computed from layout size (drawing may not run in tests).
         fun reportCentre() {
             val idle = latest.onCameraIdle ?: return
-            val top = camera.padding.top.toPx()
             val width = size.width.toFloat()
             val height = size.height.toFloat()
-            val projection = MapProjection(latest.projectionBase(camera.points), width, (height - top - camera.padding.bottom.toPx()).coerceAtLeast(1f), Sizes.mapInset.toPx())
+            val frame = previewFitFrame(camera.padding, width, height)
+            val top = frame.top
+            val projection = MapProjection(latest.projectionBase(camera.points), width, (height - top - frame.bottom).coerceAtLeast(1f), frame.inset)
             idle(projection.unproject(width / 2 - pan.x, height / 2 - top - pan.y))
         }
         detectDragGestures(onDragEnd = { reportCentre() }, onDragCancel = { reportCentre() }) { change, drag -> change.consume(); pan += drag; onGesture() }
     }) {
     Canvas(Modifier.fillMaxSize().background(scheme.surfaceContainer)) {
-        val top = camera.padding.top.toPx()
-        val bottom = camera.padding.bottom.toPx()
-        val projection = MapProjection(state.projectionBase(camera.points), size.width, (size.height - top - bottom).coerceAtLeast(1f), Sizes.mapInset.toPx())
+        val frame = previewFitFrame(camera.padding, size.width, size.height)
+        val top = frame.top
+        val projection = MapProjection(state.projectionBase(camera.points), size.width, (size.height - top - frame.bottom).coerceAtLeast(1f), frame.inset)
         fun position(point: com.sunseat.app.domain.LatLng): Offset = projection.project(point).let { Offset(it.first, it.second + top) + pan }
         val grid = Sizes.mapInset.toPx()
         var x = 0f
@@ -258,3 +259,7 @@ internal fun routeSummary(route: com.sunseat.app.domain.Route?): String? {
     }
     return stringResource(R.string.map_route_summary, parts.joinToString(stringResource(R.string.map_route_separator)))
 }
+
+/** 테스트 지도의 맞춤 틀. 실제 SDK 지도(NativeMap)와 같은 [fitFrame] 규칙이다(#138). */
+private fun androidx.compose.ui.unit.Density.previewFitFrame(padding: MapPadding, width: Float, height: Float): FitFrame =
+    fitFrame(padding.top.toPx(), padding.bottom.toPx(), width, height, Sizes.mapInset.toPx(), com.sunseat.app.ui.theme.Spacing.xl.toPx(), Sizes.mapMarker.toPx() + com.sunseat.app.ui.theme.Spacing.xs.toPx())

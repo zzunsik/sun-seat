@@ -74,7 +74,7 @@ internal fun NativeMap(state: MapState, modifier: Modifier = Modifier, keyAvaila
     val subway = stringResource(R.string.common_subway)
     val moreLines = stringResource(R.string.map_line_more)
     val metrics = with(density) {
-        MapMetrics(Sizes.mapMarker.toPx(), Sizes.mapRouteWalk.toPx(), Sizes.mapInset.toPx(), (if(state.routeProgress!=null) Sizes.simulationSunRay else Sizes.mapSunRay).toPx(),
+        MapMetrics(Sizes.mapMarker.toPx(), Sizes.mapRouteWalk.toPx(), Sizes.mapInset.toPx(), Spacing.xl.toPx(), (if(state.routeProgress!=null) Sizes.simulationSunRay else Sizes.mapSunRay).toPx(),
             Sizes.mapStopMarker.toPx(), Sizes.mapRouteArrow.toPx(), Sizes.mapStopBorder.toPx(), Sizes.mapMarkerTail.toPx(), Spacing.xs.toPx(), labelSize.toPx(), origin, destination, Sizes.mapLabelHeight.toPx(), bus, subway, moreLines)
     }
     val session = remember(context, lifecycle, ink, surface, sun, metrics) { MapSession(context, ink, surface, sun, metrics) }
@@ -139,7 +139,7 @@ private const val MAX_WALK_DOTS = 150
 private const val DOT_STUB = 0.2
 
 private data class MapMetrics(
-    val marker: Float, val walk: Float, val inset: Float, val ray: Float,
+    val marker: Float, val walk: Float, val inset: Float, val minInset: Float, val ray: Float,
     val stop: Float, val arrow: Float, val stopBorder: Float, val tail: Float, val textPadding: Float, val text: Float,
     val origin: String, val destination: String, val labelHeight: Float,
     val bus: String, val subway: String, val moreLines: String,
@@ -163,7 +163,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
     var closed = false
         private set
     private var geometry: Triple<List<Route>, Int, Pair<com.sunseat.app.domain.NamedPlace?, com.sunseat.app.domain.NamedPlace?>>? = null
-    private var padding: MapPadding? = null
+    private var padding: Pair<Int, Int>? = null
     private val fitPolicy = MapFitPolicy()
     private var cursor: Label? = null
     private var ray: Label? = null
@@ -250,12 +250,18 @@ private class MapSession(context: Context, private val ink: Int, private val sur
             }
             decorRoute = state.routes.getOrNull(state.selectedRoute); decorZoom = null; lineDensity = density; walkLines.clear(); decorations.clear()
         }
-        if (geometryChanged || padding != state.padding) {
-            padding = state.padding
-            target.setPadding(0, (state.padding.top.value * density).toInt(), 0, (state.padding.bottom.value * density).toInt())
+        // #138: 낮은 지도 띠에서는 맞춤 inset을 줄이고 위로 솟는 출발·도착 표식만큼만 위 여백을 더한다(fitFrame, 테스트 지도와 같은 값).
+        val top = state.padding.top.value * density
+        val bottom = state.padding.bottom.value * density
+        val frame = if (view.width > 0 && view.height > 0) fitFrame(top, bottom, view.width.toFloat(), view.height.toFloat(), metrics.inset, metrics.minInset, metrics.marker + metrics.textPadding)
+            else FitFrame(top, bottom, metrics.inset)
+        val applied = frame.top.toInt() to frame.bottom.toInt()
+        if (geometryChanged || padding != applied) {
+            padding = applied
+            target.setPadding(0, applied.first, 0, applied.second)
         }
         if (fitPolicy.shouldFit(state)) {
-            target.moveCamera(CameraUpdateFactory.fitMapPoints(state.points().map { it.sdk() }.toTypedArray(), metrics.inset.toInt(), 17))
+            target.moveCamera(CameraUpdateFactory.fitMapPoints(state.points().map { it.sdk() }.toTypedArray(), frame.inset.toInt(), 17))
         }
         if (decorZoom == null) view.post { map?.let(::decorate) }
         state.center?.let { center ->
