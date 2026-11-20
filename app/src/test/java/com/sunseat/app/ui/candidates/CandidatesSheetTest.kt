@@ -158,10 +158,34 @@ class CandidatesSheetTest {
         compose.onAllNodesWithContentDescription("경로 목록으로 돌아가기")[0].performSemanticsAction(SemanticsActions.OnClick)
         compose.waitForIdle()
         assertEquals(before, compose.onNodeWithTag("candidate_list").fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value(), 0.001f)
+        compose.onNodeWithTag("candidates_sort").performSemanticsAction(SemanticsActions.OnClick)
         compose.onNodeWithText("최소 시간").performSemanticsAction(SemanticsActions.OnClick)
         compose.mainClock.advanceTimeBy(1000)
         compose.waitForIdle()
         assertEquals(revision, compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey])
+    }
+
+    /** #83: 열린 정렬 메뉴는 재생성(회전) 뒤에도 열려 있고, 현재 기준을 다시 고르면 기준을 바꾸지 않고 닫기만 한다. */
+    @Test fun sortMenuSurvivesRecreationAndReselectingCurrentOnlyCloses() {
+        val sorts = mutableListOf<CandidateSort>()
+        val state = CandidatesState.Options(CandidatesFixtures.options.toUi(java.time.LocalDateTime.of(2026, 11, 15, 9, 0)), sort = CandidateSort.TIME)
+        val restoration = androidx.compose.ui.test.junit4.StateRestorationTester(compose)
+        restoration.setContent {
+            CompositionLocalProvider(LocalMapRenderer provides MapRenderer.PREVIEW) {
+                SunSeatTheme { CandidatesScreen(CandidatesFixtures.transitRequest, state, CandidatesActions(onSort = { sorts += it })) }
+            }
+        }
+        compose.onNodeWithTag("candidates_sort").assert(hasText("최소 시간"))
+        compose.onNodeWithText("추천순").assertDoesNotExist()
+        compose.onNodeWithTag("candidates_sort").performSemanticsAction(SemanticsActions.OnClick)
+        compose.onNodeWithText("추천순").assertExists()
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithText("추천순").assertExists()
+        compose.onNode(hasText("최소 시간") and isSelected()).performSemanticsAction(SemanticsActions.OnClick)
+        compose.waitForIdle()
+        compose.onNodeWithText("추천순").assertDoesNotExist()
+        assertTrue(sorts.isEmpty())
+        compose.onNodeWithTag("candidates_sort").assert(hasText("최소 시간"))
     }
 
     private fun bounds(tag: String) = compose.onNodeWithTag(tag, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
