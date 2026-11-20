@@ -173,7 +173,7 @@ class SunSeatFlowTest {
         clickText(text(R.string.candidates_filter_subway))
         waitForTextGone("40분")
         compose.onNode(hasClickAction() and hasText("30분")).tap()
-        compose.onNodeWithText(text(R.string.candidates_preview_title)).assertExists()
+        compose.onNodeWithTag("candidates_preview_sheet").assertExists()
         clickText(text(R.string.candidates_view_seat))
 
         // 결과 → 햇빛 따라가기
@@ -220,7 +220,7 @@ class SunSeatFlowTest {
         clickText(text(R.string.candidates_filter_subway))
         repeat(3) {
             compose.onNode(hasClickAction() and hasText("30분")).tap()
-            compose.onNodeWithText(text(R.string.candidates_preview_title)).assertExists()
+            compose.onNodeWithTag("candidates_preview_sheet").assertExists()
             compose.onNodeWithText(text(R.string.result_legs)).assertDoesNotExist()
             assertEquals(1, graph.server.transitRequests)
             back()
