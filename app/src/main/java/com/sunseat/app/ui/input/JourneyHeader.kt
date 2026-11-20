@@ -99,8 +99,8 @@ fun JourneyHeader(
                     onClick = { actions.onEdit(EndpointField.DESTINATION) },
                 )
             }
-            // 설정(입력만)은 장소 행 바깥 오른쪽 위, 맞바꾸기는 그 아래. 설정이 없으면 맞바꾸기가 두 행 가운데에 온다.
-            Column {
+            // 설정(입력만)은 장소 행 바깥 오른쪽 위(긴 이름에서도 위에 고정), 맞바꾸기는 그 아래. 설정이 없으면 맞바꾸기가 두 행 가운데에 온다.
+            Column(Modifier.align(if (actions.onSettings != null) Alignment.Top else Alignment.CenterVertically)) {
                 actions.onSettings?.let { onSettings ->
                     IconButton(onClick = onSettings) { Icon(painterResource(R.drawable.ic_ms_settings), stringResource(R.string.settings_title)) }
                 }

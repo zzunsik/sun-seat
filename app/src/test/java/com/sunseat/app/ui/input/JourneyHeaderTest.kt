@@ -178,6 +178,26 @@ class JourneyHeaderTest {
         assertMapPaddingCoversTopPanel(header().bottom)
     }
 
+    /** 가로 화면에서는 헤더가 표면 안에서 스크롤하고, 지도 여백은 잘린 표면의 실제 아래끝과 같다(독립 리뷰 지적). */
+    @Test @Config(qualifiers = "w800dp-h360dp-land-xxhdpi")
+    fun landscapeMapPaddingIsTheVisibleHeaderBottom() {
+        renderInput({ filled })
+        val bottom = header().bottom
+        assertMapPaddingCoversTopPanel(bottom)
+        val densityValue = context.resources.displayMetrics.density
+        // 지도 띠가 남는다: 헤더 아래로 터치 영역 둘 이상.
+        assertTrue(360f - bottom / densityValue >= 96f)
+    }
+
+    /** 긴 이름에서도 설정은 장소 행 바깥 오른쪽 위에 남는다. */
+    @Test @Config(qualifiers = "w320dp-h640dp-xxhdpi")
+    fun settingsStaysTopRightWithLongNames() {
+        renderInput({ filled.copy(origin = Endpoint(NamedPlace("가상구 예시동 견본 문화체육센터 정문 앞 버스 정류장", LatLng(37.55, 126.97)))) }, fontScale = 1.5f)
+        val gear = bounds(hasContentDescription(text(R.string.settings_title)))
+        val origin = bounds(hasText("가상구 예시동 견본 문화체육센터 정문 앞 버스 정류장"))
+        assertTrue("settings at the top of the origin row", gear.top <= origin.top + (origin.height / 3))
+    }
+
     @Test fun inputMapPaddingIncludesTheLocationNotice() {
         renderInput({ filled.copy(locationMessageRes = R.string.location_permission_permanently_denied, locationAction = com.sunseat.app.location.LocationAction.OpenAppSettings) })
         val notice = compose.onNode(hasText(text(R.string.location_permission_permanently_denied))).fetchSemanticsNode().boundsInRoot

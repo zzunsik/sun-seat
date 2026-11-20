@@ -1,6 +1,7 @@
 package com.sunseat.app.ui.input
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -107,9 +109,11 @@ fun InputScreen(
     LaunchedEffect(endpoints) { if (endpoints != fittedEndpoints) { fittedEndpoints = endpoints; fitRevision++ } }
     Surface(modifier.fillMaxSize(), color = scheme.background, contentColor = scheme.onSurface) {
         BoxWithConstraints(Modifier.fillMaxSize().onGloballyPositioned { boxTop = with(density) { it.positionInRoot().y.toDp() } }) {
-            // 헤더가 지도를 모두 덮지 않게 한다(가로·큰 글자). 넘치면 헤더 안에서 스크롤한다.
-            val panelLimit = (maxHeight - Spacing.touch * 3).coerceAtLeast(Spacing.touch)
-            val mapTop = panelBottom.coerceAtMost(panelLimit)
+            // 헤더 표면이 지도를 모두 덮지 않게 한다(가로·큰 글자). 넘치면 표면 안에서 스크롤하고 모양(모서리)은 유지한다.
+            val topInset = WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding()
+            val headerLimit = (maxHeight - topInset - Spacing.screen - Spacing.touch * 3).coerceAtLeast(Spacing.touch)
+            // 지도 위 여백 = 헤더(+안내)의 실제 아래끝. 안내까지 길어져도 지도 띠는 남긴다.
+            val mapTop = panelBottom.coerceAtMost((maxHeight - Spacing.touch * 2).coerceAtLeast(0.dp))
             com.sunseat.app.ui.map.SunSeatMap(com.sunseat.app.ui.map.MapState(
                 origin = state.origin?.place, destination = state.destination?.place,
                 // 아래 여백: 오른쪽 아래 현재 위치 버튼(터치 48 + 바깥 여백) 위로 표식을 맞춘다.
@@ -124,21 +128,26 @@ fun InputScreen(
                 this[com.sunseat.app.ui.map.MapCameraRevisionKey] = fitRevision
             })
             Column(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(Spacing.screen).heightIn(max = panelLimit)
-                .onGloballyPositioned { with(density) { panelBottom = (it.positionInRoot().y + it.size.height).toDp() - boxTop } }
-                .verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+                .padding(Spacing.screen)
+                .onGloballyPositioned { with(density) { panelBottom = (it.positionInRoot().y + it.size.height).toDp() - boxTop } },
+                verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                 Surface(color = scheme.surface, shape = MaterialTheme.shapes.large) {
-                    JourneyHeader(
-                        origin = JourneyEndpointUi(state.origin?.place?.name, currentLocation = state.origin?.isCurrentLocation == true, loading = state.locating),
-                        destination = JourneyEndpointUi(state.destination?.place?.name),
-                        mode = state.mode, departure = state.departure, goal = state.goal, now = now,
-                        actions = JourneyHeaderActions(
-                            onEdit = actions.openSearch, onSwap = actions.swap, onMode = actions.setMode,
-                            onTime = { showTime = true }, onGoal = actions.setGoal, onSettings = actions.onSettings,
-                        ),
-                        swapEnabled = state.origin != null || state.destination != null,
-                        modifier = Modifier.padding(Spacing.s),
-                    )
+                    val headerScroll = rememberScrollState()
+                    Box {
+                        JourneyHeader(
+                            origin = JourneyEndpointUi(state.origin?.place?.name, currentLocation = state.origin?.isCurrentLocation == true, loading = state.locating),
+                            destination = JourneyEndpointUi(state.destination?.place?.name),
+                            mode = state.mode, departure = state.departure, goal = state.goal, now = now,
+                            actions = JourneyHeaderActions(
+                                onEdit = actions.openSearch, onSwap = actions.swap, onMode = actions.setMode,
+                                onTime = { showTime = true }, onGoal = actions.setGoal, onSettings = actions.onSettings,
+                            ),
+                            swapEnabled = state.origin != null || state.destination != null,
+                            modifier = Modifier.heightIn(max = headerLimit).verticalScroll(headerScroll).padding(Spacing.s),
+                        )
+                        // 표면 안에 더 내릴 내용이 있으면 아래 가장자리에 구분선을 둬 스크롤할 수 있음을 알린다.
+                        if (headerScroll.canScrollForward) HorizontalDivider(Modifier.align(Alignment.BottomCenter), color = scheme.outlineVariant)
+                    }
                 }
                 if (state.locationMessageRes != null) LocationNotice(state, actions)
                 if (state.sameEndpoints) Surface(color = scheme.surface, shape = MaterialTheme.shapes.large) {
