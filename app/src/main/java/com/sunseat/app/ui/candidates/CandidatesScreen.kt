@@ -464,8 +464,10 @@ private fun OptionList(items: List<CandidateUi>, selectedId: Int?, request: Trip
                 Text(stringResource(R.string.candidates_scope_action), style = MaterialTheme.typography.bodySmall)
             }
         }
+        // #134: 목록 항목은 자체 좌우 여백을 갖는다(LazyColumn은 위·아래 여백만 받는다). 안내 줄도 후보 행과 같은 화면 여백에서 시작한다.
         request.departure?.let { departure -> item(key = "time_basis") {
             Text(stringResource(R.string.candidates_time_basis, departure.format(DateTimeFormatter.ofPattern("M월 d일 HH:mm"))),
+                Modifier.fillMaxWidth().padding(horizontal = Spacing.screen),
                 style = MaterialTheme.typography.bodySmall, color = SunSeatTheme.scheme.onSurfaceVariant)
         } }
         items(items, key = { it.id }) { item ->

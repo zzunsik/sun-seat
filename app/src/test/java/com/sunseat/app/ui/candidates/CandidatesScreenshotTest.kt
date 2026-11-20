@@ -183,6 +183,20 @@ class CandidatesScreenshotTest {
     @Test fun emptyFilterDark() { render(list.copy(category = RouteCategory.MIXED), true); shot("candidates_empty_filter_dark") }
     @Test fun noRouteDark() { render(noRoute, true); shot("candidates_no_route_dark") }
 
+    /** #134: 출발 시각을 고른 목록의 '경로는 지금 기준 · 햇빛은 … 기준' 줄은 후보 행과 같은 화면 좌우 여백에서 시작한다. */
+    private val laterDeparture = transitRequest.copy(departure = java.time.LocalDateTime.of(2026, 11, 16, 10, 33))
+    private fun timeBasis(dark: Boolean, name: String, fontScale: Float = 1f) {
+        compose.enableAccessibilityChecks()
+        render(list, dark, laterDeparture, fontScale)
+        compose.onRoot().tryPerformAccessibilityChecks()
+        compose.onNodeWithText("경로는 지금 기준", substring = true).assertIsDisplayed()
+        shot(name)
+    }
+    @Test fun timeBasisLight() = timeBasis(false, "candidates_time_basis_light")
+    @Test fun timeBasisDark() = timeBasis(true, "candidates_time_basis_dark")
+    @Test @Config(qualifiers = "w320dp-h640dp-xxhdpi")
+    fun timeBasisSmallLargeText() = timeBasis(false, "candidates_time_basis_small_large_text", 1.5f)
+
     /** #82: 작은 화면·큰 글자에서도 범주 이름과 개수를 줄이지 않고, 넘치면 가로로 넘기며 고른 탭을 보이는 곳에 둔다. */
     @Test @Config(qualifiers = "w320dp-h640dp-xxhdpi")
     fun categoryTabsSmallLargeText() {
