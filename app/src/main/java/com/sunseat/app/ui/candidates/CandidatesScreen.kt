@@ -262,8 +262,9 @@ fun CandidatesScreen(
                         val category = RouteCategory.entries[it]
                         // #136: 범주를 바꾸면 정렬 변경(#83)처럼 새 범주의 1순위부터 보인다. 같은 탭을 다시 누르면 위치를 유지한다.
                         // 미리보기·결과에서 돌아올 때는 이 경로를 타지 않으므로 목록 위치 복원(#99)은 그대로다.
-                        if (category != options.category) scope.launch { listScroll.scrollToItem(0) }
+                        val changed = category != options.category
                         actions.onCategory(category)
+                        if (changed) scope.launch { listScroll.scrollToItem(0) }
                     }
                     // #83: 정렬은 현재 기준이 보이는 드롭다운 하나. 기준을 바꾸면 목록을 맨 위(새 1순위)부터 보인다.
                     Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.s), horizontalArrangement = Arrangement.End) {
@@ -277,7 +278,7 @@ fun CandidatesScreen(
                 val content = if (options != null && request.mode == TravelMode.TRANSIT) PaddingValues(start = Spacing.screen, end = Spacing.screen, bottom = Spacing.screen) else PaddingValues(Spacing.screen)
                 when (state) {
                     is CandidatesState.Loading -> Loading(content, state.mode, animateLoader)
-                    is CandidatesState.Options -> if (state.visible.isEmpty()) Message(content, R.drawable.ic_ms_search, stringResource(R.string.candidates_filtered_empty), null, stringResource(R.string.candidates_clear_filters) to { scope.launch { listScroll.scrollToItem(0) }; actions.onCategory(RouteCategory.ALL) }, stringResource(R.string.candidates_edit_input) to actions.onBack)
+                    is CandidatesState.Options -> if (state.visible.isEmpty()) Message(content, R.drawable.ic_ms_search, stringResource(R.string.candidates_filtered_empty), null, stringResource(R.string.candidates_clear_filters) to { actions.onCategory(RouteCategory.ALL); scope.launch { listScroll.scrollToItem(0) } }, stringResource(R.string.candidates_edit_input) to actions.onBack)
                         else OptionList(state.visible, state.selectedId, request, content, if (request.mode == TravelMode.TRANSIT) stringResource(if (state.sort == CandidateSort.WALK) R.string.candidates_walk_scope_sort else R.string.candidates_walk_scope) else null, actions.copy(onHighlight = {
                             userMoved = false
                             showPreview = true

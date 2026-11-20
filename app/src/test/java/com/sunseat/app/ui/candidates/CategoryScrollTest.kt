@@ -79,11 +79,11 @@ class CategoryScrollTest {
         assertEquals(RouteCategory.ALL, state.category)
         assertEquals(0f, scroll(), 0.001f)
 
-        // 빈 범주의 "전체 보기"로 돌아와도 맨 위부터.
+        // 빈 범주의 "전체 보기"로 돌아와도 맨 위부터. 탭을 거치지 않고(예: 상태 복원) 내린 위치에서 목록이 비는 경우.
         compose.onNodeWithTag("candidate_list").performScrollToIndex(8)
         compose.waitForIdle()
         assertTrue(scroll() > 0f)
-        compose.onNodeWithContentDescription("혼합 경로 0개").performSemanticsAction(SemanticsActions.OnClick)
+        compose.runOnIdle { state = state.copy(category = RouteCategory.MIXED) }
         compose.mainClock.advanceTimeBy(1000)
         compose.waitForIdle()
         compose.onNodeWithText("전체 보기").performSemanticsAction(SemanticsActions.OnClick)
