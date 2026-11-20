@@ -33,7 +33,7 @@ internal fun routeTimeParts(item: CandidateUi): List<RouteTimePart> = routeLegGr
     RouteTimePart(range, range.fold(Duration.ZERO) { sum, index -> sum + item.chosen.route.legs[index].duration })
 }
 internal fun routeTimeFractions(item: CandidateUi): List<Float> {
-    val seconds = routeTimeParts(item).map { it.duration.toNanos().toDouble().coerceAtLeast(0.0) }
+    val seconds = routeTimeParts(item).map { (it.duration.seconds.toDouble() + it.duration.nano / 1_000_000_000.0).coerceAtLeast(0.0) }
     val total = seconds.sum()
     return seconds.map { if (total > 0) (it / total).toFloat() else 0f }
 }
@@ -158,7 +158,7 @@ internal fun RouteLegSummary(item: CandidateUi, taxi: Boolean) {
                 Column(Modifier.weight(1f).padding(bottom = Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     Text(label, style = if (walk) MaterialTheme.typography.bodySmall else MaterialTheme.typography.titleSmall)
                     if (!walk && board.isNotBlank()) Text(stringResource(R.string.candidates_board, board), style = MaterialTheme.typography.bodyMedium, color = SunSeatTheme.scheme.onSurfaceVariant)
-                    // Different transfer stops remain available; no stop is invented when missing.
+                    // Keep known transfer alighting stops; never invent missing names.
                     val end = legs[range.last].endName
                     if (!walk && range != rides.lastOrNull() && end.isNotBlank())
                         Text(stringResource(R.string.candidates_alight, end), style = MaterialTheme.typography.bodySmall, color = SunSeatTheme.scheme.onSurfaceVariant)
@@ -177,10 +177,22 @@ internal fun RouteLegSummary(item: CandidateUi, taxi: Boolean) {
 
 @Composable
 private fun TimelineRail(color: Color, walk: Boolean, terminal: Boolean, modifier: Modifier = Modifier) {
+    val scheme = SunSeatTheme.scheme
+    val background = SunSeatTheme.route.selectionContainer
+    val contrast = (maxOf(color.luminance(), background.luminance()) + .05f) /
+        (minOf(color.luminance(), background.luminance()) + .05f)
     Canvas(modifier.width(Sizes.timelineNode).clearAndSetSemantics { }) {
         val center = size.width / 2
-        if (!terminal) drawLine(color, Offset(center, 0f), Offset(center, size.height), Sizes.timelineConnector.toPx(),
-            pathEffect = if (walk) PathEffect.dashPathEffect(floatArrayOf(Spacing.xs.toPx(), Spacing.xs.toPx())) else null)
-        if (!walk) drawCircle(color, radius = size.width / 2, center = Offset(center, size.width / 2))
+        val pattern = if (walk) PathEffect.dashPathEffect(floatArrayOf(Spacing.xs.toPx(), Spacing.xs.toPx())) else null
+        if (!terminal) {
+            if (contrast < 3f) drawLine(scheme.outline, Offset(center, 0f), Offset(center, size.height),
+                (Sizes.timelineConnector + Sizes.hairline * 2).toPx(), pathEffect = pattern)
+            drawLine(color, Offset(center, 0f), Offset(center, size.height), Sizes.timelineConnector.toPx(), pathEffect = pattern)
+        }
+        if (!walk) {
+            if (contrast < 3f) drawCircle(scheme.outline, radius = size.width / 2, center = Offset(center, size.width / 2))
+            drawCircle(color, radius = size.width / 2 - if (contrast < 3f) Sizes.hairline.toPx() else 0f,
+                center = Offset(center, size.width / 2))
+        }
     }
 }

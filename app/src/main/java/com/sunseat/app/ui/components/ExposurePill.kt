@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
@@ -36,7 +35,6 @@ fun ExposurePill(
     }
     Row(
         modifier = modifier
-            .then(if (compact) Modifier.heightIn(min = Sizes.compactPillHeight) else Modifier)
             .then(if (compact) Modifier.heightIn(min = Sizes.compactPillHeight) else Modifier)
             .background(bg, CapsuleShape)
             .padding(horizontal = if (compact) Spacing.s else Spacing.m, vertical = if (compact) Spacing.xs else Sizes.pillVertical),
