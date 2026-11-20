@@ -74,7 +74,7 @@ internal fun NativeMap(state: MapState, modifier: Modifier = Modifier, keyAvaila
     val subway = stringResource(R.string.common_subway)
     val moreLines = stringResource(R.string.map_line_more)
     val metrics = with(density) {
-        MapMetrics(Sizes.mapMarker.toPx(), Sizes.mapRouteWalk.toPx(), Sizes.mapInset.toPx(), (if(state.routeProgress!=null) Sizes.simulationSunRay else Sizes.mapSunRay).toPx(),
+        MapMetrics(Sizes.mapMarker.toPx(), Sizes.mapRouteWalk.toPx(), Sizes.mapInset.toPx(), Spacing.s.toPx(), (if(state.routeProgress!=null) Sizes.simulationSunRay else Sizes.mapSunRay).toPx(),
             Sizes.mapStopMarker.toPx(), Sizes.mapRouteArrow.toPx(), Sizes.mapStopBorder.toPx(), Sizes.mapMarkerTail.toPx(), Spacing.xs.toPx(), labelSize.toPx(), origin, destination, Sizes.mapLabelHeight.toPx(), bus, subway, moreLines)
     }
     val session = remember(context, lifecycle, ink, surface, sun, metrics) { MapSession(context, ink, surface, sun, metrics) }
@@ -139,7 +139,7 @@ private const val MAX_WALK_DOTS = 150
 private const val DOT_STUB = 0.2
 
 private data class MapMetrics(
-    val marker: Float, val walk: Float, val inset: Float, val ray: Float,
+    val marker: Float, val walk: Float, val inset: Float, val edge: Float, val ray: Float,
     val stop: Float, val arrow: Float, val stopBorder: Float, val tail: Float, val textPadding: Float, val text: Float,
     val origin: String, val destination: String, val labelHeight: Float,
     val bus: String, val subway: String, val moreLines: String,
@@ -163,7 +163,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
     var closed = false
         private set
     private var geometry: Triple<List<Route>, Int, Pair<com.sunseat.app.domain.NamedPlace?, com.sunseat.app.domain.NamedPlace?>>? = null
-    private var padding: MapPadding? = null
+    private var padding: List<Int>? = null
     private val fitPolicy = MapFitPolicy()
     private var cursor: Label? = null
     private var ray: Label? = null
@@ -186,11 +186,6 @@ private class MapSession(context: Context, private val ink: Int, private val sur
     private var decorZoom: Int? = null
     private var lineDensity = 1f
     private val decorations = mutableListOf<Label>()
-    /** 재생 중 차량과 겹치면 숨기는 글자 표식(출발·도착·노선 배지)과 그 좌표(#146). */
-    private val textLabels = mutableListOf<Pair<Label, LatLng>>()
-    private val hiddenLabels = mutableSetOf<Label>()
-    private var metersPerPx = 0.0
-    private var coverState: MapState? = null
     private val walkLines = mutableListOf<com.kakao.vectormap.route.RouteLine>()
     private val vehicleIcon = marker(2, ink)
     private val rayIcon = marker(3, sun)
@@ -239,7 +234,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
                 }
             }
             target.labelManager?.layer?.let { layer ->
-                layer.removeAll(); cursor = null; ray = null; myLocation = null; lastCursor = null; lastRayAltitude = null; lastVehicleLight=null; textLabels.clear(); hiddenLabels.clear()
+                layer.removeAll(); cursor = null; ray = null; myLocation = null; lastCursor = null; lastRayAltitude = null; lastVehicleLight=null
                 state.routes.getOrNull(state.selectedRoute)?.let { route ->
                     RouteLinePolicy.stops(route).forEach { stop ->
                         layer.addLabel(LabelOptions.from(stop.location.sdk()).setRank(STOP_RANK).setStyles(LabelStyle.from(stopIcon(stop.color.toArgb())).setApplyDpScale(false).setAnchorPoint(.5f, .5f)))
@@ -247,24 +242,26 @@ private class MapSession(context: Context, private val ink: Int, private val sur
                             // Line name beside the marker, on the side away from the outgoing line; dropped on collision.
                             val name = metrics.stopLabel(stop)
                             layer.addLabel(LabelOptions.from(stop.location.sdk()).setRank(STOP_NAME_RANK).setStyles(LabelStyle.from(nameIcon(name, stop.color.toArgb(), stop.labelOnLeft)).setApplyDpScale(false).setAnchorPoint(if (stop.labelOnLeft) 1f else 0f, .5f)))
-                                ?.let { textLabels += it to stop.location }
                         }
                     }
                 }
-                state.origin?.let { place -> layer.addLabel(LabelOptions.from(place.location.sdk()).setRank(PLACE_RANK).setStyles(LabelStyle.from(startIcon).setApplyDpScale(false).setAnchorPoint(.5f, 1f)))?.let { textLabels += it to place.location } }
-                state.destination?.let { place -> layer.addLabel(LabelOptions.from(place.location.sdk()).setRank(PLACE_RANK).setStyles(LabelStyle.from(endIcon).setApplyDpScale(false).setAnchorPoint(.5f, 1f)))?.let { textLabels += it to place.location } }
+                state.origin?.let { layer.addLabel(LabelOptions.from(it.location.sdk()).setRank(PLACE_RANK).setStyles(LabelStyle.from(startIcon).setApplyDpScale(false).setAnchorPoint(.5f, 1f))) }
+                state.destination?.let { layer.addLabel(LabelOptions.from(it.location.sdk()).setRank(PLACE_RANK).setStyles(LabelStyle.from(endIcon).setApplyDpScale(false).setAnchorPoint(.5f, 1f))) }
             }
             decorRoute = state.routes.getOrNull(state.selectedRoute); decorZoom = null; lineDensity = density; walkLines.clear(); decorations.clear()
         }
-        if (geometryChanged || padding != state.padding) {
-            padding = state.padding
-            target.setPadding(0, (state.padding.top.value * density).toInt(), 0, (state.padding.bottom.value * density).toInt())
+        // #138: 낮은 지도 띠에서는 맞춤 inset을 줄이고, 표식이 솟는 위쪽에 지도 여백을 더하고 좌우는 기본 폭을 유지한다(fitFrame, 테스트 지도와 같은 값).
+        val top = state.padding.top.value * density
+        val bottom = state.padding.bottom.value * density
+        val frame = if (view.width > 0 && view.height > 0) fitFrame(top, bottom, view.width.toFloat(), view.height.toFloat(), metrics.inset, metrics.edge, metrics.marker + metrics.textPadding)
+            else FitFrame(top, bottom, 0f, metrics.inset)
+        val applied = listOf(frame.side.toInt(), frame.top.toInt(), frame.bottom.toInt())
+        if (geometryChanged || padding != applied) {
+            padding = applied
+            target.setPadding(applied[0], applied[1], applied[0], applied[2])
         }
-        when (fitPolicy.camera(state)) {
-            MapCamera.FIT_ROUTE -> target.moveCamera(CameraUpdateFactory.fitMapPoints(state.points().map { it.sdk() }.toTypedArray(), metrics.inset.toInt(), 17))
-            // Street-level frame around the vehicle (#146); later cursor moves only re-centre and keep this zoom.
-            MapCamera.FRAME_FOLLOW -> state.followTarget?.let { at -> target.moveCamera(CameraUpdateFactory.fitMapPoints(followBounds(at).map { it.sdk() }.toTypedArray(), 0, 17)) }
-            MapCamera.NONE -> Unit
+        if (fitPolicy.shouldFit(state)) {
+            target.moveCamera(CameraUpdateFactory.fitMapPoints(state.points().map { it.sdk() }.toTypedArray(), frame.inset.toInt(), 17))
         }
         if (decorZoom == null) view.post { map?.let(::decorate) }
         state.center?.let { center ->
@@ -310,17 +307,6 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         }
         following = state.followCursor
         lastCursor = position
-        coverState = state
-        uncover()
-    }
-
-    /** 차량과 겹치는 글자 표식을 숨기고 나머지는 보인다. 줌이 바뀌면 [decorate]가 다시 부른다. */
-    private fun uncover() {
-        val state = coverState ?: return
-        textLabels.forEach { (label, at) ->
-            val covered = metersPerPx > 0 && state.coveredByVehicle(at, metrics.marker) { a, b -> (com.sunseat.app.domain.ExposureAnalyzer.distanceMeters(a, b) / metersPerPx).toFloat() }
-            if (covered != (label in hiddenLabels)) { if (covered) { label.hide(); hiddenLabels += label } else { label.show(); hiddenLabels -= label } }
-        }
     }
 
     /** 현재 위치 원·차량 화살표와 짧은 해 방향 선. */
@@ -389,8 +375,6 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         val metersPerPx = com.sunseat.app.domain.ExposureAnalyzer.distanceMeters(LatLng(left.latitude, left.longitude), LatLng(right.latitude, right.longitude)) / w
         if (!(metersPerPx > 0)) return
         decorZoom = target.cameraPosition?.zoomLevel
-        this.metersPerPx = metersPerPx
-        uncover()
         walkLines.forEach { it.remove() }; walkLines.clear()
         target.labelManager?.layer?.let { layer -> decorations.forEach { layer.remove(it) } }
         decorations.clear()
