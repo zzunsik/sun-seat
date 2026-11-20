@@ -38,9 +38,10 @@ class MapFitFrameTest {
     }
 
     @Test fun roomyMapKeepsDefaultInsetAndPadding() {
-        // 미리보기(위 여백 = 지도 맞춤 행동 아래끝)·입력·지도 선택(#85: 여백 없음, 화면 가운데 = 핀)처럼 넉넉한 영역은 지금과 같다.
-        assertEquals(FitFrame(64f, 120f, 0f, inset), frame(top = 64f, bottom = 120f, width = 540f, height = 1200f))
-        assertEquals(FitFrame(0f, 0f, 0f, inset), frame(top = 0f, bottom = 0f, width = 600f, height = 900f))
+        // 390dp 폭 기기의 미리보기(위 여백 = 지도 맞춤 행동 아래끝, 보이는 높이 576dp)·지도 선택(#85: 여백 없음, 화면 가운데 = 핀)처럼
+        // 높이가 넉넉한 영역은 폭이 좁아도 지금과 같다.
+        assertEquals(FitFrame(64f, 120f, 0f, inset), frame(top = 64f, bottom = 120f, width = 384f, height = 760f))
+        assertEquals(FitFrame(0f, 0f, 0f, inset), frame(top = 0f, bottom = 0f, width = 384f, height = 600f))
     }
 
     @Test fun markerRoomIsAddedBelowAnExistingTopPadding() {
