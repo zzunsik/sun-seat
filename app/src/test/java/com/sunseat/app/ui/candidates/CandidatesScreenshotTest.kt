@@ -9,6 +9,7 @@ import androidx.compose.ui.test.junit4.accessibility.enableAccessibilityChecks
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertIsDisplayed
@@ -119,6 +120,18 @@ class CandidatesScreenshotTest {
         org.junit.Assert.assertEquals(SheetValue.Expanded, sheet.bottomSheetState.currentValue)
         compose.onNodeWithTag("candidates_journey_bar").assertIsDisplayed()
         compose.onRoot().tryPerformAccessibilityChecks()
+        if (name != "candidates_expanded_landscape") {
+            val listBottom = compose.onNodeWithTag("candidate_list").getUnclippedBoundsInRoot().bottom
+            val secondTime = compose.onNodeWithTag("candidate_time_1", useUnmergedTree = true).getUnclippedBoundsInRoot()
+            val firstCard = compose.onNodeWithTag("candidate_0").getUnclippedBoundsInRoot()
+            println("#98 density $name: first row=${firstCard.bottom - firstCard.top}, first top=${firstCard.top}, second time=${secondTime.top}..${secondTime.bottom}, list bottom=$listBottom")
+            if (name != "candidates_expanded_landscape") org.junit.Assert.assertTrue("second candidate total must be fully visible", secondTime.bottom <= listBottom)
+            if (fontScale == 1f && name != "candidates_expanded_landscape") {
+                compose.onNodeWithTag("route_bar_1", useUnmergedTree = true).assertIsDisplayed()
+                compose.onNodeWithTag("candidate_boarding_1", useUnmergedTree = true).assertIsDisplayed()
+            }
+            if (fontScale > 1f) org.junit.Assert.assertTrue("one whole candidate must fit at 320dp / 1.5x", firstCard.bottom <= listBottom)
+        }
         shot(name)
         compose.runOnIdle { scope.launch { sheet.bottomSheetState.partialExpand() } }
         compose.mainClock.advanceTimeBy(5000)
@@ -214,9 +227,10 @@ class CandidatesScreenshotTest {
         compose.onRoot().tryPerformAccessibilityChecks()
         if (!missing) {
             compose.onNodeWithText("버스 견본 광역급행 아주 긴 노선 이름 12345 / 대체노선 67890").assertExists()
-            compose.onNodeWithText("견본 출발 정류장 이름이 아주 긴 곳 승차 → 견본 환승센터 하차").assertExists()
+            compose.onNodeWithText("견본 출발 정류장 이름이 아주 긴 곳 승차").assertExists()
+            compose.onNodeWithText("견본 환승센터 하차").assertExists()
         }
-        compose.onNodeWithText("23:50 출발 → 00:30 도착 예상").assertExists()
+        compose.onNodeWithText("23:50 → 다음 날 00:30").assertExists()
         shot("candidates_readable_${if (dark) "dark" else "light"}${if (large) "_large" else ""}${if (missing) "_missing" else ""}")
         compose.onNodeWithText("자리 보기").performScrollTo().assertIsDisplayed()
         compose.onRoot().tryPerformAccessibilityChecks()
@@ -229,6 +243,23 @@ class CandidatesScreenshotTest {
     @Test @Config(qualifiers = "w320dp-h640dp-xxhdpi")
     fun readableDarkSmallLarge() = readableCard(true, large = true)
     @Test fun readableMissing() = readableCard(false, missing = true)
+
+    @Test fun sameLineReboardingWithShortWalkLight() {
+        val base = list.items.first()
+        val ride = base.chosen.route.legs.first().copy(estimatedStationTiming = true, transitStepIndex = 0)
+        val second = ride.copy(startName = ride.endName, endName = "견본 중간역")
+        val walk = base.chosen.route.legs[1].copy(duration = java.time.Duration.ofSeconds(20), startName = "견본 중간역", endName = "견본 환승역")
+        val again = ride.copy(startName = "견본 환승역", endName = "견본 종점", transitStepIndex = 1)
+        val route = com.sunseat.app.domain.Route(listOf(ride, second, walk, again))
+        val result = com.sunseat.app.ui.result.ResultFixtures.advisor(90.0, 15.0)
+            .advise(route, java.time.Instant.parse("2026-11-15T00:00:00Z"), transitRequest.goal, totalDuration = base.totalDuration)
+        val item = base.copy(chips = listOf(base.chips[0], base.chips[0], base.chips[1], base.chips[0]),
+            chosen = base.chosen.copy(route = route, cachedResult = result))
+        compose.enableAccessibilityChecks()
+        render(CandidatesState.Options(listOf(item), selectedId = item.id), false)
+        compose.onRoot().tryPerformAccessibilityChecks()
+        shot("candidates_same_line_reboarding_light")
+    }
 
     private fun shot(name: String) = compose.onRoot().captureRoboImage("src/test/screenshots/$name.png")
 }

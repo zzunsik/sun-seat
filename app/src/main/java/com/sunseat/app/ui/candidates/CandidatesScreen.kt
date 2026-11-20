@@ -56,6 +56,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.platform.LocalContext
 import com.sunseat.app.ui.input.NeutralTabs
@@ -382,16 +383,33 @@ private fun Bar(width: Dp, height: Dp, shape: androidx.compose.ui.graphics.Shape
 @Composable
 private fun OptionList(items: List<CandidateUi>, selectedId: Int?, request: TripRequest, content: PaddingValues, scopeNotice: String?, actions: CandidatesActions, listState: LazyListState) {
     val haptics = rememberSunSeatHaptics()
-    LazyColumn(Modifier.fillMaxSize().testTag("candidate_list"), state = listState, contentPadding = content, verticalArrangement = Arrangement.spacedBy(Spacing.m)) {
-        // 카드마다 반복하지 않고 목록에 한 번만 도보·막대의 데이터 범위를 알린다(#105).
+    var showScope by remember { mutableStateOf(false) }
+    if (showScope && scopeNotice != null) AlertDialog(
+        onDismissRequest = { showScope = false },
+        title = { Text(stringResource(R.string.candidates_scope_action)) },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+            Text(scopeNotice)
+            Text(stringResource(R.string.candidates_scope_detail))
+        } },
+        confirmButton = { QuietButton(onClick = { showScope = false }) { Text(stringResource(R.string.candidates_scope_close)) } },
+    )
+    LazyColumn(Modifier.fillMaxSize().testTag("candidate_list"), state = listState, contentPadding = PaddingValues(top = content.calculateTopPadding(), bottom = content.calculateBottomPadding())) {
         if (scopeNotice != null) item(key = "walk_scope") {
-            Row(Modifier.fillMaxWidth().testTag("walk_scope_notice"), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                Icon(painterResource(R.drawable.ic_ms_directions_walk), contentDescription = null, tint = SunSeatTheme.scheme.onSurfaceVariant, modifier = Modifier.size(Sizes.iconSmall))
-                Text(scopeNotice, style = MaterialTheme.typography.bodySmall, color = SunSeatTheme.scheme.onSurfaceVariant)
+            QuietButton(onClick = { showScope = true }, modifier = Modifier.testTag("walk_scope_notice").padding(horizontal = Spacing.xs)) {
+                Icon(painterResource(R.drawable.ic_ms_directions_walk), null, Modifier.size(Sizes.iconSmall))
+                Spacer(Modifier.width(Spacing.s))
+                Text(stringResource(R.string.candidates_scope_action), style = MaterialTheme.typography.bodySmall)
             }
         }
+        request.departure?.let { departure -> item(key = "time_basis") {
+            Text(stringResource(R.string.candidates_time_basis, departure.format(DateTimeFormatter.ofPattern("M월 d일 HH:mm"))),
+                style = MaterialTheme.typography.bodySmall, color = SunSeatTheme.scheme.onSurfaceVariant)
+        } }
         items(items, key = { it.id }) { item ->
-            CandidateCard(item, item.id == selectedId, request, onClick = { haptics.selectionChanged(); actions.onHighlight(item) }, onView = { haptics.press(); actions.onSelect(item) })
+            Column {
+                CandidateCard(item, item.id == selectedId, request, onClick = { haptics.selectionChanged(); actions.onHighlight(item) }, onView = { haptics.press(); actions.onSelect(item) })
+                HorizontalDivider(Modifier.padding(start = Spacing.l), thickness = Sizes.hairline, color = SunSeatTheme.scheme.outlineVariant)
+            }
         }
     }
 }
@@ -399,47 +417,79 @@ private fun OptionList(items: List<CandidateUi>, selectedId: Int?, request: Trip
 @Composable
 internal fun CandidateCard(item: CandidateUi, selected: Boolean, request: TripRequest, onClick: () -> Unit, onView: () -> Unit) {
     val scheme = SunSeatTheme.scheme
-    Surface(color = if (selected) scheme.surfaceContainerHigh else scheme.surface,
-        shape = MaterialTheme.shapes.large,
-        modifier = Modifier.fillMaxWidth().testTag("candidate_${item.id}").semantics { this.selected = selected }
-            .then(if (selected) Modifier.border(Sizes.hairline, scheme.onSurface, MaterialTheme.shapes.large) else Modifier)
+    val routeColors = SunSeatTheme.route
+    val taxi = request.mode == TravelMode.TAXI
+    val selectedDescription = stringResource(R.string.candidates_map_selected)
+    Surface(color = if (selected) routeColors.selectionContainer else scheme.surface,
+        modifier = Modifier.fillMaxWidth().testTag("candidate_${item.id}").semantics { this.selected = selected; if (selected) stateDescription = selectedDescription }
             .clickable(role = Role.Button, onClickLabel = stringResource(R.string.candidates_highlight), onClick = onClick)) {
-        Column(Modifier.padding(Spacing.l), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                Text(formatDuration(item.totalDuration), modifier = Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, color = scheme.onSurface)
-                if (selected) Icon(painterResource(R.drawable.ic_ms_check), stringResource(R.string.candidates_selected), Modifier.size(Sizes.iconSmall))
+        Box {
+            if (selected) androidx.compose.foundation.Canvas(Modifier.matchParentSize()) {
+                drawRect(routeColors.selectionIndicator, size = androidx.compose.ui.geometry.Size(Sizes.selectionBar.toPx(), size.height))
             }
-            item.arrival?.let { arrival ->
-                val departure = arrival.minus(item.totalDuration)
-                Text(stringResource(R.string.candidates_schedule, departure.format(ArrivalFormat), arrival.format(ArrivalFormat)), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
-            }
-            item.fare?.let { Text(if (request.mode == TravelMode.TAXI) stringResource(R.string.candidates_taxi_fare, formatWon(it)) else formatWon(it), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant) }
-            RouteSegmentBar(item, taxi = request.mode == TravelMode.TAXI)
-            if (request.mode == TravelMode.TRANSIT) {
-                // 응답의 도보는 환승 구간뿐이다(#105). 도보 구간이 없으면 '도보 0분'으로 단정하지 않고 생략한다.
-                val walkLabel = item.providedWalk?.let { walking ->
-                    if (!walking.isZero && walking < java.time.Duration.ofMinutes(1)) stringResource(R.string.candidates_transfer_walk_under_minute)
-                    else stringResource(R.string.candidates_transfer_walk, walking.toMinutes())
-                }
-                Text(listOfNotNull(stringResource(R.string.candidates_transfers, item.transfers), walkLabel).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
-            }
-            RouteLegSummary(item, taxi = request.mode == TravelMode.TAXI)
-            val result = item.chosen.cachedResult
-            if (result == null) {
-                Box(Modifier.fillMaxWidth().height(Sizes.timelineBar).background(scheme.surfaceContainerHighest))
-                Text(stringResource(R.string.candidates_calculating_sun), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
-            } else {
-                if (result.sunIfFollowed.isZero && result.shadeIfFollowed.isZero) Text(stringResource(R.string.result_no_outdoor), style = MaterialTheme.typography.bodyMedium)
-                else {
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                        com.sunseat.app.ui.components.ExposurePill(com.sunseat.app.ui.components.Exposure.Shade, stringResource(R.string.result_shade, formatDuration(result.shadeIfFollowed, zeroOk = true)))
-                        com.sunseat.app.ui.components.ExposurePill(com.sunseat.app.ui.components.Exposure.Sun, stringResource(R.string.result_sun, formatDuration(result.sunIfFollowed, zeroOk = true)))
+            Column(Modifier.padding(horizontal = Spacing.l, vertical = Spacing.m), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
+                    Text(formatDuration(item.totalDuration), Modifier.weight(1f).testTag("candidate_time_${item.id}"),
+                        style = MaterialTheme.typography.titleLarge, color = scheme.onSurface)
+                    if (item.fastest) Surface(color = scheme.surfaceContainerHigh, shape = MaterialTheme.shapes.extraSmall) {
+                        Text(stringResource(R.string.candidates_fastest), Modifier.heightIn(min = Sizes.badgeHeight).padding(horizontal = Spacing.xs), style = MaterialTheme.typography.labelMedium)
                     }
-                    val (res, arg) = com.sunseat.app.ui.result.headlineRes(LocalContext.current, request, result)
-                    Text(if (arg == null) stringResource(res) else stringResource(res, arg), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                    item.arrival?.let { arrival ->
+                        val departure = arrival.minus(item.totalDuration)
+                        val arrivalLabel = if (arrival.toLocalDate() > departure.toLocalDate())
+                            stringResource(R.string.candidates_next_day, arrival.format(ArrivalFormat)) else arrival.format(ArrivalFormat)
+                        Text(stringResource(R.string.candidates_compact_schedule, departure.format(ArrivalFormat), arrivalLabel),
+                            style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+                    }
+                    item.fare?.let { Text(if (taxi) stringResource(R.string.candidates_taxi_fare, formatWon(it)) else formatWon(it),
+                        style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant) }
+                }
+                RouteSegmentBar(item, taxi = taxi)
+                if (request.mode == TravelMode.TRANSIT) {
+                    val walkLabel = item.providedWalk?.let { walking ->
+                        if (!walking.isZero && walking < java.time.Duration.ofMinutes(1)) stringResource(R.string.candidates_transfer_walk_under_minute)
+                        else stringResource(R.string.candidates_transfer_walk, walking.toMinutes())
+                    }
+                    Text(listOfNotNull(stringResource(R.string.candidates_transfers, item.transfers), walkLabel).joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                }
+                if (selected) RouteLegSummary(item, taxi) else {
+                    val rides = routeLegGroups(item).filter { item.chosen.route.legs[it.first].mode != Mode.WALK }
+                    val boardingLabels = rides.map { range ->
+                        val leg = item.chosen.route.legs[range.first]
+                        val stop = leg.startName.ifBlank { if (range == rides.firstOrNull()) item.boardAt else "" }
+                        val line = item.chips.getOrNull(range.first)?.lineName.orEmpty().ifBlank { routeBoardingLabel(item, range.first, taxi) }
+                        listOf(stop, line).filter { it.isNotBlank() }.joinToString(" ")
+                    } + listOfNotNull(rides.lastOrNull()?.let { item.chosen.route.legs[it.last].endName.ifBlank { item.alightAt } }?.takeIf { it.isNotBlank() })
+                    Text(boardingLabels.joinToString(" → "), Modifier.testTag("candidate_boarding_${item.id}"),
+                        style = MaterialTheme.typography.bodySmall, color = scheme.onSurface)
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalAlignment = Alignment.Bottom) {
+                    FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                    val result = item.chosen.cachedResult
+                    when {
+                        result == null -> Text(stringResource(R.string.candidates_calculating_sun), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                        result.advice == com.sunseat.app.domain.TripAdvice.NoSun -> Text(stringResource(R.string.candidates_no_sun), style = MaterialTheme.typography.bodySmall)
+                        result.sunIfFollowed.isZero && result.shadeIfFollowed.isZero -> Text(stringResource(R.string.result_no_outdoor), style = MaterialTheme.typography.bodySmall)
+                        else -> {
+                            com.sunseat.app.ui.components.ExposurePill(com.sunseat.app.ui.components.Exposure.Shade,
+                                stringResource(R.string.result_shade, formatDuration(result.shadeIfFollowed, zeroOk = true)), compact = true)
+                            com.sunseat.app.ui.components.ExposurePill(com.sunseat.app.ui.components.Exposure.Sun,
+                                stringResource(R.string.result_sun, formatDuration(result.sunIfFollowed, zeroOk = true)), compact = true)
+                        }
+                    }
+                    }
+                    Box(Modifier.heightIn(min = Spacing.touch), contentAlignment = Alignment.Center) {
+                        OutlinedButton(onClick = onView, modifier = Modifier.heightIn(min = Sizes.secondaryButton).testTag("candidate_action_${item.id}"), shape = CapsuleShape,
+                            border = androidx.compose.foundation.BorderStroke(Sizes.hairline, scheme.outline),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = scheme.onSurface)) {
+                            Text(stringResource(R.string.candidates_view_seat))
+                        }
+                    }
                 }
             }
-            PrimaryButton(onClick = onView, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.candidates_view_seat)) }
         }
     }
 }

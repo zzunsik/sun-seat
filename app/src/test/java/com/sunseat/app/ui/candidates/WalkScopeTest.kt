@@ -1,5 +1,6 @@
 package com.sunseat.app.ui.candidates
 
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -57,7 +58,7 @@ class WalkScopeTest {
         compose.setContent { SunSeatTheme { CandidateCard(item, false, transitRequest, {}, {}) } }
         compose.onNodeWithText("환승 1회 · 환승 도보 0분", useUnmergedTree = true).assertIsDisplayed()
         // 0초 구간을 1분으로 부풀리지 않는다.
-        compose.onNodeWithContentDescription("지하철 1호선 → 도보 0분 → 지하철 2호선").assertIsDisplayed()
+        compose.onNodeWithContentDescription("지하철 1호선 → 도보 0분 → 지하철 2호선; 1호선 12분 · 도보 0분 · 2호선 18분").assertIsDisplayed()
     }
 
     @Test fun uiModelSeparatesMissingWalkFromKnownWalkAndNeverFillsTheGap() {
@@ -93,12 +94,14 @@ class WalkScopeTest {
 
     @Test fun transitListExplainsWalkAndBarScopeOnce() {
         screen(CandidatesState.Options(CandidatesFixtures.options.toUi(null)))
+        compose.onNodeWithText("구간·햇빛 안내").performClick()
         compose.onAllNodesWithText("도보와 구간 표시는 승차부터 하차까지예요.", substring = true).assertCountEquals(1)
         compose.onAllNodesWithText("정류장을 오가는 도보와 대기 시간은 빠져요.", substring = true).assertCountEquals(1)
     }
 
     @Test fun walkSortExplainsItComparesOnlyProvidedTransferWalk() {
         screen(CandidatesState.Options(CandidatesFixtures.options.toUi(null), sort = CandidateSort.WALK))
+        compose.onNodeWithText("구간·햇빛 안내").performClick()
         compose.onAllNodesWithText("최소 도보는 환승 도보만 비교해요.", substring = true).assertCountEquals(1)
     }
 
