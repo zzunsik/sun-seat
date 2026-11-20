@@ -116,8 +116,8 @@ fun InputScreen(
             val mapTop = panelBottom.coerceAtMost((maxHeight - Spacing.touch * 2).coerceAtLeast(0.dp))
             com.sunseat.app.ui.map.SunSeatMap(com.sunseat.app.ui.map.MapState(
                 origin = state.origin?.place, destination = state.destination?.place,
-                // 아래 여백: 오른쪽 아래 현재 위치 버튼(터치 48 + 바깥 여백) 위로 표식을 맞춘다.
-                padding = com.sunseat.app.ui.map.MapPadding(top = mapTop, bottom = WindowInsets.safeDrawing.asPaddingValues().calculateBottomPadding() + Spacing.touch + Spacing.l * 2),
+                // 아래 여백: 세로 화면은 오른쪽 아래 현재 위치 버튼(터치 48 + 바깥 여백) 위로 표식을 맞춘다. 가로 화면은 지도 띠가 낮아 주지 않는다.
+                padding = com.sunseat.app.ui.map.MapPadding(top = mapTop, bottom = if (maxHeight >= maxWidth) WindowInsets.safeDrawing.asPaddingValues().calculateBottomPadding() + Spacing.touch + Spacing.l * 2 else 0.dp),
                 showDecorations = false,
                 focus = state.mapFocus,
                 automaticFit = false,
