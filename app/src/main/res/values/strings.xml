@@ -364,4 +364,13 @@
     <string name="candidates_preview_close">경로 목록으로 돌아가기</string>
     <string name="candidates_fit_route">전체 경로 보기</string>
     <string name="candidates_journey_expand">여정 펼쳐서 바꾸기</string>
+    <string name="candidates_compact_schedule">%1$s → %2$s</string>
+    <string name="candidates_next_day">다음 날 %1$s</string>
+    <string name="candidates_scope_action">구간·햇빛 안내</string>
+    <string name="candidates_scope_detail">막대는 제공된 구간 시간 합에 비례해요. 총시간과의 차이를 도보나 대기로 추측하지 않아요. 햇빛·그늘은 계산 가능한 탑승 구간만 표시해 총시간과 다를 수 있어요.</string>
+    <string name="candidates_time_basis">경로는 지금 기준 · 햇빛은 %1$s 기준</string>
+    <string name="candidates_fastest">가장 빠름</string>
+    <string name="candidates_no_sun">해 없음</string>
+    <string name="candidates_scope_close">닫기</string>
+    <string name="candidates_map_selected">지도에 표시 중</string>
 </resources>

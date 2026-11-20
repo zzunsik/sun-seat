@@ -18,6 +18,9 @@ private val LocalSunSeatColors = staticCompositionLocalOf { LightSunSeatColors }
 @Suppress("ComposeCompositionLocalUsage")
 private val LocalReduceMotion = staticCompositionLocalOf { false }
 
+@Suppress("ComposeCompositionLocalUsage")
+private val LocalRouteColors = staticCompositionLocalOf { LightRouteColors }
+
 /**
  * 햇빛 좌석 테마. Material 3 Expressive 위에 자체 토큰(docs/DESIGN.md)을 입힌다.
  */
@@ -31,6 +34,7 @@ fun SunSeatTheme(
     CompositionLocalProvider(
         LocalSunSeatColors provides if (darkTheme) DarkSunSeatColors else LightSunSeatColors,
         LocalReduceMotion provides reduceMotion,
+        LocalRouteColors provides if (darkTheme) DarkRouteColors else LightRouteColors,
     ) {
         MaterialExpressiveTheme(
             colorScheme = if (darkTheme) DarkScheme else LightScheme,
@@ -44,6 +48,9 @@ fun SunSeatTheme(
 
 /** 테마 토큰 접근점 */
 object SunSeatTheme {
+    val route: RouteColors
+        @Composable @ReadOnlyComposable get() = LocalRouteColors.current
+
     val colors: SunSeatColors
         @Composable @ReadOnlyComposable get() = LocalSunSeatColors.current
 

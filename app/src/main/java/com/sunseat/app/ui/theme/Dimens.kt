@@ -22,6 +22,14 @@ object Spacing {
 
 /** 부품 크기 토큰. docs/DESIGN.md 4 */
 object Sizes {
+    val routeBar = 8.dp
+    val routeBarGap = 2.dp
+    val timelineNode = 12.dp
+    val timelineConnector = 2.dp
+    val selectionBar = 4.dp
+    val badgeHeight = 24.dp
+    val compactPillHeight = 28.dp
+    val secondaryButton = 40.dp
     val cabinHeight = 208.dp
     val cabinLandscapeHeight = 152.dp
     val simulationCompactPlay = 112.dp

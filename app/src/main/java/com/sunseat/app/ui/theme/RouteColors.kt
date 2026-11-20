@@ -20,3 +20,13 @@ object MapRouteColors {
     /** 시뮬레이션에서 지나온 구간 */
     val passed = Color(0xFF7A8696)
 }
+
+/** 지도 밖 후보 시간 막대·현재 선택 역할. DESIGN 2.5. */
+data class RouteColors(
+    val transit: Color,
+    val walk: Color,
+    val selectionContainer: Color,
+    val selectionIndicator: Color,
+)
+internal val LightRouteColors = RouteColors(Color(0xFF0B6E75), LightScheme.outline, LightScheme.surfaceContainerHigh, LightScheme.onSurface)
+internal val DarkRouteColors = RouteColors(Color(0xFF5FC6CC), DarkScheme.outline, DarkScheme.surfaceContainerHigh, DarkScheme.onSurface)
