@@ -154,14 +154,20 @@ fun CandidatesScreen(
     var fitRevision by remember { mutableLongStateOf(0L) }
     var fittedTrigger by remember { mutableLongStateOf(-1L) }
     var userMoved by remember { mutableStateOf(false) }
-    // 카메라 맞춤 트리거는 목록 개요의 후보 집합 기준이라 미리보기 진입·닫기만으로 다시 맞추지 않는다.
+    // 카메라 맞춤 트리거: 목록 개요의 후보 집합·선택 변경, 미리보기 진입(#102), 미리보기 닫기(#135), 명시적 "지도 맞춤".
+    // 미리보기와 목록은 시트 높이(보이는 지도 영역)가 달라, 한쪽에서 맞춘 카메라는 다른 쪽에서 경로를 시트 뒤에 둔다.
+    // 사용자가 지도를 직접 움직였으면(userMoved) 맞춤 요청이 와도 카메라를 옮기지 않는다(#71, DESIGN 12.3).
     val routes = options?.visible?.sortedBy { it.id }.orEmpty().map { it.chosen.route }
     val mapRoutes = candidateMapRoutes(options?.visible.orEmpty(), options?.selectedId, preview)
     fun closePreview() { showPreview = false; scope.launch { scaffoldState.bottomSheetState.partialExpand() } }
     BackHandler(enabled = preview) { closePreview() }
     LaunchedEffect(routes, options?.selectedId) { userMoved = false; fitTrigger++ }
+    // 이 화면 안에서 미리보기를 연 적이 있을 때만 닫힘을 맞춤 시점으로 본다(첫 구성·결과에서 복귀는 위 후보 집합 맞춤이 맡는다).
+    var previewShown by remember { mutableStateOf(false) }
     LaunchedEffect(preview) {
-        if (preview) { androidx.compose.runtime.withFrameNanos { }; scaffoldState.bottomSheetState.partialExpand(); fitTrigger++ }
+        if (preview) { previewShown = true; androidx.compose.runtime.withFrameNanos { }; scaffoldState.bottomSheetState.partialExpand(); fitTrigger++ }
+        // #135: 목록으로 돌아오면 시트가 목록 높이에 자리 잡은 뒤(아래 맞춤 효과가 기다린다) 보이는 지도 띠에 선택 경로를 다시 맞춘다.
+        else if (previewShown) { androidx.compose.runtime.withFrameNanos { }; fitTrigger++ }
     }
     val density = LocalDensity.current
     var headerHeight by remember { mutableStateOf(0.dp) }
@@ -250,7 +256,7 @@ fun CandidatesScreen(
             if (preview && previewCandidate != null) {
                 val paneTitle = stringResource(R.string.candidates_preview_title)
                 Column(Modifier.testTag("candidates_preview_sheet").semantics { this.paneTitle = paneTitle }.fillMaxWidth().heightIn(max = (viewportHeight - headerHeight - (if (dragHandleHeight > 0.dp) dragHandleHeight else Spacing.touch)).coerceAtLeast(Spacing.touch)).verticalScroll(rememberScrollState()).navigationBarsPadding()) {
-                    RoutePreviewSheet(previewCandidate, request, onSeat = { showPreview = false; actions.onSelect(previewCandidate) }) { previewSummaryHeight = with(density) { it.toDp() } }
+                    RoutePreviewSheet(previewCandidate, request, onSeat = { previewShown = false; showPreview = false; actions.onSelect(previewCandidate) }) { previewSummaryHeight = with(density) { it.toDp() } }
                 }
             } else Column(Modifier.testTag("candidates_sheet").fillMaxWidth().heightIn(max = listSheetMax).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                 if (options != null && request.mode == TravelMode.TRANSIT) {
