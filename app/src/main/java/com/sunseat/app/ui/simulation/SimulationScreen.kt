@@ -72,7 +72,8 @@ fun SimulationScreen(
         else MapCursor(p.position, p.heading, p.sun?.azimuth ?: 0.0, if (p.undergroundOrUnknown) -90.0 else p.sun?.altitude ?: -90.0)
     }
     @Composable fun JourneyMap(mapModifier: Modifier) {
-            Box(mapModifier.clipToBounds()) {
+        Column(mapModifier) {
+            Box(Modifier.fillMaxWidth().weight(1f).clipToBounds()) {
                 SunSeatMap(MapState(routes = listOf(route), origin = request.origin, destination = request.destination,
                     cursor = cursor, followCursor = state.following, onGesture = actions.unfollow,
                     routeProgress = point?.routeProgress ?: 0f, showDecorations = false,
@@ -90,10 +91,14 @@ fun SimulationScreen(
                         Text(stringResource(R.string.simulation_route_overview,request.origin.name,request.destination.name),style=MaterialTheme.typography.labelSmall,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     }
                 }
-                if (!state.following) Surface(Modifier.align(Alignment.BottomEnd).padding(Spacing.s), color = scheme.surface, shape = MaterialTheme.shapes.large) {
+            }
+            // A separate row cannot cover the SDK logo or any map marker, at any font size.
+            if (!state.following) Surface(Modifier.fillMaxWidth(), color = scheme.surface) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.s), horizontalArrangement = Arrangement.End) {
                     QuietButton(onClick = actions.follow) { Text(stringResource(R.string.simulation_follow)) }
                 }
             }
+        }
     }
     @Composable fun CabinDetails(detailModifier: Modifier) {
             Column(detailModifier.verticalScroll(rememberScrollState()).padding(horizontal=Spacing.screen,vertical=if(landscape) Spacing.s else Spacing.screen), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {

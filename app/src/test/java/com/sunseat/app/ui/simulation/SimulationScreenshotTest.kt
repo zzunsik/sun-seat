@@ -49,12 +49,12 @@ class SimulationScreenshotTest {
         val advisor = TripAdvisor(ExposureAnalyzer(source))
         return TripTimeline(route, advisor.advise(route, start, SunGoal.AVOID, totalDuration = route.duration.plusMinutes(2)), source, advisor)
     }
-    private fun render(minute: Long, dark: Boolean, altitude: Double = 15.0, route: Route = this.route) {
+    private fun render(minute: Long, dark: Boolean, altitude: Double = 15.0, route: Route = this.route, following: Boolean = true, fontScale: Float = 1f, actions: SimulationActions = SimulationActions()) {
         val timeline = timeline(altitude, route)
         compose.enableAccessibilityChecks()
-        compose.setContent { CompositionLocalProvider(LocalMapRenderer provides MapRenderer.PREVIEW) {
+        compose.setContent { CompositionLocalProvider(LocalMapRenderer provides MapRenderer.PREVIEW, LocalDensity provides Density(LocalDensity.current.density, fontScale)) {
             SunSeatTheme(darkTheme = dark) {
-                SimulationScreen(request, route, timeline.result, SimulationUiState(minute * 60_000), timeline.at(start.plusSeconds(minute * 60)), timeline.boundaries, SimulationActions(), zone = zone)
+                SimulationScreen(request, route, timeline.result, SimulationUiState(minute * 60_000, following = following), timeline.at(start.plusSeconds(minute * 60)), timeline.boundaries, actions, zone = zone)
             }
         } }
         compose.waitForIdle()
@@ -110,6 +110,27 @@ class SimulationScreenshotTest {
         assertTrue("the complete scene must retain its intended height with system bars", scene.height >= com.sunseat.app.ui.theme.Sizes.cabinLandscapeHeight.value * compose.density.density - 1)
         assertTrue("scene must fit above controls without scrolling", scene.bottom <= slider.top)
         shot(if (dark) "simulation_landscape_bars_dark_large" else "simulation_landscape_bars_light")
+    }
+    @Test fun followOutsideMapPortraitLight() { followOutsideMap(false, "simulation_follow_light") }
+    @Test fun followOutsideMapPortraitDark() { followOutsideMap(true, "simulation_follow_dark") }
+    @Config(qualifiers = "w320dp-h844dp-xxhdpi")
+    @Test fun followOutsideMapSmallDarkLarge() { followOutsideMap(true, "simulation_follow_small_dark_large", 1.5f) }
+    @Config(qualifiers = "w832dp-h384dp-xxhdpi")
+    @Test fun followOutsideMapLandscape() { followOutsideMap(false, "simulation_follow_landscape") }
+
+    private fun followOutsideMap(dark: Boolean, name: String, fontScale: Float = 1f) {
+        render(6, dark, following = false, fontScale = fontScale)
+        val app = org.robolectric.RuntimeEnvironment.getApplication()
+        val map = compose.onNodeWithContentDescription(app.getString(R.string.map_description, "숲 입구", "공원")).fetchSemanticsNode().boundsInRoot
+        val follow = compose.onNodeWithText(app.getString(R.string.simulation_follow)).fetchSemanticsNode().boundsInRoot
+        assertTrue("follow control must be outside the map, including native logo and destination markers", follow.top >= map.bottom)
+        shot(name)
+    }
+    @Test fun followButtonRetainsItsAction() {
+        var followed = false
+        render(6, false, following = false, actions = SimulationActions(follow = { followed = true }))
+        compose.onNodeWithText(org.robolectric.RuntimeEnvironment.getApplication().getString(R.string.simulation_follow)).performClick()
+        assertTrue(followed)
     }
     @Test fun nightDark() { render(6, true, -10.0); shot("simulation_night_dark") }
     @Test fun undergroundLight() { render(6, false, route = route.copy(legs = route.legs.map { it.copy(mode = Mode.SUBWAY, groundLevel = GroundLevel.BELOW) })); shot("simulation_underground_light") }
