@@ -84,14 +84,15 @@ internal val MapVisibleHeightKey = androidx.compose.ui.semantics.SemanticsProper
 internal val MapTopPaddingKey = androidx.compose.ui.semantics.SemanticsPropertyKey<Float>("MapTopPadding")
 
 /**
- * 카메라 맞춤 틀(px). 지도 여백 [top]·[bottom]·[side](좌우 같음)과 네 변에 같이 들어가는 맞춤 [inset].
+ * 카메라 맞춤 틀(px). 지도 여백 [top]·[bottom]·[left]·[right]와 네 변에 같이 들어가는 맞춤 [inset]. [side]는 이름표가 없을 때의 좌우 여백이다.
  * 실제 SDK 지도(setPadding + fitMapPoints)와 테스트 지도가 같은 값을 쓴다.
  */
-internal data class FitFrame(val top: Float, val bottom: Float, val side: Float, val inset: Float)
+internal data class FitFrame(val top: Float, val bottom: Float, val side: Float, val inset: Float, val left: Float = side, val right: Float = side)
 
 /**
  * [top]·[bottom]은 지도 위·아래 여백(헤더·시트 겹침), [inset]은 기본 맞춤 inset, [edge]는 가장 작은 맞춤 inset,
- * [markerHeight]는 좌표 위로 솟는 출발·도착 표식 높이(틈 포함)다.
+ * [markerHeight]는 좌표 위로 솟는 출발·도착 표식 높이(틈 포함)다. [labelLeft]·[labelRight]는 정류장 노선 이름표가 좌표에서
+ * 왼쪽·오른쪽으로 뻗는 최대 폭([labelExtents])이다. 어느 정류장이 가장자리에 올지 맞춤 전에는 모르므로 가장 넓은 이름표 기준이다.
  *
  * #138: 맞춤 inset은 네 변에 같이 들어가므로 낮은 지도 띠(후보 목록 기본 상태 약 110dp)에서는 기본 inset 두 배가
  * 높이 대부분을 차지해 지도가 크게 축소됐다. Kakao 줌은 정수 단계라 경로 높이가 두 배 들어갈 자리가 있어야 한 단계 가까워진다.
@@ -100,14 +101,25 @@ internal data class FitFrame(val top: Float, val bottom: Float, val side: Float,
  * 돌려 기본 inset과 같은 폭을 남긴다(높이가 맞춤을 제한하므로 손해가 없고, 가장자리 정류장 노선 이름표가 잘리지 않는다).
  * 보이는 높이가 200dp 이상인 지도(미리보기·결과·세로 입력·지도 선택)는 기본 inset 그대로다.
  */
-internal fun fitFrame(top: Float, bottom: Float, width: Float, height: Float, inset: Float, edge: Float, markerHeight: Float): FitFrame {
+internal fun fitFrame(top: Float, bottom: Float, width: Float, height: Float, inset: Float, edge: Float, markerHeight: Float, labelLeft: Float = 0f, labelRight: Float = 0f): FitFrame {
     val visible = (height - top - bottom).coerceAtLeast(0f)
     val spare = visible * (1 - FIT_SHARE) // 맞춤 inset 두 변 + 위쪽 표식 여백에 쓸 수 있는 높이
     // inset이 표식 높이 이상이면 위 여백을 더하지 않으므로 spare를 위아래 inset이 나눠 쓰고, 아니면 표식 높이를 먼저 뺀다.
     val needed = if (spare / 2 >= markerHeight) spare / 2 else spare - markerHeight
     val fitted = minOf(inset, maxOf(edge, needed))
-    return FitFrame(top + (markerHeight - fitted).coerceAtLeast(0f), bottom, inset - fitted, fitted)
+    // #143: 정류장 옆 노선 이름표가 inset보다 넓으면 그쪽 지도 여백을 이름표 폭만큼 둔다(그 밖의 좌우는 기본 inset 폭).
+    return FitFrame(top + (markerHeight - fitted).coerceAtLeast(0f), bottom, inset - fitted, fitted,
+        left = maxOf(inset, labelLeft) - fitted, right = maxOf(inset, labelRight) - fitted)
 }
 
 /** 경로·표식 좌표가 보이는 지도 높이에서 최소한 차지할 비율. */
 internal const val FIT_SHARE = 0.6f
+
+/**
+ * 정류장 옆 노선 이름표가 정류장 좌표에서 왼쪽·오른쪽으로 뻗는 최대 폭(px). [labelWidth]는 렌더러가 그리는 이름표 상자 폭이다.
+ */
+internal fun labelExtents(stops: List<StopMarker>, stopRadius: Float, labelWidth: (StopMarker) -> Float): Pair<Float, Float> {
+    val labeled = stops.filter { it.labeled }
+    fun side(onLeft: Boolean) = labeled.filter { it.labelOnLeft == onLeft }.maxOfOrNull { stopRadius + labelWidth(it) } ?: 0f
+    return side(true) to side(false)
+}

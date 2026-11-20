@@ -164,6 +164,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         private set
     private var geometry: Triple<List<Route>, Int, Pair<com.sunseat.app.domain.NamedPlace?, com.sunseat.app.domain.NamedPlace?>>? = null
     private var padding: List<Int>? = null
+    private var labelSides = 0f to 0f
     private val fitPolicy = MapFitPolicy()
     private var cursor: Label? = null
     private var ray: Label? = null
@@ -251,14 +252,19 @@ private class MapSession(context: Context, private val ink: Int, private val sur
             decorRoute = state.routes.getOrNull(state.selectedRoute); decorZoom = null; lineDensity = density; walkLines.clear(); decorations.clear()
         }
         // #138: 낮은 지도 띠에서는 맞춤 inset을 줄이고, 표식이 솟는 위쪽에 지도 여백을 더하고 좌우는 기본 폭을 유지한다(fitFrame, 테스트 지도와 같은 값).
+        // #143: 정류장 노선 이름표가 기본 inset보다 넓으면 그쪽 여백을 이름표 폭만큼 둔다. 폭은 nameIcon과 같은 측정이다.
+        if (geometryChanged) labelSides = state.routes.getOrNull(state.selectedRoute)?.let { route ->
+            val paint = textPaint(ink)
+            labelExtents(RouteLinePolicy.stops(route), metrics.stop / 2) { stop -> paint.measureText(metrics.stopLabel(stop)) + metrics.textPadding * 2 }
+        } ?: (0f to 0f)
         val top = state.padding.top.value * density
         val bottom = state.padding.bottom.value * density
-        val frame = if (view.width > 0 && view.height > 0) fitFrame(top, bottom, view.width.toFloat(), view.height.toFloat(), metrics.inset, metrics.edge, metrics.marker + metrics.textPadding)
+        val frame = if (view.width > 0 && view.height > 0) fitFrame(top, bottom, view.width.toFloat(), view.height.toFloat(), metrics.inset, metrics.edge, metrics.marker + metrics.textPadding, labelSides.first, labelSides.second)
             else FitFrame(top, bottom, 0f, metrics.inset)
-        val applied = listOf(frame.side.toInt(), frame.top.toInt(), frame.bottom.toInt())
+        val applied = listOf(frame.left.toInt(), frame.top.toInt(), frame.right.toInt(), frame.bottom.toInt())
         if (geometryChanged || padding != applied) {
             padding = applied
-            target.setPadding(applied[0], applied[1], applied[0], applied[2])
+            target.setPadding(applied[0], applied[1], applied[2], applied[3])
         }
         if (fitPolicy.shouldFit(state)) {
             target.moveCamera(CameraUpdateFactory.fitMapPoints(state.points().map { it.sdk() }.toTypedArray(), frame.inset.toInt(), 17))
