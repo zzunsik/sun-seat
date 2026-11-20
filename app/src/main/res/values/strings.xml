@@ -241,11 +241,14 @@
     <string name="candidates_sort_walk">최소 도보</string>
     <string name="candidates_sort_sun_less">햇빛 적은 순</string>
     <string name="candidates_sort_sun_more">햇빛 많은 순</string>
-    <string name="candidates_filter_bus">버스만</string>
-    <string name="candidates_filter_subway">지하철만</string>
-    <string name="candidates_filter_mixed">버스+지하철</string>
-    <string name="candidates_filtered_empty">조건에 맞는 경로가 없어요</string>
-    <string name="candidates_clear_filters">필터 해제</string>
+    <string name="candidates_filter_all">전체</string>
+    <string name="candidates_filter_bus">버스</string>
+    <string name="candidates_filter_subway">지하철</string>
+    <string name="candidates_filter_mixed">혼합</string>
+    <!-- 범주 탭 TalkBack 설명(#82): 이름 + 받은 후보 수 -->
+    <string name="candidates_category_description">%1$s 경로 %2$d개</string>
+    <string name="candidates_filtered_empty">이 종류의 경로가 없어요</string>
+    <string name="candidates_clear_filters">전체 보기</string>
     <string name="candidates_highlight">경로 미리보기</string>
     <string name="candidates_selected">선택됨</string>
     <string name="candidates_view_seat">자리 보기</string>

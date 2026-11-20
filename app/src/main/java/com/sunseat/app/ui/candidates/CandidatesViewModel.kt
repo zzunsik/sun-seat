@@ -83,10 +83,12 @@ sealed interface CandidatesState {
     data class Loading(val mode: TravelMode) : CandidatesState
     data class Options(
         val items: List<CandidateUi>, val sort: CandidateSort = CandidateSort.RECOMMENDED,
-        val filters: Set<TransitRouteType> = emptySet(), val selectedId: Int? = null,
+        val category: RouteCategory = RouteCategory.ALL, val selectedId: Int? = null,
         val goal: SunGoal = SunGoal.AVOID,
     ) : CandidatesState {
-        val visible: List<CandidateUi> get() = orderCandidates(items, sort, filters, goal)
+        val visible: List<CandidateUi> get() = orderCandidates(items, sort, category.types, goal)
+        /** 범주 탭에 보일 개수(#82). 정렬·햇빛 계산과 무관하게 받은 후보 [items] 기준이다. */
+        val counts: Map<RouteCategory, Int> get() = categoryCounts(items)
     }
 
     /** 경로 없음. [suggestCar]면 "자가용 기준으로 좌석 보기"를 제안한다. */
@@ -177,10 +179,15 @@ class CandidatesViewModel(
         calculateSun(refreshed, base, version)
     }
     fun setSort(sort: CandidateSort) { _state.update { if (it is CandidatesState.Options) it.copy(sort = sort) else it } }
-    fun toggleFilter(type: TransitRouteType) { _state.update {
-        if (it is CandidatesState.Options) it.copy(filters = if (type in it.filters) it.filters - type else it.filters + type, selectedId = null) else it
+    /**
+     * 범주 탭 하나를 고른다(#82). 같은 범주를 다시 골라도 그대로다. 고른 경로가 새 범주에서 숨으면
+     * 선택을 해제해 목록에 없는 경로가 지도에만 선택으로 남지 않게 한다(DESIGN 12.2).
+     */
+    fun selectCategory(category: RouteCategory) { _state.update { current ->
+        if (current !is CandidatesState.Options) return@update current
+        val kept = current.selectedId?.takeIf { id -> current.items.any { it.id == id && category.matches(it) } }
+        current.copy(category = category, selectedId = kept)
     } }
-    fun clearFilters() { _state.update { if (it is CandidatesState.Options) it.copy(filters = emptySet()) else it } }
     fun highlight(id: Int) { _state.update { if (it is CandidatesState.Options) it.copy(selectedId = id) else it } }
 
     fun load() {
@@ -280,6 +287,26 @@ internal fun CarNoRouteReason?.messageRes(): Int = when (this) {
 
 
 enum class CandidateSort { RECOMMENDED, TIME, TRANSFERS, WALK, SUN }
+
+/**
+ * 후보 목록의 경로 종류 범주(#82). 하나만 고르며 [ALL]은 빈 집합 대신 이름이 있는 "전체"다.
+ * 분류를 알 수 없는 [TransitRouteType.OTHER]는 [ALL]에만 들어가고 다른 범주로 추측해 넣지 않는다.
+ */
+enum class RouteCategory(val types: Set<TransitRouteType>) {
+    ALL(emptySet()),
+    BUS(setOf(TransitRouteType.BUS)),
+    SUBWAY(setOf(TransitRouteType.SUBWAY)),
+    MIXED(setOf(TransitRouteType.BUS_AND_SUBWAY));
+
+    fun matches(item: CandidateUi): Boolean = types.isEmpty() || item.type in types
+}
+
+/**
+ * 범주별 후보 수. API가 알려 준 총계가 아니라 앱이 실제로 받은 후보 수를 센다(목록에 보이는 행과 같은 기준).
+ * 정렬·햇빛 계산 결과는 개수에 영향을 주지 않는다.
+ */
+fun categoryCounts(items: List<CandidateUi>): Map<RouteCategory, Int> =
+    RouteCategory.entries.associateWith { category -> items.count(category::matches) }
 
 /** Filters combine with OR; pending sun calculations sort last in both goals. */
 fun orderCandidates(items: List<CandidateUi>, sort: CandidateSort, filters: Set<TransitRouteType>, goal: SunGoal): List<CandidateUi> {
