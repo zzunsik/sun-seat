@@ -193,6 +193,28 @@ class CandidatesScreenshotTest {
         shot("candidates_category_small_large_text")
     }
 
+    /**
+     * #83: 정렬 메뉴를 연 상태(팝업 포함 화면 캡처). 현재 기준은 체크 + 굵은 글자이고,
+     * 햇빛 받기 목적이면 햇빛 기준 이름이 '햇빛 많은 순'이다.
+     */
+    @OptIn(com.github.takahirom.roborazzi.ExperimentalRoborazziApi::class)
+    private fun sortMenu(dark: Boolean, name: String, fontScale: Float = 1f) {
+        compose.enableAccessibilityChecks()
+        // 메뉴 팝업은 창 설정의 글자 배율을 따르므로 기기 글자 배율도 함께 바꾼다.
+        org.robolectric.RuntimeEnvironment.setFontScale(fontScale)
+        render(list.copy(sort = CandidateSort.SUN), dark, transitRequest.copy(goal = com.sunseat.app.domain.SunGoal.SEEK), fontScale)
+        compose.onNodeWithTag("candidates_sort").performSemanticsAction(SemanticsActions.OnClick)
+        compose.waitForIdle()
+        compose.onRoot().tryPerformAccessibilityChecks()
+        compose.onNode(androidx.compose.ui.test.hasText("햇빛 많은 순") and androidx.compose.ui.test.isSelected()).assertExists()
+        compose.onNodeWithText("햇빛 적은 순").assertDoesNotExist()
+        com.github.takahirom.roborazzi.captureScreenRoboImage("src/test/screenshots/$name.png")
+    }
+    @Test fun sortMenuLight() = sortMenu(false, "candidates_sort_menu_light")
+    @Test fun sortMenuDark() = sortMenu(true, "candidates_sort_menu_dark")
+    @Test @Config(qualifiers = "w320dp-h640dp-xxhdpi")
+    fun sortMenuSmallLargeText() = sortMenu(false, "candidates_sort_menu_small_large_text", 1.5f)
+
     /** #105: 최소 도보 정렬은 응답의 환승 도보만 비교한다는 목록 공통 안내. */
     private fun walkSort(dark: Boolean, name: String, fontScale: Float = 1f) {
         compose.enableAccessibilityChecks()
