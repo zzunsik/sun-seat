@@ -158,7 +158,7 @@ internal fun MapPickScreen(
 
 /** 핀: 지도 위 출발·도착 글자 표식과 같은 모양(DESIGN 11.1). 꼬리 끝이 정확히 지도 가운데다. */
 @Composable
-private fun PickPin(isOrigin: Boolean, modifier: Modifier) {
+private fun PickPin(isOrigin: Boolean, modifier: Modifier = Modifier) {
     val measurer = rememberTextMeasurer()
     val style = MaterialTheme.typography.labelMedium
     val label = stringResource(if (isOrigin) R.string.input_origin else R.string.input_destination)
