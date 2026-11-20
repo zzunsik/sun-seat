@@ -58,6 +58,8 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.foundation.layout.navigationBars
@@ -65,7 +67,6 @@ import androidx.compose.ui.platform.LocalContext
 import com.sunseat.app.ui.input.NeutralTabs
 import com.sunseat.app.ui.components.CategoryTab
 import com.sunseat.app.ui.components.CategoryTabs
-import com.sunseat.app.ui.input.NeutralFilterChip
 import com.sunseat.app.ui.input.TimeSheet
 import com.sunseat.app.ui.input.scheduleLabel
 import com.sunseat.app.data.route.TransitRouteType
@@ -148,7 +149,6 @@ fun CandidatesScreen(
     val previewCandidate = options?.visible?.firstOrNull { it.id == options.selectedId }
     val preview = showPreview && previewCandidate != null
     val listScroll = rememberLazyListState()
-    val sortScroll = rememberScrollState(initial = if ((options?.sort?.ordinal ?: 0) >= 3) Int.MAX_VALUE else 0)
     val scope = rememberCoroutineScope()
     var fitTrigger by remember { mutableLongStateOf(0L) }
     var fitRevision by remember { mutableLongStateOf(0L) }
@@ -258,11 +258,16 @@ fun CandidatesScreen(
                         val count = options.counts[category] ?: 0
                         CategoryTab(label, count, stringResource(R.string.candidates_category_description, label, count))
                     }, options.category.ordinal) { actions.onCategory(RouteCategory.entries[it]) }
-                    Row(Modifier.fillMaxWidth().horizontalScroll(sortScroll).padding(horizontal = Spacing.screen), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                        CandidateSort.entries.forEach { sort -> NeutralFilterChip(options.sort == sort, sortLabel(sort, request.goal)) { actions.onSort(sort) } }
+                    // #83: 정렬은 현재 기준이 보이는 드롭다운 하나. 기준을 바꾸면 목록을 맨 위(새 1순위)부터 보인다.
+                    Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.s), horizontalArrangement = Arrangement.End) {
+                        SortDropdown(options.sort, request.goal) { sort ->
+                            actions.onSort(sort)
+                            scope.launch { listScroll.scrollToItem(0) }
+                        }
                     }
                 }
-                val content = PaddingValues(Spacing.screen)
+                // 범주 탭·정렬 행이 있으면 그 아래 간격(spacedBy)만 두고 목록 위 여백을 겹쳐 쌓지 않는다(#83 디자인 리뷰).
+                val content = if (options != null && request.mode == TravelMode.TRANSIT) PaddingValues(start = Spacing.screen, end = Spacing.screen, bottom = Spacing.screen) else PaddingValues(Spacing.screen)
                 when (state) {
                     is CandidatesState.Loading -> Loading(content, state.mode, animateLoader)
                     is CandidatesState.Options -> if (state.visible.isEmpty()) Message(content, R.drawable.ic_ms_search, stringResource(R.string.candidates_filtered_empty), null, stringResource(R.string.candidates_clear_filters) to { actions.onCategory(RouteCategory.ALL) }, stringResource(R.string.candidates_edit_input) to actions.onBack)
@@ -319,6 +324,54 @@ fun CandidatesScreen(
     RouteCategory.SUBWAY -> R.string.candidates_filter_subway
     RouteCategory.MIXED -> R.string.candidates_filter_mixed
 })
+
+/**
+ * 정렬 드롭다운(#83, DESIGN 4.1·12.2): 현재 기준 이름 + 펼침 표시가 있는 버튼 하나.
+ * 메뉴 안 현재 기준은 체크 + selected다. 다른 기준을 고르면 한 번 적용하고 닫는다.
+ * 같은 기준·바깥 터치·Back은 기준을 바꾸지 않고 메뉴만 닫는다(Back 우선순위 ①, DESIGN 12.3).
+ * 열림 상태는 회전·재생성 뒤에도 유지한다.
+ */
+@Composable
+private fun SortDropdown(current: CandidateSort, goal: SunGoal, onSort: (CandidateSort) -> Unit) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    val haptics = rememberSunSeatHaptics()
+    val label = sortLabel(current, goal)
+    val description = stringResource(R.string.candidates_sort_description, label)
+    val stateText = stringResource(if (open) R.string.candidates_sort_expanded else R.string.candidates_sort_collapsed)
+    BackHandler(enabled = open) { open = false }
+    Box {
+        QuietButton(onClick = { open = true }, modifier = Modifier.testTag("candidates_sort").semantics {
+            role = Role.DropdownList
+            contentDescription = description
+            stateDescription = stateText
+        }) {
+            Text(label)
+            Icon(painterResource(R.drawable.ic_ms_chevron_right), null, Modifier.padding(start = Spacing.xs).size(Sizes.iconSmall).rotate(90f))
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = SunSeatTheme.scheme.surfaceContainerHigh,
+            border = androidx.compose.foundation.BorderStroke(Sizes.hairline, SunSeatTheme.scheme.outlineVariant)) {
+            CandidateSort.entries.forEach { sort ->
+                val isCurrent = sort == current
+                DropdownMenuItem(
+                    text = { Text(sortLabel(sort, goal), fontWeight = if (isCurrent) androidx.compose.ui.text.font.FontWeight.SemiBold else null) },
+                    leadingIcon = {
+                        if (isCurrent) Icon(painterResource(R.drawable.ic_ms_check), null, Modifier.size(Sizes.iconSmall))
+                        else Spacer(Modifier.size(Sizes.iconSmall))
+                    },
+                    onClick = {
+                        open = false
+                        if (!isCurrent) { haptics.selectionChanged(); onSort(sort) }
+                    },
+                    modifier = Modifier.heightIn(min = Spacing.touch).semantics {
+                        selected = isCurrent
+                        role = Role.RadioButton
+                    },
+                    colors = MenuDefaults.itemColors(textColor = SunSeatTheme.scheme.onSurface, leadingIconColor = SunSeatTheme.scheme.onSurface),
+                )
+            }
+        }
+    }
+}
 
 @Composable private fun sortLabel(sort: CandidateSort, goal: SunGoal): String = stringResource(when (sort) {
     CandidateSort.RECOMMENDED -> R.string.candidates_sort_recommended

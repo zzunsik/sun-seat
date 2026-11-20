@@ -286,6 +286,10 @@ internal fun CarNoRouteReason?.messageRes(): Int = when (this) {
 }
 
 
+/**
+ * 후보 정렬 기준(#83 드롭다운). [RECOMMENDED](추천순)는 앱 점수가 아니라 경로 API가 준 순서 그대로다.
+ * [SUN]은 햇빛 목적에 따라 적은 순(피하기)·많은 순(받기)이며, 계산이 끝나지 않았거나 비교할 수 없는 후보는 뒤에 둔다.
+ */
 enum class CandidateSort { RECOMMENDED, TIME, TRANSFERS, WALK, SUN }
 
 /**
