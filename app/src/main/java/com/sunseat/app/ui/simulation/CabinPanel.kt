@@ -74,22 +74,28 @@ internal fun CabinPanel(point: TimelinePoint, mode: TravelMode, state: Simulatio
             stringResource(coverageText(light.lit(chosen.id,SeatSurface.CUSHION))),
             stringResource(coverageText(light.lit(chosen.id,SeatSurface.BACK))))
     }
-    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(Spacing.s)) {
-        Column(Modifier.weight(1f)) {
-            Text(stringResource(R.string.simulation_selected_seat,chosen.label()),style=MaterialTheme.typography.titleSmall)
-            Text(profileLabel,style=MaterialTheme.typography.bodySmall,color=SunSeatTheme.scheme.onSurfaceVariant)
-        }
-        Box {
-            QuietButton(onClick={choosing=true}) { Text(stringResource(R.string.simulation_choose_seat)) }
-            DropdownMenu(expanded=choosing,onDismissRequest={choosing=false},modifier=Modifier.heightIn(max=Sizes.cabinHeight)) {
-                profile.seats.forEach { s -> DropdownMenuItem(text={Text(s.label())},
-                    modifier=Modifier.semantics { selected=s.id==chosen.id },
-                    leadingIcon=if(s.id==chosen.id) ({ Icon(painterResource(R.drawable.ic_ms_check),null) }) else null,
-                    onClick={actions.seat(point.legIndex,s.id);choosing=false}) }
+    @Composable fun SeatSummary() {
+        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(Spacing.s)) {
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.simulation_selected_seat,chosen.label()),style=MaterialTheme.typography.titleSmall)
+                Text(profileLabel,style=MaterialTheme.typography.bodySmall,color=SunSeatTheme.scheme.onSurfaceVariant)
+            }
+            Box {
+                QuietButton(onClick={choosing=true}) { Text(stringResource(R.string.simulation_choose_seat)) }
+                DropdownMenu(expanded=choosing,onDismissRequest={choosing=false},modifier=Modifier.heightIn(max=Sizes.cabinHeight)) {
+                    profile.seats.forEach { s -> DropdownMenuItem(text={Text(s.label())},
+                        modifier=Modifier.semantics { selected=s.id==chosen.id },
+                        leadingIcon=if(s.id==chosen.id) ({ Icon(painterResource(R.drawable.ic_ms_check),null) }) else null,
+                        onClick={actions.seat(point.legIndex,s.id);choosing=false}) }
+                }
             }
         }
+        Text(summary,style=MaterialTheme.typography.bodySmall)
     }
-    Text(summary,style=MaterialTheme.typography.bodySmall)
+    // Keep the full viewport first in the short landscape panel; text remains scrollable below it.
+    val configuration = LocalConfiguration.current
+    val landscape = configuration.screenWidthDp > configuration.screenHeightDp
+    if (!landscape) SeatSummary()
     val description=stringResource(R.string.simulation_scene_description,chosen.label(),summary,
         point.sun?.azimuth?.toInt() ?: 0,point.sun?.altitude?.toInt() ?: 0)
     var toggle by remember { mutableStateOf(IntSize.Zero) }
@@ -99,6 +105,7 @@ internal fun CabinPanel(point: TimelinePoint, mode: TravelMode, state: Simulatio
             QuietButton(onClick={actions.camera(!state.interior)}) { Text(stringResource(if(state.interior) R.string.simulation_overview else R.string.simulation_inside)) }
         }
     }
+    if (landscape) SeatSummary()
     if(profile.kind in BusModels.kinds) BusModelRow(point,mode,profile,manual,state,actions)
     recommended?.let { Text(stringResource(R.string.simulation_recommended_seat,
         if(point.leg.mode==Mode.CAR) it.label() else point.spot!!.label()),style=MaterialTheme.typography.bodySmall) }

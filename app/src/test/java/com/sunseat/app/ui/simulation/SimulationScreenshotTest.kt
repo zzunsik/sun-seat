@@ -1,6 +1,11 @@
 package com.sunseat.app.ui.simulation
 
 import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.accessibility.enableAccessibilityChecks
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -78,6 +83,33 @@ class SimulationScreenshotTest {
         val slider=compose.onNodeWithContentDescription(app.getString(R.string.simulation_slider)).fetchSemanticsNode().boundsInRoot
         assertTrue("#75: enlarged landscape scene must still fit above playback controls without scrolling",scene.bottom<=slider.top)
         shot("simulation_landscape_light")
+    }
+    @Config(qualifiers = "w832dp-h384dp-xxhdpi")
+    @Test fun landscapeWithSystemBarsKeepsSceneAboveControls() { landscapeWithBars(false, 1f) }
+    @Config(qualifiers = "w832dp-h384dp-xxhdpi")
+    @Test fun landscapeWithSystemBarsDarkLargeText() { landscapeWithBars(true, 1.5f) }
+
+    private fun landscapeWithBars(dark: Boolean, fontScale: Float) {
+        val timeline = timeline()
+        compose.enableAccessibilityChecks()
+        compose.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalMapRenderer provides MapRenderer.PREVIEW,
+                LocalDensity provides Density(density.density, fontScale)) {
+                SunSeatTheme(darkTheme = dark) {
+                    Box(Modifier.windowInsetsPadding(WindowInsets(top = 24.dp, bottom = 24.dp))) {
+                        SimulationScreen(request, route, timeline.result, SimulationUiState(360_000),
+                            timeline.at(start.plusSeconds(360)), timeline.boundaries, SimulationActions(), zone = zone)
+                    }
+                }
+            }
+        }
+        compose.onRoot().tryPerformAccessibilityChecks()
+        val scene = compose.onNode(hasContentDescription("3D 차량", substring = true)).fetchSemanticsNode().boundsInRoot
+        val slider = compose.onNodeWithContentDescription("재생 시각").fetchSemanticsNode().boundsInRoot
+        assertTrue("the complete scene must retain its intended height with system bars", scene.height >= com.sunseat.app.ui.theme.Sizes.cabinLandscapeHeight.value * compose.density.density - 1)
+        assertTrue("scene must fit above controls without scrolling", scene.bottom <= slider.top)
+        shot(if (dark) "simulation_landscape_bars_dark_large" else "simulation_landscape_bars_light")
     }
     @Test fun nightDark() { render(6, true, -10.0); shot("simulation_night_dark") }
     @Test fun undergroundLight() { render(6, false, route = route.copy(legs = route.legs.map { it.copy(mode = Mode.SUBWAY, groundLevel = GroundLevel.BELOW) })); shot("simulation_underground_light") }
