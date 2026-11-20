@@ -118,7 +118,7 @@ class CandidatesSheetTest {
 
     @Test fun previewCloseRestoresSelectionSortFiltersAndNonzeroScroll() {
         val base = CandidatesFixtures.options.toUi(java.time.LocalDateTime.of(2026, 11, 15, 9, 0)).first()
-        var state by mutableStateOf(CandidatesState.Options((0..9).map { base.copy(id = it) }, sort = CandidateSort.WALK, filters = setOf(base.type)))
+        var state by mutableStateOf(CandidatesState.Options((0..9).map { base.copy(id = it) }, sort = CandidateSort.WALK, category = RouteCategory.SUBWAY))
         val restoration = androidx.compose.ui.test.junit4.StateRestorationTester(compose)
         restoration.setContent {
             CompositionLocalProvider(LocalMapRenderer provides MapRenderer.PREVIEW) {
@@ -146,7 +146,7 @@ class CandidatesSheetTest {
         val after = compose.onNodeWithTag("candidate_list").fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
         assertEquals(before, after, 0.001f)
         assertEquals(CandidateSort.WALK, state.sort)
-        assertEquals(setOf(base.type), state.filters)
+        assertEquals(RouteCategory.SUBWAY, state.category)
         // Reopening the same card requests one settled route fit, preserving the list.
         compose.onNodeWithTag("candidate_5").performSemanticsAction(SemanticsActions.OnClick)
         compose.onNodeWithTag("candidates_preview_sheet").assertExists()
