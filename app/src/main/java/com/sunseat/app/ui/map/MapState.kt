@@ -57,10 +57,52 @@ internal fun MapState.points(): List<LatLng> =
     (routes.getOrNull(selectedRoute)?.let { listOf(it) } ?: routes).flatMap { it.legs }.flatMap { it.path } +
         listOfNotNull(origin?.location, destination?.location)
 
+/** 카메라 이동 종류. [FRAME_FOLLOW]는 차량 둘레 [followBounds]를 맞춘다(#146). */
+internal enum class MapCamera { NONE, FIT_ROUTE, FRAME_FOLLOW }
+
+/** 따라가기 중인 차량 위치. 따라가기가 아니거나 차량이 없으면 null. */
+internal val MapState.followTarget: LatLng? get() = cursor?.position?.takeIf { followCursor }
+
+/**
+ * 따라가기 중 차량 둘레로 보여 줄 반경(m). 전체 경로를 맞추면 긴 노선(예: 402번)에서 지도가 구 단위까지 축소되어
+ * 출발 표식·노선 배지·차량 표식이 한 점에 겹쳤다(#146). 이 범위를 맞춰 거리 수준의 줌을 유지한다.
+ */
+internal const val FOLLOW_RADIUS_METERS = 250.0
+
+/** [center]를 가운데에 둔, 한 변이 2×[radius]m인 범위의 남서·북동 꼭짓점. */
+internal fun followBounds(center: LatLng, radius: Double = FOLLOW_RADIUS_METERS): List<LatLng> {
+    val metersPerLat = com.sunseat.app.domain.ExposureAnalyzer.distanceMeters(center, LatLng(center.latitude + 1, center.longitude))
+    val metersPerLon = com.sunseat.app.domain.ExposureAnalyzer.distanceMeters(center, LatLng(center.latitude, center.longitude + 1)).coerceAtLeast(1.0)
+    val dLat = radius / metersPerLat
+    val dLon = radius / metersPerLon
+    return listOf(LatLng(center.latitude - dLat, center.longitude - dLon), LatLng(center.latitude + dLat, center.longitude + dLon))
+}
+
 /** Shared camera decision for SDK and test renderer. Padding updates alone need not fit. */
 internal class MapFitPolicy {
     private var previous: MapState? = null
-    fun shouldFit(state: MapState): Boolean {
+    private var framed = false
+    /** 전체 경로 맞춤. 따라가기 중에는 하지 않는다([camera]). */
+    fun shouldFit(state: MapState): Boolean = camera(state) == MapCamera.FIT_ROUTE
+
+    /**
+     * 따라가기 중에는 맞춤 요청(첫 화면·여백 변경·순번)을 전체 경로 대신 차량 둘레 맞춤으로 바꾸고,
+     * 따라가기를 다시 시작할 때도 한 번 맞춘다. 그 사이 차량 이동은 렌더러가 가운데만 옮긴다(줌 유지).
+     */
+    fun camera(state: MapState): MapCamera {
+        val requested = requested(state)
+        val following = state.followTarget != null
+        val frame = following && (requested || !framed)
+        framed = following
+        return when {
+            frame -> MapCamera.FRAME_FOLLOW
+            following -> MapCamera.NONE
+            requested -> MapCamera.FIT_ROUTE
+            else -> MapCamera.NONE
+        }
+    }
+
+    private fun requested(state: MapState): Boolean {
         if (!state.fitEnabled || state.points().isEmpty()) return false
         val old = previous
         previous = state

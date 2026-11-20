@@ -70,7 +70,12 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
     val busLabel = stringResource(R.string.common_bus)
     val subwayLabel = stringResource(R.string.common_subway)
     val moreLines = stringResource(R.string.map_line_more)
-    if (fitPolicy.shouldFit(state)) { camera.points = state.points(); camera.padding = state.padding; camera.revision++ }
+    when (fitPolicy.camera(state)) {
+        MapCamera.FIT_ROUTE -> { camera.points = state.points(); camera.padding = state.padding; camera.revision++ }
+        // Drawing follows the vehicle each frame (projectionBase); the framed bounds stay as the camera once following stops.
+        MapCamera.FRAME_FOLLOW -> { camera.points = state.followTarget?.let { followBounds(it) }.orEmpty(); camera.padding = state.padding; camera.revision++ }
+        MapCamera.NONE -> Unit
+    }
     LaunchedEffect(camera.revision, state.center) { pan = Offset.Zero }
     val latest by rememberUpdatedState(state)
     Box(modifier.pointerInput(Unit) {
@@ -192,8 +197,9 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
     }
 }
 
-/** 테스트 지도가 투영의 기준으로 삼는 좌표: 카메라 요청(지도 선택) → 현재 위치 초점 → 맞춤 좌표. */
-private fun MapState.projectionBase(fitted: List<com.sunseat.app.domain.LatLng>) = (center ?: focus)?.let { listOf(it.location) } ?: fitted
+/** 테스트 지도가 투영의 기준으로 삼는 좌표: 카메라 요청(지도 선택) → 현재 위치 초점 → 따라가는 차량 둘레(#146) → 맞춤 좌표. */
+private fun MapState.projectionBase(fitted: List<com.sunseat.app.domain.LatLng>) =
+    (center ?: focus)?.let { listOf(it.location) } ?: followTarget?.let { followBounds(it) } ?: fitted
 
 private class PreviewCamera {
     var revision = 0L

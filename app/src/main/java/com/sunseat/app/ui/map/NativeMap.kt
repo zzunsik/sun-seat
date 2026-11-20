@@ -254,8 +254,11 @@ private class MapSession(context: Context, private val ink: Int, private val sur
             padding = state.padding
             target.setPadding(0, (state.padding.top.value * density).toInt(), 0, (state.padding.bottom.value * density).toInt())
         }
-        if (fitPolicy.shouldFit(state)) {
-            target.moveCamera(CameraUpdateFactory.fitMapPoints(state.points().map { it.sdk() }.toTypedArray(), metrics.inset.toInt(), 17))
+        when (fitPolicy.camera(state)) {
+            MapCamera.FIT_ROUTE -> target.moveCamera(CameraUpdateFactory.fitMapPoints(state.points().map { it.sdk() }.toTypedArray(), metrics.inset.toInt(), 17))
+            // Street-level frame around the vehicle (#146); later cursor moves only re-centre and keep this zoom.
+            MapCamera.FRAME_FOLLOW -> state.followTarget?.let { at -> target.moveCamera(CameraUpdateFactory.fitMapPoints(followBounds(at).map { it.sdk() }.toTypedArray(), 0, 17)) }
+            MapCamera.NONE -> Unit
         }
         if (decorZoom == null) view.post { map?.let(::decorate) }
         state.center?.let { center ->
