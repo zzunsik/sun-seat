@@ -1,13 +1,12 @@
 package com.sunseat.app.ui.input
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -16,34 +15,37 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
 import com.sunseat.app.R
 import com.sunseat.app.data.place.Place
 import com.sunseat.app.domain.SunGoal
 import com.sunseat.app.domain.TravelMode
 import com.sunseat.app.location.LocationAction
 import com.sunseat.app.ui.components.QuietButton
-import com.sunseat.app.ui.components.SectionCard
 import com.sunseat.app.ui.theme.Sizes
 import com.sunseat.app.ui.theme.Spacing
 import com.sunseat.app.ui.theme.SunSeatTheme
@@ -84,7 +86,10 @@ data class InputActions(
 )
 
 
-/** 입력 화면: 출발·도착, 수단, 출발 시각, 햇빛 피하기/받기. 상태 없음(미리보기·스크린샷용). */
+/**
+ * 입력 화면: 출발·도착, 수단, 출발 시각, 햇빛 목적을 한 표면의 여정 헤더(#103, DESIGN 5.1)로 보인다.
+ * 지도 위쪽 여백은 헤더(와 그 아래 안내)의 실제 측정 높이다. 상태 없음(미리보기·스크린샷용).
+ */
 @Composable
 fun InputScreen(
     state: InputUiState,
@@ -93,31 +98,60 @@ fun InputScreen(
     now: java.time.LocalDateTime = java.time.LocalDateTime.now(),
 ) {
     val scheme = SunSeatTheme.scheme
+    val density = LocalDensity.current
     var showTime by rememberSaveable { mutableStateOf(false) }
-    var showGoal by rememberSaveable { mutableStateOf(false) }
+    var boxTop by remember { mutableStateOf(0.dp) }
+    var panelBottom by remember { mutableStateOf(0.dp) }
+    // 여백·안내 변화로는 카메라를 다시 맞추지 않는다(수동 이동 보존). 끝점이 바뀔 때만 맞춘다.
+    val endpoints = state.origin?.place to state.destination?.place
+    var fittedEndpoints by remember { mutableStateOf(endpoints) }
+    var fitRevision by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(endpoints) { if (endpoints != fittedEndpoints) { fittedEndpoints = endpoints; fitRevision++ } }
     Surface(modifier.fillMaxSize(), color = scheme.background, contentColor = scheme.onSurface) {
-        Box(Modifier.fillMaxSize()) {
+        BoxWithConstraints(Modifier.fillMaxSize().onGloballyPositioned { boxTop = with(density) { it.positionInRoot().y.toDp() } }) {
+            // 헤더 표면이 지도를 모두 덮지 않게 한다(가로·큰 글자). 넘치면 표면 안에서 스크롤하고 모양(모서리)은 유지한다.
+            val topInset = WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding()
+            val headerLimit = (maxHeight - topInset - Spacing.screen - Spacing.touch * 3).coerceAtLeast(Spacing.touch)
+            // 지도 위 여백 = 헤더(+안내)의 실제 아래끝. 안내까지 길어져도 지도 띠는 남긴다.
+            val mapTop = panelBottom.coerceAtMost((maxHeight - Spacing.touch * 2).coerceAtLeast(0.dp))
             com.sunseat.app.ui.map.SunSeatMap(com.sunseat.app.ui.map.MapState(
                 origin = state.origin?.place, destination = state.destination?.place,
-                padding = com.sunseat.app.ui.map.MapPadding(top = Sizes.mapHeight),
+                // 아래 여백: 세로 화면은 오른쪽 아래 현재 위치 버튼(터치 48 + 바깥 여백) 위로 표식을 맞춘다. 가로 화면은 지도 띠가 낮아 주지 않는다.
+                padding = com.sunseat.app.ui.map.MapPadding(top = mapTop, bottom = if (maxHeight >= maxWidth) WindowInsets.safeDrawing.asPaddingValues().calculateBottomPadding() + Spacing.touch + Spacing.l * 2 else 0.dp),
                 showDecorations = false,
                 focus = state.mapFocus,
-            ), Modifier.fillMaxSize())
+                automaticFit = false,
+                cameraRevision = fitRevision,
+                fitEnabled = panelBottom > 0.dp,
+            ), Modifier.fillMaxSize().testTag(INPUT_MAP_TAG).semantics {
+                this[com.sunseat.app.ui.map.MapTopPaddingKey] = mapTop.value
+                this[com.sunseat.app.ui.map.MapCameraRevisionKey] = fitRevision
+            })
             Column(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(Spacing.screen), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                EndpointsCard(state, actions)
+                .padding(Spacing.screen)
+                .onGloballyPositioned { with(density) { panelBottom = (it.positionInRoot().y + it.size.height).toDp() - boxTop } },
+                verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                 Surface(color = scheme.surface, shape = MaterialTheme.shapes.large) {
-                    Column(Modifier.padding(Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                        NeutralTabs(listOf(stringResource(R.string.input_mode_transit), stringResource(R.string.common_taxi), stringResource(R.string.common_car)), state.mode.ordinal) { actions.setMode(TravelMode.entries[it]) }
-                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                            QuietButton(onClick = { showTime = true }) { Text(scheduleLabel(state.departure, now)); DropArrow() }
-                            QuietButton(onClick = { showGoal = true }) { Text(stringResource(if (state.goal == SunGoal.AVOID) R.string.input_goal_chip_avoid else R.string.input_goal_chip_seek)); DropArrow() }
-                        }
+                    val headerScroll = rememberScrollState()
+                    Box {
+                        JourneyHeader(
+                            origin = JourneyEndpointUi(state.origin?.place?.name, currentLocation = state.origin?.isCurrentLocation == true, loading = state.locating),
+                            destination = JourneyEndpointUi(state.destination?.place?.name),
+                            mode = state.mode, departure = state.departure, goal = state.goal, now = now,
+                            actions = JourneyHeaderActions(
+                                onEdit = actions.openSearch, onSwap = actions.swap, onMode = actions.setMode,
+                                onTime = { showTime = true }, onGoal = actions.setGoal, onSettings = actions.onSettings,
+                            ),
+                            swapEnabled = state.origin != null || state.destination != null,
+                            modifier = Modifier.heightIn(max = headerLimit).verticalScroll(headerScroll).padding(Spacing.s),
+                        )
+                        // 표면 안에 더 내릴 내용이 있으면 아래 가장자리에 구분선을 둬 스크롤할 수 있음을 알린다.
+                        if (headerScroll.canScrollForward) HorizontalDivider(Modifier.align(Alignment.BottomCenter), color = scheme.outlineVariant)
                     }
                 }
                 if (state.locationMessageRes != null) LocationNotice(state, actions)
-                if (state.sameEndpoints) Surface(color = scheme.surface) {
-                    Text(stringResource(R.string.input_same_endpoints), Modifier.padding(Spacing.l), style = MaterialTheme.typography.bodyMedium, color = scheme.error)
+                if (state.sameEndpoints) Surface(color = scheme.surface, shape = MaterialTheme.shapes.large) {
+                    Text(stringResource(R.string.input_same_endpoints), Modifier.fillMaxWidth().padding(Spacing.l), style = MaterialTheme.typography.bodyMedium, color = scheme.error)
                 }
             }
             Surface(Modifier.align(Alignment.BottomEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(Spacing.l), shape = androidx.compose.foundation.shape.CircleShape, color = scheme.surface) {
@@ -131,83 +165,6 @@ fun InputScreen(
         }
     }
     if (showTime) TimeSheet(state.departure, state.mode, onDismiss = { showTime = false }, onApply = actions.setSchedule, now = now)
-    if (showGoal) GoalSheet(state.goal, onDismiss = { showGoal = false }, onSelect = { actions.setGoal(it); showGoal = false })
-}
-
-@Composable private fun DropArrow() {
-    Icon(painterResource(R.drawable.ic_ms_chevron_right), null, Modifier.size(Sizes.iconSmall).then(Modifier.rotate(90f)))
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable private fun GoalSheet(goal: SunGoal, onDismiss: () -> Unit, onSelect: (SunGoal) -> Unit) {
-    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss, containerColor = SunSeatTheme.scheme.surface) {
-        Column(Modifier.fillMaxWidth().padding(Spacing.screen), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
-            Text(stringResource(R.string.common_sun), style = MaterialTheme.typography.titleLarge)
-            SunGoal.entries.forEach { option -> NeutralFilterChip(option == goal, stringResource(if (option == SunGoal.AVOID) R.string.input_goal_avoid else R.string.input_goal_seek)) { onSelect(option) } }
-            Spacer(Modifier.size(Spacing.l))
-        }
-    }
-}
-
-@Composable
-private fun EndpointsCard(state: InputUiState, actions: InputActions) {
-    SectionCard {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                EndpointRow(
-                    label = stringResource(R.string.input_origin),
-                    value = when {
-                        state.locating -> stringResource(R.string.input_locating)
-                        state.origin == null -> null
-                        else -> state.origin.place.name
-                    },
-                    placeholder = stringResource(R.string.input_origin_placeholder),
-                    iconRes = if (state.origin?.isCurrentLocation == true) R.drawable.ic_ms_my_location else R.drawable.ic_ms_search,
-                    onClick = { actions.openSearch(EndpointField.ORIGIN) },
-                )
-                if (state.locating) LinearProgressIndicator(Modifier.fillMaxWidth())
-                HorizontalDivider(color = SunSeatTheme.scheme.outlineVariant)
-                EndpointRow(
-                    label = stringResource(R.string.input_destination),
-                    value = state.destination?.place?.name,
-                    placeholder = stringResource(R.string.input_destination_placeholder),
-                    iconRes = R.drawable.ic_ms_search,
-                    onClick = { actions.openSearch(EndpointField.DESTINATION) },
-                )
-            }
-            Column {
-                IconButton(onClick = actions.onSettings) { Icon(painterResource(R.drawable.ic_ms_settings), stringResource(R.string.settings_title)) }
-                IconButton(onClick = actions.swap, enabled = state.origin != null || state.destination != null) {
-                    Icon(painterResource(R.drawable.ic_ms_swap_vert), contentDescription = stringResource(R.string.input_swap))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-internal fun EndpointRow(label: String, value: String?, placeholder: String, iconRes: Int, onClick: () -> Unit) {
-    val scheme = SunSeatTheme.scheme
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .heightIn(min = Spacing.touch + Spacing.m)
-            .clickable(role = Role.Button, onClickLabel = placeholder, onClick = onClick),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.m),
-    ) {
-        Icon(painterResource(iconRes), contentDescription = null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(Sizes.iconMedium))
-        Column(Modifier.weight(1f)) {
-            Text(label, style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
-            Text(
-                value ?: placeholder,
-                style = if (value == null) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.titleMedium,
-                color = if (value == null) scheme.onSurfaceVariant else scheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
 }
 
 /** 지도 선택 중의 위치 안내. '직접 검색'은 지도 선택을 닫고 아래 검색으로 돌아간다. */

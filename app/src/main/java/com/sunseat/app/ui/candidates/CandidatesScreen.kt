@@ -228,20 +228,21 @@ fun CandidatesScreen(
                 if (preview) JourneyBar(request, now, ::closePreview, Modifier.windowInsetsPadding(cutoutSides), backLabel = stringResource(R.string.candidates_preview_close), onExpand = null)
                 else if (compactHeader) JourneyBar(request, now, actions.onBack, Modifier.windowInsetsPadding(cutoutSides).onSizeChanged { journeyBarHeight = with(density) { it.height.toDp() } }) {
                     scope.launch { scaffoldState.bottomSheetState.partialExpand() }
-                } else Column(Modifier.onSizeChanged { fullHeaderHeight = with(density) { it.height.toDp() } }.fillMaxWidth().heightIn(max = headerLimit).verticalScroll(headerScroll).statusBarsPadding().windowInsetsPadding(cutoutSides).padding(horizontal = Spacing.screen, vertical = Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = actions.onBack) { Icon(painterResource(R.drawable.ic_ms_arrow_back), stringResource(R.string.common_back)) }
-                        Column(Modifier.weight(1f)) {
-                            com.sunseat.app.ui.input.EndpointRow(stringResource(R.string.input_origin), request.origin.name, stringResource(R.string.input_origin_placeholder), R.drawable.ic_ms_search) { actions.onEditEndpoint(com.sunseat.app.ui.input.EndpointField.ORIGIN) }
-                            HorizontalDivider(color = scheme.outlineVariant)
-                            com.sunseat.app.ui.input.EndpointRow(stringResource(R.string.input_destination), request.destination.name, stringResource(R.string.input_destination_placeholder), R.drawable.ic_ms_search) { actions.onEditEndpoint(com.sunseat.app.ui.input.EndpointField.DESTINATION) }
-                        }
-                        IconButton(onClick = actions.onSwap, enabled = request.origin.location != request.destination.location) {
-                            Icon(painterResource(R.drawable.ic_ms_swap_vert), stringResource(R.string.input_swap))
-                        }
-                    }
-                    NeutralTabs(listOf(stringResource(R.string.input_mode_transit), stringResource(R.string.common_taxi), stringResource(R.string.common_car)), request.mode.ordinal) { actions.onRequestChange(request.copy(mode = TravelMode.entries[it])) }
-                    QuietButton(onClick = { showTime = true }) { Text(scheduleLabel(request.departure, now)); Icon(painterResource(R.drawable.ic_ms_chevron_right), null, Modifier.size(Sizes.iconSmall).rotate(90f)) }
+                } else Column(Modifier.onSizeChanged { fullHeaderHeight = with(density) { it.height.toDp() } }.fillMaxWidth().heightIn(max = headerLimit).verticalScroll(headerScroll).statusBarsPadding().windowInsetsPadding(cutoutSides).padding(horizontal = Spacing.screen, vertical = Spacing.s)) {
+                    // #103: 입력 화면과 같은 펼친 여정 헤더(DESIGN 5.1). 앞에 뒤로 하나, 설정은 두지 않는다.
+                    com.sunseat.app.ui.input.JourneyHeader(
+                        origin = com.sunseat.app.ui.input.JourneyEndpointUi(request.origin.name),
+                        destination = com.sunseat.app.ui.input.JourneyEndpointUi(request.destination.name),
+                        mode = request.mode, departure = request.departure, goal = request.goal, now = now,
+                        actions = com.sunseat.app.ui.input.JourneyHeaderActions(
+                            onEdit = actions.onEditEndpoint, onSwap = actions.onSwap,
+                            onMode = { actions.onRequestChange(request.copy(mode = it)) },
+                            onTime = { showTime = true },
+                            onGoal = { actions.onRequestChange(request.copy(goal = it)) },
+                        ),
+                        swapEnabled = request.origin.location != request.destination.location,
+                        leading = { IconButton(onClick = actions.onBack) { Icon(painterResource(R.drawable.ic_ms_arrow_back), stringResource(R.string.common_back)) } },
+                    )
                 }
             }
         },
@@ -388,24 +389,16 @@ private fun SortDropdown(current: CandidateSort, goal: SunGoal, onSort: (Candida
  */
 @Composable
 private fun JourneyBar(request: TripRequest, now: java.time.LocalDateTime, onBack: () -> Unit, modifier: Modifier = Modifier, backLabel: String = stringResource(R.string.common_back), onExpand: (() -> Unit)?) {
-    val scheme = SunSeatTheme.scheme
-    val mode = stringResource(when (request.mode) {
-        TravelMode.TRANSIT -> R.string.input_mode_transit
-        TravelMode.TAXI -> R.string.common_taxi
-        TravelMode.CAR -> R.string.common_car
-    })
+    val mode = com.sunseat.app.ui.input.travelModeLabel(request.mode)
     Row(modifier.fillMaxWidth().statusBarsPadding().heightIn(min = Sizes.journeyBar).padding(horizontal = Spacing.s), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onBack) { Icon(painterResource(R.drawable.ic_ms_arrow_back), backLabel) }
         val expandLabel = stringResource(R.string.candidates_journey_expand)
-        Column(
+        com.sunseat.app.ui.input.JourneySummary(
+            request.origin.name, request.destination.name, "$mode · ${scheduleLabel(request.departure, now)}",
             Modifier.weight(1f).heightIn(min = Spacing.touch).testTag("candidates_journey_bar")
                 .then(if (onExpand != null) Modifier.clickable(role = Role.Button, onClickLabel = expandLabel, onClick = onExpand) else Modifier)
                 .padding(horizontal = Spacing.s, vertical = Spacing.xs),
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text("${request.origin.name} → ${request.destination.name}", style = MaterialTheme.typography.titleMedium, color = scheme.onSurface, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text("$mode · ${scheduleLabel(request.departure, now)}", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
-        }
+        )
     }
 }
 

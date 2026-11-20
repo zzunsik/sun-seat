@@ -37,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
@@ -148,25 +149,18 @@ fun ResultScreen(
                     IconButton(onClick = actions.onBack) {
                         Icon(painterResource(R.drawable.ic_ms_arrow_back), contentDescription = stringResource(R.string.common_back))
                     }
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            "${request.origin.name} → ${request.destination.name}",
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            if (result != null) stringResource(
-                                R.string.result_schedule,
-                                stringResource(when (request.mode) { TravelMode.TAXI -> R.string.common_taxi; TravelMode.CAR -> R.string.common_car; else -> R.string.input_mode_transit }),
-                                state.departure.atZone(zone).format(TimeFormat), result.arrival.atZone(zone).format(TimeFormat),
-                            ) else stringResource(
-                                if (request.mode != TravelMode.TRANSIT) R.string.result_subtitle_car else R.string.result_subtitle_transit,
-                                state.departure.atZone(zone).format(TimeFormat),
-                            ),
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
+                    // #103: 축약 여정 바와 같은 글(2줄까지 줄바꿈 + 조건 줄, DESIGN 5.1). 시각은 오른쪽 아이콘으로 고친다.
+                    val mode = com.sunseat.app.ui.input.travelModeLabel(request.mode)
+                    com.sunseat.app.ui.input.JourneySummary(
+                        request.origin.name, request.destination.name,
+                        if (result != null) stringResource(R.string.result_schedule, mode,
+                            state.departure.atZone(zone).format(TimeFormat), result.arrival.atZone(zone).format(TimeFormat))
+                        else stringResource(
+                            if (request.mode != TravelMode.TRANSIT) R.string.result_subtitle_car else R.string.result_subtitle_transit,
+                            state.departure.atZone(zone).format(TimeFormat),
+                        ),
+                        Modifier.weight(1f).testTag("result_journey_bar"),
+                    )
                     IconButton(onClick = { showSchedule = true }) { Icon(painterResource(R.drawable.ic_ms_schedule), stringResource(R.string.input_time_title)) }
                 }
             }
