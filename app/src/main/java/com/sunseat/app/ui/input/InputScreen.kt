@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -111,7 +112,8 @@ fun InputScreen(
             val mapTop = panelBottom.coerceAtMost(panelLimit)
             com.sunseat.app.ui.map.SunSeatMap(com.sunseat.app.ui.map.MapState(
                 origin = state.origin?.place, destination = state.destination?.place,
-                padding = com.sunseat.app.ui.map.MapPadding(top = mapTop),
+                // 아래 여백: 오른쪽 아래 현재 위치 버튼(터치 48 + 바깥 여백) 위로 표식을 맞춘다.
+                padding = com.sunseat.app.ui.map.MapPadding(top = mapTop, bottom = WindowInsets.safeDrawing.asPaddingValues().calculateBottomPadding() + Spacing.touch + Spacing.l * 2),
                 showDecorations = false,
                 focus = state.mapFocus,
                 automaticFit = false,
