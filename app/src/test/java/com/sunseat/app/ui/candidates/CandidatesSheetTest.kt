@@ -76,12 +76,12 @@ class CandidatesSheetTest {
         for (id in listOf(0, 1, 2)) {
             compose.onNodeWithTag("candidate_list").performScrollToKey(id)
             compose.onNodeWithTag("candidate_$id").performSemanticsAction(SemanticsActions.OnClick)
-            compose.onNodeWithText("선택한 경로").assertExists()
+            compose.onNodeWithTag("candidates_preview_sheet").assertExists()
             compose.waitForIdle()
             assertEquals("미리보기 #$id 는 선택 경로만 그린다", listOf(id), shownIds())
             assertEquals(0, shownSelected())
-            // '전체 경로 보기'는 선택 경로 전체 구간에 카메라를 맞출 뿐 다른 후보를 다시 섞지 않는다.
-            compose.onNodeWithText("전체 경로 보기").performSemanticsAction(SemanticsActions.OnClick)
+            // '지도 맞춤'은 선택 경로 전체 구간에 카메라를 맞출 뿐 다른 후보를 다시 섞지 않는다.
+            compose.onNodeWithText("지도 맞춤").performSemanticsAction(SemanticsActions.OnClick)
             compose.waitForIdle()
             assertEquals(listOf(id), shownIds())
             compose.onAllNodesWithContentDescription("경로 목록으로 돌아가기")[0].performSemanticsAction(SemanticsActions.OnClick)
@@ -129,14 +129,14 @@ class CandidatesSheetTest {
         compose.waitForIdle()
         val before = compose.onNodeWithTag("candidate_list").fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
         compose.onNodeWithTag("candidate_5").performSemanticsAction(SemanticsActions.OnClick)
-        compose.onNodeWithText("선택한 경로").assertExists()
-        compose.onNodeWithText("전체 경로 보기").assertExists()
+        compose.onNodeWithTag("candidates_preview_sheet").assertExists()
+        compose.onNodeWithText("지도 맞춤").assertExists()
         restoration.emulateSavedInstanceStateRestore()
-        compose.onNodeWithText("선택한 경로").assertExists()
+        compose.onNodeWithTag("candidates_preview_sheet").assertExists()
         compose.waitUntil(10_000) { compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey] > 0 }
         var revision = compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey]
         compose.onNodeWithTag("candidate_map").performTouchInput { swipeLeft() }
-        compose.onNodeWithText("전체 경로 보기").performSemanticsAction(SemanticsActions.OnClick)
+        compose.onNodeWithText("지도 맞춤").performSemanticsAction(SemanticsActions.OnClick)
         compose.waitUntil(10_000) { compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey] > revision }
         revision = compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey]
         compose.onNodeWithTag("candidate_map").performTouchInput { swipeLeft() }
@@ -149,7 +149,7 @@ class CandidatesSheetTest {
         assertEquals(setOf(base.type), state.filters)
         // Reopening the same card requests one settled route fit, preserving the list.
         compose.onNodeWithTag("candidate_5").performSemanticsAction(SemanticsActions.OnClick)
-        compose.onNodeWithText("선택한 경로").assertExists()
+        compose.onNodeWithTag("candidates_preview_sheet").assertExists()
         compose.waitUntil(10_000) { compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey] > revision }
         compose.mainClock.advanceTimeBy(1000)
         compose.waitForIdle()
