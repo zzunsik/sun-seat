@@ -130,12 +130,14 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
                 if (started) drawRouteLine(path, RouteLinePolicy.forLeg(leg.mode, leg.lineName, RouteRole.PASSED))
             }
         }
+        val markerPx = Sizes.mapMarker.toPx()
+        fun covered(at: com.sunseat.app.domain.LatLng) = state.coveredByVehicle(at, markerPx) { a, b -> (position(a) - position(b)).getDistance() }
         selected?.let { route -> RouteLinePolicy.stops(route).forEach { stop ->
             val p = position(stop.location)
             val radius = Sizes.mapStopMarker.toPx() / 2 - Sizes.mapStopBorder.toPx() / 2
             drawCircle(MapRouteColors.casing, radius, p)
             drawCircle(stop.color, radius, p, style = Stroke(Sizes.mapStopBorder.toPx()))
-            if (stop.labeled) {
+            if (stop.labeled && !covered(stop.location)) {
                 val name = when {
                     stop.lines.isEmpty() -> if (stop.mode == Mode.SUBWAY) subwayLabel else busLabel
                     stop.lines.size == 1 -> stop.lines.first()
@@ -151,8 +153,8 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
                 drawText(text, topLeft = Offset(left + pad, p.y - text.size.height / 2f))
             }
         } }
-        state.origin?.let { drawPlaceMarker(position(it.location), textMeasurer.measure(originLabel, labelStyle.copy(color = MapRouteColors.transit)), filled = false, surface = MapRouteColors.casing) }
-        state.destination?.let { drawPlaceMarker(position(it.location), textMeasurer.measure(destinationLabel, labelStyle.copy(color = MapRouteColors.casing)), filled = true, surface = MapRouteColors.casing) }
+        state.origin?.takeUnless { covered(it.location) }?.let { drawPlaceMarker(position(it.location), textMeasurer.measure(originLabel, labelStyle.copy(color = MapRouteColors.transit)), filled = false, surface = MapRouteColors.casing) }
+        state.destination?.takeUnless { covered(it.location) }?.let { drawPlaceMarker(position(it.location), textMeasurer.measure(destinationLabel, labelStyle.copy(color = MapRouteColors.casing)), filled = true, surface = MapRouteColors.casing) }
         state.focus?.let { val p = position(it.location); val radius = Sizes.mapMarker.toPx() / 3; drawCircle(scheme.surface, radius, p); drawCircle(scheme.onSurface, radius, p, style = Stroke(Sizes.mapRouteWalk.toPx())); drawCircle(scheme.onSurface, radius / 3, p) }
         state.cursor?.let { cursor ->
             val p = position(cursor.position)

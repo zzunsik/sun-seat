@@ -68,6 +68,19 @@ class FollowCameraTest {
         assertTrue(walk / (2 * FOLLOW_RADIUS_METERS) * mapDp > Sizes.mapMarker.value)
     }
 
+    @Test fun textMarkersUnderThePlaybackVehicleAreHidden() {
+        val marker = 32f
+        // Screen distance from a fixed scale: 1 px = 1 m.
+        val metres = { a: LatLng, b: LatLng -> ExposureAnalyzer.distanceMeters(a, b).toFloat() }
+        // Origin is the boarding stop: 출발 marker and the 402 badge sit under the vehicle at the start.
+        assertTrue(playback.coveredByVehicle(origin, marker, metres))
+        // ~140 m away at this scale: visible.
+        assertFalse(playback.coveredByVehicle(stop, marker, metres))
+        // Not playback (result map with a cursor) or no vehicle: never hidden.
+        assertFalse(playback.copy(routeProgress = null).coveredByVehicle(origin, marker, metres))
+        assertFalse(playback.copy(cursor = null).coveredByVehicle(origin, marker, metres))
+    }
+
     @Test fun followingIgnoresMissingCursor() {
         assertNull(playback.copy(cursor = null).followTarget)
         assertNull(playback.copy(followCursor = false).followTarget)

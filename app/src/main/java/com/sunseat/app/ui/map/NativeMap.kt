@@ -186,6 +186,11 @@ private class MapSession(context: Context, private val ink: Int, private val sur
     private var decorZoom: Int? = null
     private var lineDensity = 1f
     private val decorations = mutableListOf<Label>()
+    /** 재생 중 차량과 겹치면 숨기는 글자 표식(출발·도착·노선 배지)과 그 좌표(#146). */
+    private val textLabels = mutableListOf<Pair<Label, LatLng>>()
+    private val hiddenLabels = mutableSetOf<Label>()
+    private var metersPerPx = 0.0
+    private var coverState: MapState? = null
     private val walkLines = mutableListOf<com.kakao.vectormap.route.RouteLine>()
     private val vehicleIcon = marker(2, ink)
     private val rayIcon = marker(3, sun)
@@ -234,7 +239,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
                 }
             }
             target.labelManager?.layer?.let { layer ->
-                layer.removeAll(); cursor = null; ray = null; myLocation = null; lastCursor = null; lastRayAltitude = null; lastVehicleLight=null
+                layer.removeAll(); cursor = null; ray = null; myLocation = null; lastCursor = null; lastRayAltitude = null; lastVehicleLight=null; textLabels.clear(); hiddenLabels.clear()
                 state.routes.getOrNull(state.selectedRoute)?.let { route ->
                     RouteLinePolicy.stops(route).forEach { stop ->
                         layer.addLabel(LabelOptions.from(stop.location.sdk()).setRank(STOP_RANK).setStyles(LabelStyle.from(stopIcon(stop.color.toArgb())).setApplyDpScale(false).setAnchorPoint(.5f, .5f)))
@@ -242,11 +247,12 @@ private class MapSession(context: Context, private val ink: Int, private val sur
                             // Line name beside the marker, on the side away from the outgoing line; dropped on collision.
                             val name = metrics.stopLabel(stop)
                             layer.addLabel(LabelOptions.from(stop.location.sdk()).setRank(STOP_NAME_RANK).setStyles(LabelStyle.from(nameIcon(name, stop.color.toArgb(), stop.labelOnLeft)).setApplyDpScale(false).setAnchorPoint(if (stop.labelOnLeft) 1f else 0f, .5f)))
+                                ?.let { textLabels += it to stop.location }
                         }
                     }
                 }
-                state.origin?.let { layer.addLabel(LabelOptions.from(it.location.sdk()).setRank(PLACE_RANK).setStyles(LabelStyle.from(startIcon).setApplyDpScale(false).setAnchorPoint(.5f, 1f))) }
-                state.destination?.let { layer.addLabel(LabelOptions.from(it.location.sdk()).setRank(PLACE_RANK).setStyles(LabelStyle.from(endIcon).setApplyDpScale(false).setAnchorPoint(.5f, 1f))) }
+                state.origin?.let { place -> layer.addLabel(LabelOptions.from(place.location.sdk()).setRank(PLACE_RANK).setStyles(LabelStyle.from(startIcon).setApplyDpScale(false).setAnchorPoint(.5f, 1f)))?.let { textLabels += it to place.location } }
+                state.destination?.let { place -> layer.addLabel(LabelOptions.from(place.location.sdk()).setRank(PLACE_RANK).setStyles(LabelStyle.from(endIcon).setApplyDpScale(false).setAnchorPoint(.5f, 1f)))?.let { textLabels += it to place.location } }
             }
             decorRoute = state.routes.getOrNull(state.selectedRoute); decorZoom = null; lineDensity = density; walkLines.clear(); decorations.clear()
         }
@@ -304,6 +310,17 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         }
         following = state.followCursor
         lastCursor = position
+        coverState = state
+        uncover()
+    }
+
+    /** 차량과 겹치는 글자 표식을 숨기고 나머지는 보인다. 줌이 바뀌면 [decorate]가 다시 부른다. */
+    private fun uncover() {
+        val state = coverState ?: return
+        textLabels.forEach { (label, at) ->
+            val covered = metersPerPx > 0 && state.coveredByVehicle(at, metrics.marker) { a, b -> (com.sunseat.app.domain.ExposureAnalyzer.distanceMeters(a, b) / metersPerPx).toFloat() }
+            if (covered != (label in hiddenLabels)) { if (covered) { label.hide(); hiddenLabels += label } else { label.show(); hiddenLabels -= label } }
+        }
     }
 
     /** 현재 위치 원·차량 화살표와 짧은 해 방향 선. */
@@ -372,6 +389,8 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         val metersPerPx = com.sunseat.app.domain.ExposureAnalyzer.distanceMeters(LatLng(left.latitude, left.longitude), LatLng(right.latitude, right.longitude)) / w
         if (!(metersPerPx > 0)) return
         decorZoom = target.cameraPosition?.zoomLevel
+        this.metersPerPx = metersPerPx
+        uncover()
         walkLines.forEach { it.remove() }; walkLines.clear()
         target.labelManager?.layer?.let { layer -> decorations.forEach { layer.remove(it) } }
         decorations.clear()

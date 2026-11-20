@@ -78,6 +78,17 @@ internal fun followBounds(center: LatLng, radius: Double = FOLLOW_RADIUS_METERS)
     return listOf(LatLng(center.latitude - dLat, center.longitude - dLon), LatLng(center.latitude + dLat, center.longitude + dLon))
 }
 
+/**
+ * 재생 중 차량 표식과 화면에서 겹치는 글자 표식(출발·도착·노선 배지)은 숨긴다(#146). 차량이 지금 보여 줄 정보이고,
+ * 출발지가 곧 승차 정류장이면 줌과 관계없이 세 표식이 한 점에 겹친다. 정류장 원은 남긴다.
+ * [distancePx]는 렌더러의 현재 투영으로 잰 두 좌표의 화면 거리, [markerPx]는 차량 표식 크기다.
+ */
+internal fun MapState.coveredByVehicle(at: LatLng, markerPx: Float, distancePx: (LatLng, LatLng) -> Float): Boolean {
+    if (routeProgress == null) return false
+    val vehicle = cursor?.position ?: return false
+    return distancePx(vehicle, at) < markerPx
+}
+
 /** Shared camera decision for SDK and test renderer. Padding updates alone need not fit. */
 internal class MapFitPolicy {
     private var previous: MapState? = null
