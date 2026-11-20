@@ -14,6 +14,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.tryPerformAccessibilityChecks
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.sunseat.app.R
@@ -175,11 +177,21 @@ class CandidatesScreenshotTest {
     @Test fun unavailableDark() { render(CandidatesState.Error(R.string.candidates_error_unavailable, R.drawable.ic_ms_error, canRetry = false), true); shot("candidates_unavailable_dark") }
     @Test fun sunLight() { render(list.copy(sort = CandidateSort.SUN), false); shot("candidates_sun_light") }
     @Test fun sunDark() { render(list.copy(sort = CandidateSort.SUN), true); shot("candidates_sun_dark") }
-    @Test fun filterLight() { render(list.copy(filters = setOf(com.sunseat.app.data.route.TransitRouteType.BUS), selectedId = 1), false); shot("candidates_filter_light") }
-    @Test fun filterDark() { render(list.copy(filters = setOf(com.sunseat.app.data.route.TransitRouteType.BUS), selectedId = 1), true); shot("candidates_filter_dark") }
-    @Test fun emptyFilterLight() { render(list.copy(filters = setOf(com.sunseat.app.data.route.TransitRouteType.BUS_AND_SUBWAY)), false); shot("candidates_empty_filter_light") }
-    @Test fun emptyFilterDark() { render(list.copy(filters = setOf(com.sunseat.app.data.route.TransitRouteType.BUS_AND_SUBWAY)), true); shot("candidates_empty_filter_dark") }
+    @Test fun filterLight() { render(list.copy(category = RouteCategory.BUS, selectedId = 1), false); shot("candidates_filter_light") }
+    @Test fun filterDark() { render(list.copy(category = RouteCategory.BUS, selectedId = 1), true); shot("candidates_filter_dark") }
+    @Test fun emptyFilterLight() { render(list.copy(category = RouteCategory.MIXED), false); shot("candidates_empty_filter_light") }
+    @Test fun emptyFilterDark() { render(list.copy(category = RouteCategory.MIXED), true); shot("candidates_empty_filter_dark") }
     @Test fun noRouteDark() { render(noRoute, true); shot("candidates_no_route_dark") }
+
+    /** #82: 작은 화면·큰 글자에서도 범주 이름과 개수를 줄이지 않고, 넘치면 가로로 넘기며 고른 탭을 보이는 곳에 둔다. */
+    @Test @Config(qualifiers = "w320dp-h640dp-xxhdpi")
+    fun categoryTabsSmallLargeText() {
+        compose.enableAccessibilityChecks()
+        render(list.copy(category = RouteCategory.MIXED), false, fontScale = 1.5f)
+        compose.onRoot().tryPerformAccessibilityChecks()
+        compose.onNodeWithContentDescription("혼합 경로 0개").assertIsSelected().assertIsDisplayed()
+        shot("candidates_category_small_large_text")
+    }
 
     /** #105: 최소 도보 정렬은 응답의 환승 도보만 비교한다는 목록 공통 안내. */
     private fun walkSort(dark: Boolean, name: String, fontScale: Float = 1f) {

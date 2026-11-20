@@ -36,4 +36,17 @@ class CandidateOrderingTest {
         assertEquals(listOf(1, 2), orderCandidates(items, CandidateSort.RECOMMENDED, setOf(TransitRouteType.BUS, TransitRouteType.BUS_AND_SUBWAY), SunGoal.AVOID).map { it.id })
         assertTrue(orderCandidates(items, CandidateSort.TIME, setOf(TransitRouteType.OTHER), SunGoal.AVOID).isEmpty())
     }
+    /** #82: 분류 미확인(OTHER)은 전체에만 들고, 받은 후보가 없는 범주는 0건이다. */
+    @Test fun categoryCountsKeepOtherInAllOnlyAndReportZero() {
+        val other = base[0].copy(id = 3, type = TransitRouteType.OTHER)
+        val all = items + other
+        assertEquals(mapOf(RouteCategory.ALL to 4, RouteCategory.BUS to 1, RouteCategory.SUBWAY to 1, RouteCategory.MIXED to 1), categoryCounts(all))
+        assertEquals(listOf(0, 1, 2, 3), CandidatesState.Options(all).visible.map { it.id })
+        assertEquals(listOf(1), CandidatesState.Options(all, category = RouteCategory.BUS).visible.map { it.id })
+        assertTrue(RouteCategory.entries.filter { it != RouteCategory.ALL }.none { it.matches(other) })
+        val busless = listOf(base[0])
+        assertEquals(0, categoryCounts(busless)[RouteCategory.BUS])
+        assertTrue(CandidatesState.Options(busless, category = RouteCategory.BUS).visible.isEmpty())
+        assertEquals(mapOf(RouteCategory.ALL to 0, RouteCategory.BUS to 0, RouteCategory.SUBWAY to 0, RouteCategory.MIXED to 0), categoryCounts(emptyList()))
+    }
 }

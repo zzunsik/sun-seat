@@ -48,7 +48,7 @@ fun CandidatesRoute(
             onSelect = { onSelect(it.chosen) },
             onRetry = viewModel::load,
             onHighlight = { item -> viewModel.highlight(item.id) },
-            onSort = viewModel::setSort, onFilter = viewModel::toggleFilter, onClearFilters = viewModel::clearFilters,
+            onSort = viewModel::setSort, onCategory = viewModel::selectCategory,
             onRequestChange = onRequestChange,
             onSearchByCar = onSearchByCar,
         ),

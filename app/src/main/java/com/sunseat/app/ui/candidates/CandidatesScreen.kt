@@ -60,6 +60,8 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.platform.LocalContext
 import com.sunseat.app.ui.input.NeutralTabs
+import com.sunseat.app.ui.components.CategoryTab
+import com.sunseat.app.ui.components.CategoryTabs
 import com.sunseat.app.ui.input.NeutralFilterChip
 import com.sunseat.app.ui.input.TimeSheet
 import com.sunseat.app.ui.input.scheduleLabel
@@ -100,8 +102,8 @@ data class CandidatesActions(
     val onSwap: () -> Unit = {},
     val onHighlight: (CandidateUi) -> Unit = {},
     val onSort: (CandidateSort) -> Unit = {},
-    val onFilter: (TransitRouteType) -> Unit = {},
-    val onClearFilters: () -> Unit = {},
+    /** 경로 종류 범주 탭 선택(#82). 빈 범주의 "전체 보기"도 [RouteCategory.ALL]로 부른다. */
+    val onCategory: (RouteCategory) -> Unit = {},
     val onRequestChange: (TripRequest) -> Unit = {},
     val onBack: () -> Unit = {},
     val onSelect: (CandidateUi) -> Unit = {},
@@ -147,7 +149,6 @@ fun CandidatesScreen(
     val preview = showPreview && previewCandidate != null
     val listScroll = rememberLazyListState()
     val sortScroll = rememberScrollState(initial = if ((options?.sort?.ordinal ?: 0) >= 3) Int.MAX_VALUE else 0)
-    val filterScroll = rememberScrollState()
     val scope = rememberCoroutineScope()
     var fitTrigger by remember { mutableLongStateOf(0L) }
     var fitRevision by remember { mutableLongStateOf(0L) }
@@ -253,23 +254,19 @@ fun CandidatesScreen(
                 }
             } else Column(Modifier.testTag("candidates_sheet").fillMaxWidth().heightIn(max = listSheetMax).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                 if (options != null && request.mode == TravelMode.TRANSIT) {
+                    CategoryTabs(RouteCategory.entries.map { category ->
+                        val label = categoryLabel(category)
+                        val count = options.counts[category] ?: 0
+                        CategoryTab(label, count, stringResource(R.string.candidates_category_description, label, count))
+                    }, options.category.ordinal) { actions.onCategory(RouteCategory.entries[it]) }
                     Row(Modifier.fillMaxWidth().horizontalScroll(sortScroll).padding(horizontal = Spacing.screen), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
                         CandidateSort.entries.forEach { sort -> NeutralFilterChip(options.sort == sort, sortLabel(sort, request.goal)) { actions.onSort(sort) } }
-                    }
-                    Row(Modifier.fillMaxWidth().horizontalScroll(filterScroll).padding(horizontal = Spacing.screen), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                        listOf(TransitRouteType.BUS, TransitRouteType.SUBWAY, TransitRouteType.BUS_AND_SUBWAY).forEach { type ->
-                            NeutralFilterChip(type in options.filters, stringResource(when (type) {
-                                TransitRouteType.BUS -> R.string.candidates_filter_bus
-                                TransitRouteType.SUBWAY -> R.string.candidates_filter_subway
-                                else -> R.string.candidates_filter_mixed
-                            })) { actions.onFilter(type) }
-                        }
                     }
                 }
                 val content = PaddingValues(Spacing.screen)
                 when (state) {
                     is CandidatesState.Loading -> Loading(content, state.mode, animateLoader)
-                    is CandidatesState.Options -> if (state.visible.isEmpty()) Message(content, R.drawable.ic_ms_search, stringResource(R.string.candidates_filtered_empty), null, stringResource(R.string.candidates_clear_filters) to actions.onClearFilters, stringResource(R.string.candidates_edit_input) to actions.onBack)
+                    is CandidatesState.Options -> if (state.visible.isEmpty()) Message(content, R.drawable.ic_ms_search, stringResource(R.string.candidates_filtered_empty), null, stringResource(R.string.candidates_clear_filters) to { actions.onCategory(RouteCategory.ALL) }, stringResource(R.string.candidates_edit_input) to actions.onBack)
                         else OptionList(state.visible, state.selectedId, request, content, if (request.mode == TravelMode.TRANSIT) stringResource(if (state.sort == CandidateSort.WALK) R.string.candidates_walk_scope_sort else R.string.candidates_walk_scope) else null, actions.copy(onHighlight = {
                             userMoved = false
                             showPreview = true
@@ -304,6 +301,13 @@ fun CandidatesScreen(
     }
     if (showTime) TimeSheet(request.departure, request.mode, { showTime = false }, { value -> actions.onRequestChange(request.copy(departure = value)) }, now = now)
 }
+
+@Composable private fun categoryLabel(category: RouteCategory): String = stringResource(when (category) {
+    RouteCategory.ALL -> R.string.candidates_filter_all
+    RouteCategory.BUS -> R.string.candidates_filter_bus
+    RouteCategory.SUBWAY -> R.string.candidates_filter_subway
+    RouteCategory.MIXED -> R.string.candidates_filter_mixed
+})
 
 @Composable private fun sortLabel(sort: CandidateSort, goal: SunGoal): String = stringResource(when (sort) {
     CandidateSort.RECOMMENDED -> R.string.candidates_sort_recommended

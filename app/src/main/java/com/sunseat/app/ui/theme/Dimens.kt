@@ -39,6 +39,10 @@ object Sizes {
 
     /** 축약 여정 바 최소 높이(DESIGN 4.2, 5.1) */
     val journeyBar = 56.dp
+
+    /** 범주 탭 최소 높이와 선택 밑줄 두께(DESIGN 4.2, 12.2) */
+    val tabHeight = 48.dp
+    val tabIndicator = 3.dp
     val mapMarker = 32.dp
     /** 지도 경로선(논리 dp, docs/DESIGN.md 4.2·11.1). 선택 = 속 4 + 양쪽 테두리 1 */
     val mapRouteSelected = 6.dp
