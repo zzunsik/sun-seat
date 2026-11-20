@@ -293,5 +293,17 @@ class CandidatesScreenshotTest {
     @Test @Config(qualifiers = "w320dp-h640dp-xxhdpi")
     fun previewExpandedSmallLargeTextLongNames() = previewSummary(false, "candidates_preview_expanded_small_large_text", 1.5f, readableList, longRequest, expand = true)
 
+    @Test fun previewTaxiLight() {
+        val route = com.sunseat.app.ui.result.ResultFixtures.carRoute
+        val item = list.items.first().copy(totalDuration = route.duration, arrival = null, transfers = 0, walkMinutes = 0, fare = 14500, chips = listOf(LegChip(com.sunseat.app.domain.Mode.CAR)), boardAt = "", alightAt = "", chosen = ChosenRoute(route, route.duration))
+        previewSummary(false, "candidates_preview_taxi_light", state = CandidatesState.Options(listOf(item)), request = transitRequest.copy(mode = com.sunseat.app.domain.TravelMode.TAXI))
+    }
+    @Test fun previewWalkOnlyLight() {
+        val base = list.items.first()
+        val walk = com.sunseat.app.domain.Leg(com.sunseat.app.domain.Mode.WALK, base.chosen.route.legs.first().path, java.time.Duration.ofMinutes(25), "", "")
+        val item = base.copy(totalDuration = java.time.Duration.ofMinutes(25), transfers = 0, walkMinutes = 25, chips = listOf(LegChip(com.sunseat.app.domain.Mode.WALK)), boardAt = "", alightAt = "", chosen = base.chosen.copy(route = com.sunseat.app.domain.Route(listOf(walk)), cachedResult = null))
+        previewSummary(false, "candidates_preview_walk_light", state = CandidatesState.Options(listOf(item)))
+    }
+
     private fun shot(name: String) = compose.onRoot().captureRoboImage("src/test/screenshots/$name.png")
 }

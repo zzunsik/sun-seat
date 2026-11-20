@@ -7,7 +7,14 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.ui.semantics.isTraversalGroup
+import androidx.compose.ui.semantics.traversalIndex
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,7 +32,6 @@ import com.sunseat.app.domain.TripRequest
 import com.sunseat.app.ui.components.PrimaryButton
 import com.sunseat.app.ui.formatDuration
 import com.sunseat.app.ui.formatWon
-import com.sunseat.app.ui.theme.Sizes
 import com.sunseat.app.ui.theme.Spacing
 import com.sunseat.app.ui.theme.SunSeatTheme
 import java.time.format.DateTimeFormatter
@@ -81,8 +87,10 @@ internal fun RoutePreviewSheet(item: CandidateUi, request: TripRequest, onSeat: 
     val taxi = request.mode == TravelMode.TAXI
     val lines = routeLineCombination(item, transit)
     val rides = routeRideGroups(item)
+    // 접힌 높이에는 내비게이션 바가 더해지므로, 펼친 부분의 첫 줄이 그 아래로 비치지 않게 그만큼 띄운다.
+    val navigationBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     Column {
-        Column(Modifier.fillMaxWidth().onSizeChanged { onCollapsedHeight(it.height) }
+        Column(Modifier.fillMaxWidth().onSizeChanged { onCollapsedHeight(it.height) }.semantics { isTraversalGroup = true }
             .padding(start = Spacing.screen, end = Spacing.screen, bottom = Spacing.l), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
             // 자리 보기는 요약 줄 오른쪽에 둬 작은/가로 화면의 접힌 높이에서도 가려지지 않는다.
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
@@ -93,19 +101,31 @@ internal fun RoutePreviewSheet(item: CandidateUi, request: TripRequest, onSeat: 
                     if (transit && rides.isNotEmpty()) Text(stringResource(R.string.candidates_transfers, item.transfers),
                         style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
                 }
-                PrimaryButton(onClick = onSeat) { Text(stringResource(R.string.candidates_view_seat)) }
+                // TalkBack은 요약(막대·노선 조합)을 다 읽은 뒤 행동을 읽는다.
+                PrimaryButton(onClick = onSeat, modifier = Modifier.testTag("preview_seat").semantics { traversalIndex = 1f }) { Text(stringResource(R.string.candidates_view_seat)) }
             }
             RouteSegmentBar(item, taxi = taxi)
             if (lines.isNotBlank()) Text(lines, Modifier.testTag("preview_lines"), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurface)
         }
-        HorizontalDivider(Modifier.padding(horizontal = Spacing.screen), thickness = Sizes.hairline, color = scheme.outlineVariant)
-        Column(Modifier.fillMaxWidth().padding(Spacing.screen), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+        Column(Modifier.fillMaxWidth().padding(start = Spacing.screen, end = Spacing.screen, bottom = Spacing.screen, top = maxOf(Spacing.screen, navigationBottom + Spacing.s)),
+            verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
             CandidateScheduleFare(item, taxi)
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                Text(stringResource(R.string.candidates_preview_origin, request.origin.name), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
-                Text(stringResource(R.string.candidates_preview_destination, request.destination.name), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+                EndpointLine(stringResource(R.string.input_origin), request.origin.name)
+                EndpointLine(stringResource(R.string.input_destination), request.destination.name)
             }
             RouteLegSummary(item, taxi)
         }
     }
+}
+
+/** "출발 서울역": 라벨은 보조색, 장소명은 본문색이라 긴 이름에서도 라벨이 이름의 일부로 읽히지 않는다. */
+@Composable
+private fun EndpointLine(label: String, name: String) {
+    val scheme = SunSeatTheme.scheme
+    Text(buildAnnotatedString {
+        withStyle(SpanStyle(color = scheme.onSurfaceVariant)) { append(label) }
+        append(" ")
+        withStyle(SpanStyle(color = scheme.onSurface)) { append(name) }
+    }, style = MaterialTheme.typography.bodyMedium)
 }

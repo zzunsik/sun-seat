@@ -59,6 +59,7 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.ui.platform.LocalContext
 import com.sunseat.app.ui.input.NeutralTabs
@@ -204,9 +205,9 @@ fun CandidatesScreen(
         }
     }
     val offset = runCatching { with(density) { scaffoldState.bottomSheetState.requireOffset().toDp() } }.getOrDefault(maxHeight - peek)
-    // 미리보기의 지도 맞춤 행동 아래로 경로를 맞춰 출발·도착 표식이 행동에 가리지 않게 한다.
+    // 미리보기의 지도 맞춤 행동 아래로 경로를 맞춰 출발·도착 표식이 행동에 가리지 않게 한다. 가로 화면은 지도가 낮아 위 여백을 빼면 경로가 거의 안 보이므로 주지 않는다.
     val mapPadding = com.sunseat.app.ui.map.sheetMapPadding(mapTop, mapHeight, scaffoldTop + offset)
-        .let { if (preview) it.copy(top = fitActionBottom) else it }
+        .let { if (preview && mapHeight >= mapWidth) it.copy(top = fitActionBottom) else it }
     LaunchedEffect(fitTrigger, mapHeight, mapWidth) {
         if (fittedTrigger == fitTrigger) return@LaunchedEffect
         snapshotFlow { runCatching { scaffoldState.bottomSheetState.requireOffset() }.getOrDefault(Float.NaN) }
@@ -299,9 +300,10 @@ fun CandidatesScreen(
         })
         // #102: 선택 경로 맞춤은 카메라만 옮기는 조용한 행동이다(DESIGN 13). 다른 후보를 다시 그리지 않는다(#99).
         if (preview) {
+            val fitLabel = stringResource(R.string.candidates_fit_route_action)
             FloatingCapsule(Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)).padding(Spacing.s)
                 .onGloballyPositioned { fitActionBottom = with(density) { (it.positionInRoot().y + it.size.height).toDp() } - mapTop }) {
-                QuietButton(onClick = { userMoved = false; fitTrigger++ }) {
+                QuietButton(onClick = { userMoved = false; fitTrigger++ }, modifier = Modifier.semantics { onClick(label = fitLabel) { userMoved = false; fitTrigger++; true } }) {
                     Icon(painterResource(R.drawable.ic_ms_fit_screen), null, Modifier.size(Sizes.iconSmall))
                     Spacer(Modifier.width(Spacing.xs))
                     Text(stringResource(R.string.candidates_fit_route), style = MaterialTheme.typography.labelLarge)

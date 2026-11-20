@@ -140,6 +140,8 @@ class RoutePreviewTest {
         fun map() = compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config
         val ids = map()[CandidateMapRouteIdsKey]
         val revision = map()[com.sunseat.app.ui.map.MapCameraRevisionKey]
+        // TalkBack 행동 이름은 카메라만 선택 경로에 맞춘다는 뜻을 드러낸다.
+        compose.onNodeWithText("지도 맞춤").assert(SemanticsMatcher("fit label") { SemanticsActions.OnClick in it.config && it.config[SemanticsActions.OnClick].label == "선택 경로가 보이게 지도 맞추기" })
         compose.onNodeWithText("지도 맞춤").assertIsDisplayed().performSemanticsAction(SemanticsActions.OnClick)
         compose.mainClock.advanceTimeBy(5000)
         compose.waitForIdle()
