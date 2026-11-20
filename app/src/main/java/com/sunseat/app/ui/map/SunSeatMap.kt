@@ -262,4 +262,4 @@ internal fun routeSummary(route: com.sunseat.app.domain.Route?): String? {
 
 /** 테스트 지도의 맞춤 틀. 실제 SDK 지도(NativeMap)와 같은 [fitFrame] 규칙이다(#138). */
 private fun androidx.compose.ui.unit.Density.previewFitFrame(padding: MapPadding, width: Float, height: Float): FitFrame =
-    fitFrame(padding.top.toPx(), padding.bottom.toPx(), width, height, Sizes.mapInset.toPx(), com.sunseat.app.ui.theme.Spacing.s.toPx(), Sizes.mapMarker.toPx() + com.sunseat.app.ui.theme.Spacing.xs.toPx(), com.sunseat.app.ui.theme.Spacing.xl.toPx())
+    fitFrame(padding.top.toPx(), padding.bottom.toPx(), width, height, Sizes.mapInset.toPx(), com.sunseat.app.ui.theme.Spacing.s.toPx(), Sizes.mapMarker.toPx() + com.sunseat.app.ui.theme.Spacing.xs.toPx())

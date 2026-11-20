@@ -14,9 +14,9 @@ class MapFitFrameTest {
     private val inset = 40f       // Sizes.mapInset
     private val edge = 8f         // Spacing.s
     private val markerHeight = 36f // Sizes.mapMarker + Spacing.xs(표식 위 틈)
-    private val markerHalf = 24f  // Spacing.xl: 표식 절반 폭
+    private val markerHalf = 24f  // 표식 절반 폭(약 Spacing.xl). 좌우는 기본 inset 폭을 그대로 남기는지로 본다.
 
-    private fun frame(top: Float, bottom: Float, width: Float, height: Float) = fitFrame(top, bottom, width, height, inset, edge, markerHeight, markerHalf)
+    private fun frame(top: Float, bottom: Float, width: Float, height: Float) = fitFrame(top, bottom, width, height, inset, edge, markerHeight)
     /** 경로·표식 좌표가 실제로 들어가는 높이·폭. */
     private fun FitFrame.fitHeight(height: Float) = height - top - bottom - 2 * this.inset
     private fun FitFrame.fitWidth(width: Float) = width - 2 * side - 2 * this.inset
@@ -25,6 +25,8 @@ class MapFitFrameTest {
     private fun assertMarkerRoom(f: FitFrame, topPadding: Float) {
         assertTrue("marker must not hide under the top padding", f.top + f.inset >= topPadding + markerHeight)
         assertTrue("marker label must not be cut at the sides", f.side + f.inset >= markerHalf)
+        // 좌우는 기본 inset과 같은 폭을 남겨 가장자리 정류장 노선 이름표(표식보다 넓다)도 지금처럼 들어간다.
+        assertEquals(inset, f.side + f.inset, 0.01f)
         assertTrue(f.inset >= edge)
     }
 

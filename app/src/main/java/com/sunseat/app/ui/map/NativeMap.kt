@@ -74,7 +74,7 @@ internal fun NativeMap(state: MapState, modifier: Modifier = Modifier, keyAvaila
     val subway = stringResource(R.string.common_subway)
     val moreLines = stringResource(R.string.map_line_more)
     val metrics = with(density) {
-        MapMetrics(Sizes.mapMarker.toPx(), Sizes.mapRouteWalk.toPx(), Sizes.mapInset.toPx(), Spacing.s.toPx(), Spacing.xl.toPx(), (if(state.routeProgress!=null) Sizes.simulationSunRay else Sizes.mapSunRay).toPx(),
+        MapMetrics(Sizes.mapMarker.toPx(), Sizes.mapRouteWalk.toPx(), Sizes.mapInset.toPx(), Spacing.s.toPx(), (if(state.routeProgress!=null) Sizes.simulationSunRay else Sizes.mapSunRay).toPx(),
             Sizes.mapStopMarker.toPx(), Sizes.mapRouteArrow.toPx(), Sizes.mapStopBorder.toPx(), Sizes.mapMarkerTail.toPx(), Spacing.xs.toPx(), labelSize.toPx(), origin, destination, Sizes.mapLabelHeight.toPx(), bus, subway, moreLines)
     }
     val session = remember(context, lifecycle, ink, surface, sun, metrics) { MapSession(context, ink, surface, sun, metrics) }
@@ -139,7 +139,7 @@ private const val MAX_WALK_DOTS = 150
 private const val DOT_STUB = 0.2
 
 private data class MapMetrics(
-    val marker: Float, val walk: Float, val inset: Float, val edge: Float, val markerHalf: Float, val ray: Float,
+    val marker: Float, val walk: Float, val inset: Float, val edge: Float, val ray: Float,
     val stop: Float, val arrow: Float, val stopBorder: Float, val tail: Float, val textPadding: Float, val text: Float,
     val origin: String, val destination: String, val labelHeight: Float,
     val bus: String, val subway: String, val moreLines: String,
@@ -250,10 +250,10 @@ private class MapSession(context: Context, private val ink: Int, private val sur
             }
             decorRoute = state.routes.getOrNull(state.selectedRoute); decorZoom = null; lineDensity = density; walkLines.clear(); decorations.clear()
         }
-        // #138: 낮은 지도 띠에서는 맞춤 inset을 줄이고, 표식이 솟는 위쪽과 표식 폭이 걸리는 좌우에만 지도 여백을 더한다(fitFrame, 테스트 지도와 같은 값).
+        // #138: 낮은 지도 띠에서는 맞춤 inset을 줄이고, 표식이 솟는 위쪽에 지도 여백을 더하고 좌우는 기본 폭을 유지한다(fitFrame, 테스트 지도와 같은 값).
         val top = state.padding.top.value * density
         val bottom = state.padding.bottom.value * density
-        val frame = if (view.width > 0 && view.height > 0) fitFrame(top, bottom, view.width.toFloat(), view.height.toFloat(), metrics.inset, metrics.edge, metrics.marker + metrics.textPadding, metrics.markerHalf)
+        val frame = if (view.width > 0 && view.height > 0) fitFrame(top, bottom, view.width.toFloat(), view.height.toFloat(), metrics.inset, metrics.edge, metrics.marker + metrics.textPadding)
             else FitFrame(top, bottom, 0f, metrics.inset)
         val applied = listOf(frame.side.toInt(), frame.top.toInt(), frame.bottom.toInt())
         if (geometryChanged || padding != applied) {

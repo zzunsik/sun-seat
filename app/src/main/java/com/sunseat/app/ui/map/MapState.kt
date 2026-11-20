@@ -91,21 +91,22 @@ internal data class FitFrame(val top: Float, val bottom: Float, val side: Float,
 
 /**
  * [top]·[bottom]은 지도 위·아래 여백(헤더·시트 겹침), [inset]은 기본 맞춤 inset, [edge]는 가장 작은 맞춤 inset,
- * [markerHeight]는 좌표 위로 솟는 출발·도착 표식 높이(틈 포함), [markerHalfWidth]는 표식 절반 폭이다.
+ * [markerHeight]는 좌표 위로 솟는 출발·도착 표식 높이(틈 포함)다.
  *
  * #138: 맞춤 inset은 네 변에 같이 들어가므로 낮은 지도 띠(후보 목록 기본 상태 약 110dp)에서는 기본 inset 두 배가
  * 높이 대부분을 차지해 지도가 크게 축소됐다. Kakao 줌은 정수 단계라 경로 높이가 두 배 들어갈 자리가 있어야 한 단계 가까워진다.
  * 그래서 경로·표식 좌표가 보이는 높이의 [FIT_SHARE] 이상을 쓰도록 필요한 만큼만 inset을 줄이고(최소 [edge]),
- * 표식이 솟는 위쪽과 표식 폭이 걸리는 좌우에만 모자라는 만큼 지도 여백을 더한다(아래는 표식 꼬리 끝이 좌표라 더하지 않는다).
+ * 위쪽에는 솟는 표식 높이만큼 지도 여백을 더하고(아래는 표식 꼬리 끝이 좌표라 더하지 않는다), 좌우는 줄인 inset만큼 지도 여백으로
+ * 돌려 기본 inset과 같은 폭을 남긴다(높이가 맞춤을 제한하므로 손해가 없고, 가장자리 정류장 노선 이름표가 잘리지 않는다).
  * 보이는 높이가 200dp 이상인 지도(미리보기·결과·세로 입력·지도 선택)는 기본 inset 그대로다.
  */
-internal fun fitFrame(top: Float, bottom: Float, width: Float, height: Float, inset: Float, edge: Float, markerHeight: Float, markerHalfWidth: Float): FitFrame {
+internal fun fitFrame(top: Float, bottom: Float, width: Float, height: Float, inset: Float, edge: Float, markerHeight: Float): FitFrame {
     val visible = (height - top - bottom).coerceAtLeast(0f)
     val spare = visible * (1 - FIT_SHARE) // 맞춤 inset 두 변 + 위쪽 표식 여백에 쓸 수 있는 높이
     // inset이 표식 높이 이상이면 위 여백을 더하지 않으므로 spare를 위아래 inset이 나눠 쓰고, 아니면 표식 높이를 먼저 뺀다.
     val needed = if (spare / 2 >= markerHeight) spare / 2 else spare - markerHeight
     val fitted = minOf(inset, maxOf(edge, needed))
-    return FitFrame(top + (markerHeight - fitted).coerceAtLeast(0f), bottom, (markerHalfWidth - fitted).coerceAtLeast(0f), fitted)
+    return FitFrame(top + (markerHeight - fitted).coerceAtLeast(0f), bottom, inset - fitted, fitted)
 }
 
 /** 경로·표식 좌표가 보이는 지도 높이에서 최소한 차지할 비율. */
