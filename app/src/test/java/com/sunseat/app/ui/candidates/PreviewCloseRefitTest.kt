@@ -89,9 +89,12 @@ class PreviewCloseRefitTest {
 
     @Test fun closingPreviewAfterManualMoveKeepsUserCamera() {
         render()
+        val listVisible = map()[MapVisibleHeightKey]
         val inPreview = openPreview(1)
         compose.onNodeWithTag("candidate_map").performTouchInput { swipeLeft() }
         closePreview()
+        // 실제로 목록 높이로 돌아왔는데도 다시 맞추지 않는다.
+        assertEquals(listVisible, map()[MapVisibleHeightKey], 0.01f)
         assertEquals(inPreview, revision())
     }
 
