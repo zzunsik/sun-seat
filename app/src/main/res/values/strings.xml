@@ -243,6 +243,8 @@
     <string name="candidates_sort_sun_more">햇빛 많은 순</string>
     <!-- 정렬 드롭다운 버튼 TalkBack 설명(#83): 현재 기준 -->
     <string name="candidates_sort_description">정렬 기준 %1$s</string>
+    <string name="candidates_sort_expanded">펼쳐짐</string>
+    <string name="candidates_sort_collapsed">접힘</string>
     <string name="candidates_filter_all">전체</string>
     <string name="candidates_filter_bus">버스</string>
     <string name="candidates_filter_subway">지하철</string>

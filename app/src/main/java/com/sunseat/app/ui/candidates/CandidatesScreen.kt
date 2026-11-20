@@ -267,7 +267,8 @@ fun CandidatesScreen(
                         }
                     }
                 }
-                val content = PaddingValues(Spacing.screen)
+                // 범주 탭·정렬 행이 있으면 그 아래 간격(spacedBy)만 두고 목록 위 여백을 겹쳐 쌓지 않는다(#83 디자인 리뷰).
+                val content = if (options != null && request.mode == TravelMode.TRANSIT) PaddingValues(start = Spacing.screen, end = Spacing.screen, bottom = Spacing.screen) else PaddingValues(Spacing.screen)
                 when (state) {
                     is CandidatesState.Loading -> Loading(content, state.mode, animateLoader)
                     is CandidatesState.Options -> if (state.visible.isEmpty()) Message(content, R.drawable.ic_ms_search, stringResource(R.string.candidates_filtered_empty), null, stringResource(R.string.candidates_clear_filters) to { actions.onCategory(RouteCategory.ALL) }, stringResource(R.string.candidates_edit_input) to actions.onBack)
@@ -325,16 +326,19 @@ private fun SortDropdown(current: CandidateSort, goal: SunGoal, onSort: (Candida
     val haptics = rememberSunSeatHaptics()
     val label = sortLabel(current, goal)
     val description = stringResource(R.string.candidates_sort_description, label)
+    val stateText = stringResource(if (open) R.string.candidates_sort_expanded else R.string.candidates_sort_collapsed)
     BackHandler(enabled = open) { open = false }
     Box {
         QuietButton(onClick = { open = true }, modifier = Modifier.testTag("candidates_sort").semantics {
             role = Role.DropdownList
             contentDescription = description
+            stateDescription = stateText
         }) {
             Text(label)
             Icon(painterResource(R.drawable.ic_ms_chevron_right), null, Modifier.padding(start = Spacing.xs).size(Sizes.iconSmall).rotate(90f))
         }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = SunSeatTheme.scheme.surfaceContainerHigh) {
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = SunSeatTheme.scheme.surfaceContainerHigh,
+            border = androidx.compose.foundation.BorderStroke(Sizes.hairline, SunSeatTheme.scheme.outlineVariant)) {
             CandidateSort.entries.forEach { sort ->
                 val isCurrent = sort == current
                 DropdownMenuItem(
