@@ -159,7 +159,7 @@ class SunSeatFlowTest {
         clickText(text(R.string.candidates_filter_subway))
         waitForTextGone("40분")
         compose.onNode(hasClickAction() and hasText("30분")).tap()
-        compose.onNodeWithText(text(R.string.candidates_preview_title)).assertExists()
+        compose.onNodeWithTag("candidates_preview_sheet").assertExists()
         clickText(text(R.string.candidates_view_seat))
 
         // 결과 → 햇빛 따라가기
@@ -206,7 +206,7 @@ class SunSeatFlowTest {
         clickText(text(R.string.candidates_filter_subway))
         repeat(3) {
             compose.onNode(hasClickAction() and hasText("30분")).tap()
-            compose.onNodeWithText(text(R.string.candidates_preview_title)).assertExists()
+            compose.onNodeWithTag("candidates_preview_sheet").assertExists()
             compose.onNodeWithText(text(R.string.result_legs)).assertDoesNotExist()
             assertEquals(1, graph.server.transitRequests)
             back()
@@ -544,6 +544,61 @@ class SunSeatFlowTest {
         clickText(text(R.string.input_time_now))
         val departure = next.atZone(graph.clock.zone).format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
         compose.waitUntil(10_000) { compose.onAllNodesWithText("$departure 출발", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        assertEquals(1, graph.server.transitRequests)
+    }
+
+    /**
+     * #82: 경로 종류는 전체/버스/지하철/혼합 중 하나만 고르는 탭이고 받은 후보 수를 함께 보인다.
+     * 같은 탭을 다시 눌러도 전체로 숨은 토글되지 않고, 0건 범주도 골라 빈 상태에서 '전체 보기'로 돌아온다.
+     * 종류 전환은 로컬 목록만 바꿔 경로 API를 다시 부르지 않고, 정렬은 그대로다.
+     * 고른 경로가 범주 밖으로 숨으면 목록과 지도 모두 선택을 해제한다.
+     */
+    @Test fun categoryTabsSelectOneWithCountsAndRecoverFromEmpty() {
+        val graph = launch()
+        enterTrip()
+        waitForText("30분")
+        waitForText("40분")
+        fun tab(description: String) = compose.onNode(androidx.compose.ui.test.hasContentDescription(description) and
+            androidx.compose.ui.test.SemanticsMatcher.expectValue(SemanticsProperties.Role, androidx.compose.ui.semantics.Role.Tab))
+        // 직접 만든 응답: 지하철 1, 버스+지하철 1, 버스 0
+        tab("전체 경로 2개").assertIsSelected()
+        tab("버스 경로 0개").assertIsNotSelected()
+        tab("지하철 경로 1개").assertIsNotSelected()
+        tab("혼합 경로 1개").assertIsNotSelected()
+        clickText(text(R.string.candidates_sort_walk))
+
+        // 지하철 경로를 골라 미리보기를 열었다 닫으면 선택이 남는다.
+        compose.onNode(hasClickAction() and hasText("30분")).tap()
+        back()
+        compose.onNode(hasClickAction() and hasText("30분")).assertIsSelected()
+
+        tab("지하철 경로 1개").tap()
+        waitForTextGone("40분")
+        tab("지하철 경로 1개").assertIsSelected()
+        tab("전체 경로 2개").assertIsNotSelected()
+        compose.onNode(hasClickAction() and hasText("30분")).assertIsSelected()
+        // 같은 탭을 다시 눌러도 그대로다.
+        tab("지하철 경로 1개").tap()
+        tab("지하철 경로 1개").assertIsSelected()
+        compose.onNodeWithText("40분").assertDoesNotExist()
+
+        // 혼합으로 바꾸면 고른 지하철 경로가 숨으므로 목록·지도 선택을 함께 해제한다.
+        tab("혼합 경로 1개").tap()
+        waitForText("40분")
+        compose.onNodeWithText("30분").assertDoesNotExist()
+        assertEquals(-1, compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.candidates.CandidateMapSelectedRouteKey])
+
+        // 0건 범주도 고를 수 있고, 빈 상태에서 전체로 돌아온다.
+        tab("버스 경로 0개").tap()
+        tab("버스 경로 0개").assertIsSelected()
+        waitForText(text(R.string.candidates_filtered_empty))
+        compose.onNodeWithText("40분").assertDoesNotExist()
+        clickText("전체 보기")
+        waitForText("30분")
+        waitForText("40분")
+        tab("전체 경로 2개").assertIsSelected()
+        compose.onNode(hasClickAction() and hasText("30분")).assertIsNotSelected()
+        compose.onNodeWithText(text(R.string.candidates_sort_walk)).assertIsSelected()
         assertEquals(1, graph.server.transitRequests)
     }
 

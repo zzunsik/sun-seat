@@ -14,6 +14,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.tryPerformAccessibilityChecks
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.sunseat.app.R
@@ -175,11 +177,21 @@ class CandidatesScreenshotTest {
     @Test fun unavailableDark() { render(CandidatesState.Error(R.string.candidates_error_unavailable, R.drawable.ic_ms_error, canRetry = false), true); shot("candidates_unavailable_dark") }
     @Test fun sunLight() { render(list.copy(sort = CandidateSort.SUN), false); shot("candidates_sun_light") }
     @Test fun sunDark() { render(list.copy(sort = CandidateSort.SUN), true); shot("candidates_sun_dark") }
-    @Test fun filterLight() { render(list.copy(filters = setOf(com.sunseat.app.data.route.TransitRouteType.BUS), selectedId = 1), false); shot("candidates_filter_light") }
-    @Test fun filterDark() { render(list.copy(filters = setOf(com.sunseat.app.data.route.TransitRouteType.BUS), selectedId = 1), true); shot("candidates_filter_dark") }
-    @Test fun emptyFilterLight() { render(list.copy(filters = setOf(com.sunseat.app.data.route.TransitRouteType.BUS_AND_SUBWAY)), false); shot("candidates_empty_filter_light") }
-    @Test fun emptyFilterDark() { render(list.copy(filters = setOf(com.sunseat.app.data.route.TransitRouteType.BUS_AND_SUBWAY)), true); shot("candidates_empty_filter_dark") }
+    @Test fun filterLight() { render(list.copy(category = RouteCategory.BUS, selectedId = 1), false); shot("candidates_filter_light") }
+    @Test fun filterDark() { render(list.copy(category = RouteCategory.BUS, selectedId = 1), true); shot("candidates_filter_dark") }
+    @Test fun emptyFilterLight() { render(list.copy(category = RouteCategory.MIXED), false); shot("candidates_empty_filter_light") }
+    @Test fun emptyFilterDark() { render(list.copy(category = RouteCategory.MIXED), true); shot("candidates_empty_filter_dark") }
     @Test fun noRouteDark() { render(noRoute, true); shot("candidates_no_route_dark") }
+
+    /** #82: 작은 화면·큰 글자에서도 범주 이름과 개수를 줄이지 않고, 넘치면 가로로 넘기며 고른 탭을 보이는 곳에 둔다. */
+    @Test @Config(qualifiers = "w320dp-h640dp-xxhdpi")
+    fun categoryTabsSmallLargeText() {
+        compose.enableAccessibilityChecks()
+        render(list.copy(category = RouteCategory.MIXED), false, fontScale = 1.5f)
+        compose.onRoot().tryPerformAccessibilityChecks()
+        compose.onNodeWithContentDescription("혼합 경로 0개").assertIsSelected().assertIsDisplayed()
+        shot("candidates_category_small_large_text")
+    }
 
     /** #105: 최소 도보 정렬은 응답의 환승 도보만 비교한다는 목록 공통 안내. */
     private fun walkSort(dark: Boolean, name: String, fontScale: Float = 1f) {
@@ -259,6 +271,50 @@ class CandidatesScreenshotTest {
         render(CandidatesState.Options(listOf(item), selectedId = item.id), false)
         compose.onRoot().tryPerformAccessibilityChecks()
         shot("candidates_same_line_reboarding_light")
+    }
+
+    /** #102: 접힌 요약(총시간·환승·막대·노선 조합·자리 보기)과 펼친 상세(시각·요금·전체 장소명·타임라인). */
+    private val longRequest = transitRequest.copy(origin = transitRequest.origin.copy(name = "아주 긴 견본 출발지 이름과 부가 설명"),
+        destination = transitRequest.destination.copy(name = "아주 긴 견본 목적지 이름과 부가 설명"))
+    private val readableList = list.copy(items = listOf(CandidatesFixtures.readable.toUi(0, java.time.LocalDateTime.of(2026, 11, 15, 9, 0), false)) + list.items.map { it.copy(id = it.id + 1) })
+
+    private fun previewSummary(dark: Boolean, name: String, fontScale: Float = 1f, state: CandidatesState.Options = list,
+                               request: com.sunseat.app.domain.TripRequest = transitRequest, expand: Boolean = false) {
+        compose.enableAccessibilityChecks()
+        val (sheet, scope) = render(state, dark, request, fontScale)
+        compose.onNodeWithTag("candidate_${state.items.first().id}").performSemanticsAction(SemanticsActions.OnClick)
+        compose.mainClock.advanceTimeBy(5000)
+        compose.waitUntil(10_000) { compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey] > 0 }
+        if (expand) {
+            compose.runOnIdle { scope.launch { sheet.bottomSheetState.expand() } }
+            compose.mainClock.advanceTimeBy(5000)
+            compose.waitForIdle()
+            org.junit.Assert.assertEquals(SheetValue.Expanded, sheet.bottomSheetState.currentValue)
+        } else compose.onNodeWithText("자리 보기").assertIsDisplayed()
+        compose.onRoot().tryPerformAccessibilityChecks()
+        shot(name)
+    }
+
+    @Test @Config(qualifiers = "w320dp-h640dp-xxhdpi")
+    fun previewSmallLargeTextDark() = previewSummary(true, "candidates_preview_small_large_text_dark", 1.5f)
+    @Test @Config(qualifiers = "w320dp-h640dp-xxhdpi")
+    fun previewLongNamesTransfersSmallLargeText() = previewSummary(false, "candidates_preview_long_small_large_text", 1.5f, readableList, longRequest)
+    @Test fun previewTransfersLight() = previewSummary(false, "candidates_preview_transfers_light", state = readableList)
+    @Test fun previewExpandedLight() = previewSummary(false, "candidates_preview_expanded_light", expand = true)
+    @Test fun previewExpandedDark() = previewSummary(true, "candidates_preview_expanded_dark", expand = true)
+    @Test @Config(qualifiers = "w320dp-h640dp-xxhdpi")
+    fun previewExpandedSmallLargeTextLongNames() = previewSummary(false, "candidates_preview_expanded_small_large_text", 1.5f, readableList, longRequest, expand = true)
+
+    @Test fun previewTaxiLight() {
+        val route = com.sunseat.app.ui.result.ResultFixtures.carRoute
+        val item = list.items.first().copy(totalDuration = route.duration, arrival = null, transfers = 0, walkMinutes = 0, fare = 14500, chips = listOf(LegChip(com.sunseat.app.domain.Mode.CAR)), boardAt = "", alightAt = "", chosen = ChosenRoute(route, route.duration))
+        previewSummary(false, "candidates_preview_taxi_light", state = CandidatesState.Options(listOf(item)), request = transitRequest.copy(mode = com.sunseat.app.domain.TravelMode.TAXI))
+    }
+    @Test fun previewWalkOnlyLight() {
+        val base = list.items.first()
+        val walk = com.sunseat.app.domain.Leg(com.sunseat.app.domain.Mode.WALK, base.chosen.route.legs.first().path, java.time.Duration.ofMinutes(25), "", "")
+        val item = base.copy(totalDuration = java.time.Duration.ofMinutes(25), transfers = 0, walkMinutes = 25, chips = listOf(LegChip(com.sunseat.app.domain.Mode.WALK)), boardAt = "", alightAt = "", chosen = base.chosen.copy(route = com.sunseat.app.domain.Route(listOf(walk)), cachedResult = null))
+        previewSummary(false, "candidates_preview_walk_light", state = CandidatesState.Options(listOf(item)))
     }
 
     private fun shot(name: String) = compose.onRoot().captureRoboImage("src/test/screenshots/$name.png")
