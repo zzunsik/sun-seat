@@ -66,6 +66,14 @@ class CandidateSummaryTest {
         compose.onNodeWithText("23:50 → 다음 날 00:42", useUnmergedTree = true).assertExists()
     }
 
+    @Test fun collapsedSummaryKeepsBoardingStopsLineOrderAndDestination() {
+        val item = CandidatesFixtures.subwayOnly.toUi(0, null, false)
+        compose.setContent { SunSeatTheme { CandidateCard(item, false, CandidatesFixtures.transitRequest, {}, {}) } }
+        compose.onNodeWithText("서울역 1호선 → 시청 2호선 → 강남", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("route_timeline_0", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithText("자리 보기").assertIsDisplayed()
+    }
+
     @Test fun selectedTimelineKeepsOneOriginalRideAndKnownOuterStops() {
         val base = CandidatesFixtures.subwayOnly.toUi(0, null, false)
         val first = base.chosen.route.legs.first().copy(estimatedStationTiming = true, transitStepIndex = 0)

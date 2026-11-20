@@ -456,8 +456,13 @@ internal fun CandidateCard(item: CandidateUi, selected: Boolean, request: TripRe
                         style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                 }
                 if (selected) RouteLegSummary(item, taxi) else {
-                    val boardingLabels = routeLegGroups(item).filter { item.chosen.route.legs[it.first].mode != Mode.WALK }
-                        .map { routeBoardingLabel(item, it.first, taxi) }
+                    val rides = routeLegGroups(item).filter { item.chosen.route.legs[it.first].mode != Mode.WALK }
+                    val boardingLabels = rides.map { range ->
+                        val leg = item.chosen.route.legs[range.first]
+                        val stop = leg.startName.ifBlank { if (range == rides.firstOrNull()) item.boardAt else "" }
+                        val line = item.chips.getOrNull(range.first)?.lineName.orEmpty().ifBlank { routeBoardingLabel(item, range.first, taxi) }
+                        listOf(stop, line).filter { it.isNotBlank() }.joinToString(" ")
+                    } + listOfNotNull(rides.lastOrNull()?.let { item.chosen.route.legs[it.last].endName.ifBlank { item.alightAt } }?.takeIf { it.isNotBlank() })
                     Text(boardingLabels.joinToString(" → "), Modifier.testTag("candidate_boarding_${item.id}"),
                         style = MaterialTheme.typography.bodySmall, color = scheme.onSurface)
                 }
