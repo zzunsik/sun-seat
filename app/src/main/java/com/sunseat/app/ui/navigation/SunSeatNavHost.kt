@@ -44,7 +44,7 @@ fun SunSeatNavHost(graph: AppGraph, modifier: Modifier = Modifier, navigation: S
         key = "trip-input",
         factory = androidx.lifecycle.viewmodel.viewModelFactory {
             initializer { com.sunseat.app.ui.input.InputViewModel(graph.kakao.placeSearch, graph.locationProvider,
-                locationName, graph.settings.settings, graph.recent, graph.favorites) }
+                locationName, graph.settings.settings, graph.recent, graph.favorites, graph.kakao.reverseGeocode) }
         },
     )
     fun updateRequest(request: TripRequest) {

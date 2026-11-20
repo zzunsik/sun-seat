@@ -25,6 +25,8 @@ class KakaoApis(
 
     val placeSearch: PlaceSearchApi by lazy { KakaoPlaceSearchApi(dapi) }
 
+    val reverseGeocode: com.sunseat.app.data.place.ReverseGeocodeApi by lazy { com.sunseat.app.data.place.KakaoReverseGeocodeApi(dapi) }
+
     val transitRoutes: TransitRouteApi by lazy { KakaoTransitRouteApi(dapi) }
 
     val carRoutes: CarRouteApi by lazy { KakaoCarRouteApi(navi) }

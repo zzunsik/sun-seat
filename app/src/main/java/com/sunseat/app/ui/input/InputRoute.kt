@@ -28,13 +28,14 @@ fun InputRoute(
     currentLocationName: String = androidx.compose.ui.res.stringResource(com.sunseat.app.R.string.location_use_current),
     viewModel: InputViewModel = viewModel(
         factory = viewModelFactory {
-            initializer { InputViewModel(graph.kakao.placeSearch, graph.locationProvider, currentLocationName = currentLocationName, settings = graph.settings.settings, favoriteRepository = graph.favorites, recentRepository = graph.recent) }
+            initializer { InputViewModel(graph.kakao.placeSearch, graph.locationProvider, currentLocationName = currentLocationName, settings = graph.settings.settings, favoriteRepository = graph.favorites, recentRepository = graph.recent, reverseGeocode = graph.kakao.reverseGeocode) }
         },
     ),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val permission = rememberLocationPermissionState(onResult = viewModel::onLocationPermission)
+    val unnamed = androidx.compose.ui.res.stringResource(com.sunseat.app.R.string.map_pick_unnamed)
 
     LaunchedEffect(state.origin, state.destination, state.mode, state.departure, state.goal, state.search, state.locating) {
         viewModel.automaticRequest()?.let(onSubmit)
@@ -90,6 +91,19 @@ fun InputRoute(
             },
             setGoal = viewModel::setGoal,
             submit = { viewModel.submit()?.let(onSubmit) },
+            openMapPick = viewModel::openMapPick,
+            cancelMapPick = viewModel::cancelMapPick,
+            confirmMapPick = {
+                when (val result = viewModel.confirmPick(unnamed)) {
+                    is PickResult.Chosen -> viewModel.choosePlace(result.place, remember = result.named)
+                    PickResult.Unchanged -> viewModel.closeSearch()
+                    PickResult.Rejected -> Unit
+                }
+            },
+            onPickCameraMoving = viewModel::onPickCameraMoving,
+            onPickCameraIdle = viewModel::onPickCameraIdle,
+            retryPickAddress = viewModel::retryPickAddress,
+            onPickMapUnavailable = viewModel::onPickMapUnavailable,
         ),
     )
 }
