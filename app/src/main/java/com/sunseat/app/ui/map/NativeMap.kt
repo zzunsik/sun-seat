@@ -255,7 +255,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         // #143: 정류장 노선 이름표가 기본 inset보다 넓으면 그쪽 여백을 이름표 폭만큼 둔다. 폭은 nameIcon과 같은 측정이다.
         if (geometryChanged) labelSides = state.routes.getOrNull(state.selectedRoute)?.let { route ->
             val paint = textPaint(ink)
-            labelExtents(RouteLinePolicy.stops(route), metrics.stop / 2) { stop -> paint.measureText(metrics.stopLabel(stop)) + metrics.textPadding * 2 }
+            labelExtents(RouteLinePolicy.stops(route), metrics.stop / 2) { stop -> paint.measureText(metrics.stopLabel(stop)) + metrics.textPadding * 3 } // 상자 폭 + 가장자리 틈(Spacing.xs)
         } ?: (0f to 0f)
         val top = state.padding.top.value * density
         val bottom = state.padding.bottom.value * density

@@ -83,7 +83,8 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
                     stop.lines.size == 1 -> stop.lines.first()
                     else -> String.format(moreLines, stop.lines.first(), stop.lines.size - 1)
                 }
-                textMeasurer.measure(name, labelStyle).size.width + Spacing.xs.toPx() * 2
+                // 이름표 상자 폭 + 화면 가장자리와의 틈(Spacing.xs). 반올림·테두리로 가장자리에 닿지 않게 한다.
+                textMeasurer.measure(name, labelStyle).size.width + Spacing.xs.toPx() * 3
             }
         }
     } ?: (0f to 0f)
