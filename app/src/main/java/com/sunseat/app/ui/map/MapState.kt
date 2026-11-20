@@ -24,6 +24,12 @@ data class MapState(
     val automaticFit: Boolean = true,
     val cameraRevision: Long = 0,
     val fitEnabled: Boolean = true,
+    /** 지도 가운데(지도에서 위치 선택, #85). 처음 만들 때(화면 재생성 포함) 이 위치에서 시작하고, 이후에는 순번이 바뀔 때만 카메라를 옮긴다. */
+    val center: MapFocus? = null,
+    /** 카메라가 멈췄을 때의 가운데 좌표(지도 선택의 핀 좌표). */
+    val onCameraIdle: ((LatLng) -> Unit)? = null,
+    /** 지도 키 없음·인증 실패로 지도를 쓸 수 없다. */
+    val onUnavailable: () -> Unit = {},
 )
 
 /** A new sequence requests one camera move, even when the coordinate is unchanged. */
@@ -43,6 +49,9 @@ internal class MapProjection(points: List<LatLng>, private val width: Float, pri
     fun project(point: LatLng): Pair<Float, Float> =
         ((width / 2 + (point.longitude * longitudeScale - (minX + maxX) / 2) * scale).toFloat()) to
         ((height / 2 - (point.latitude - (minY + maxY) / 2) * scale).toFloat())
+    /** [project]의 역. 테스트 지도에서 화면 가운데의 좌표(지도 선택 핀)를 구한다. */
+    fun unproject(x: Float, y: Float): LatLng =
+        LatLng((height / 2 - y) / scale + (minY + maxY) / 2, ((x - width / 2) / scale + (minX + maxX) / 2) / longitudeScale)
 }
 internal fun MapState.points(): List<LatLng> =
     (routes.getOrNull(selectedRoute)?.let { listOf(it) } ?: routes).flatMap { it.legs }.flatMap { it.path } +

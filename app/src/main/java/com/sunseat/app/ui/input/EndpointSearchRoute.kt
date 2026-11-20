@@ -34,9 +34,10 @@ internal fun EndpointSearchRoute(
         viewModel.cancelEndpointEdit(request)
         onCancel()
     }
-    fun choose(place: com.sunseat.app.data.place.Place) {
-        viewModel.chooseEditedPlace(place)?.let(onConfirm)
+    fun choose(place: com.sunseat.app.data.place.Place, remember: Boolean = true) {
+        viewModel.chooseEditedPlace(place, remember)?.let(onConfirm)
     }
+    val unnamed = androidx.compose.ui.res.stringResource(com.sunseat.app.R.string.map_pick_unnamed)
     LaunchedEffect(state.locating, state.originLocationRevision) {
         if (locationPending && !state.locating && state.originLocationRevision > locationRevision) {
             locationPending = false
@@ -82,8 +83,31 @@ internal fun EndpointSearchRoute(
             } },
             dismissLocationMessage = viewModel::dismissLocationMessage,
             openSearch = { viewModel.dismissLocationMessage() },
+            // Map pick (#85): same field and return contract as a search result (#70); Back returns to this search.
+            openMapPick = viewModel::openMapPick,
+            cancelMapPick = viewModel::cancelMapPick,
+            confirmMapPick = {
+                when (val result = viewModel.confirmPick(unnamed)) {
+                    is PickResult.Chosen -> choose(result.place, result.named)
+                    PickResult.Unchanged -> cancel()
+                    PickResult.Rejected -> Unit
+                }
+            },
+            onPickCameraMoving = viewModel::onPickCameraMoving,
+            onPickCameraIdle = viewModel::onPickCameraIdle,
+            retryPickAddress = viewModel::retryPickAddress,
+            onPickMapUnavailable = viewModel::onPickMapUnavailable,
+            // In the picker the location button only recentres the map (#68); it never confirms an origin.
+            showCurrentLocationOnMap = {
+                viewModel.dismissLocationMessage()
+                viewModel.prepareLocation(LocationPurpose.MAP)
+                if (permission.status.isGranted) viewModel.fetchCurrentLocation(LocationPurpose.MAP, keepSearch = true) else permission.request()
+            },
         )
-        Column(Modifier.fillMaxSize()) {
+        val pick = state.pick
+        if (pick != null) {
+            MapPickScreen(pick, actions, state.origin?.place, state.destination?.place, mapLocating = state.mapLocating, notice = pickLocationNotice(state, actions))
+        } else Column(Modifier.fillMaxSize()) {
             PlaceSearchScreen(search, actions, Modifier.weight(1f), favorites = state.favorites,
                 recent = state.recent, showRecent = true,
                 noticeRes = state.favoriteMessageRes ?: state.recentMessageRes,

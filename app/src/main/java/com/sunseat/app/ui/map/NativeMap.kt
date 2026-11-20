@@ -54,6 +54,8 @@ import com.sunseat.app.ui.theme.SunSeatTheme
 @Composable
 internal fun NativeMap(state: MapState, modifier: Modifier = Modifier, keyAvailable: Boolean = BuildConfig.KAKAO_NATIVE_APP_KEY.isNotBlank()) {
     if (!keyAvailable) {
+        val unavailable by rememberUpdatedState(state.onUnavailable)
+        androidx.compose.runtime.LaunchedEffect(Unit) { unavailable() }
         MapNotice(R.string.map_missing_key, modifier)
         return
     }
@@ -84,7 +86,9 @@ internal fun NativeMap(state: MapState, modifier: Modifier = Modifier, keyAvaila
             override fun onMapError(error: Exception) { session.view.post { if (!session.closed) failed = true } }
         }, object : KakaoMapReadyCallback() {
             override fun getPosition(): com.kakao.vectormap.LatLng =
-                (latest.points().firstOrNull() ?: LatLng(37.5665, 126.9780)).sdk()
+                (latest.center?.location ?: latest.points().firstOrNull() ?: LatLng(37.5665, 126.9780)).sdk()
+            // The map picker (#85) opens at street level so the pin lands on a building, not a district.
+            override fun getZoomLevel(): Int = if (latest.center != null) PICK_ZOOM else super.getZoomLevel()
             override fun onMapReady(map: KakaoMap) {
                 session.view.post {
                     if (!session.closed) { session.map = map; ready = true; session.update(latest, density.density) }
@@ -107,7 +111,10 @@ internal fun NativeMap(state: MapState, modifier: Modifier = Modifier, keyAvaila
         androidx.compose.runtime.key(session) {
             AndroidView(factory = { session.view }, modifier = Modifier.fillMaxSize(), update = { if (ready && !failed) session.update(state, density.density) })
         }
-        if (failed) MapNotice(R.string.map_error, Modifier.fillMaxSize())
+        if (failed) {
+            androidx.compose.runtime.LaunchedEffect(Unit) { latest.onUnavailable() }
+            MapNotice(R.string.map_error, Modifier.fillMaxSize())
+        }
         else if (!ready) MapNotice(R.string.map_loading, Modifier.fillMaxSize())
     }
 }
@@ -125,6 +132,7 @@ internal fun MapNotice(message: Int, modifier: Modifier = Modifier) {
 private const val STOP_RANK = 10L
 private const val STOP_NAME_RANK = 5L
 private const val PLACE_RANK = 20L
+private const val PICK_ZOOM = 17
 private const val ARROW_RANK = 1L
 private const val MAX_WALK_DOTS = 150
 /** SDK lines have round caps of half the width on each end, so a short stub renders as a round dot of the line width. */
@@ -161,6 +169,8 @@ private class MapSession(context: Context, private val ink: Int, private val sur
     private var ray: Label? = null
     private var myLocation: Label? = null
     private var lastFocus: MapFocus? = null
+    private var lastCenter: MapFocus? = null
+    private var cameraIdle: ((LatLng) -> Unit)? = null
     private var lastCursor: MapCursor? = null
     private var following = false
     private var playbackMode = false
@@ -187,9 +197,14 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         if (closed) return
         val target = map ?: return
         gesture = state.onGesture
+        cameraIdle = state.onCameraIdle
         if (geometry == null) {
             target.setOnCameraMoveStartListener { _, type -> if (type != GestureType.Unknown) gesture() }
-            target.setOnCameraMoveEndListener { moved, position, _ -> if (position.zoomLevel != decorZoom) view.post { if (map === moved) decorate(moved) } }
+            target.setOnCameraMoveEndListener { moved, position, _ ->
+                if (position.zoomLevel != decorZoom) view.post { if (map === moved) decorate(moved) }
+                // Map picker (#85): the pin sits at the view centre with no padding, so the camera target is the pin.
+                cameraIdle?.let { report -> val at = LatLng(position.position.latitude, position.position.longitude); view.post { if (map === moved) report(at) } }
+            }
         }
         val next = Triple(state.routes, state.selectedRoute, state.origin to state.destination)
         val geometryChanged = geometry != next || playbackMode != (state.routeProgress != null)
@@ -243,6 +258,10 @@ private class MapSession(context: Context, private val ink: Int, private val sur
             target.moveCamera(CameraUpdateFactory.fitMapPoints(state.points().map { it.sdk() }.toTypedArray(), metrics.inset.toInt(), 17))
         }
         if (decorZoom == null) view.post { map?.let(::decorate) }
+        state.center?.let { center ->
+            // Only a new request (sequence) moves the camera; the reported pin position itself never pulls the map back mid-gesture.
+            if (center.sequence != lastCenter?.sequence) { target.moveCamera(CameraUpdateFactory.newCenterPosition(center.location.sdk())); lastCenter = center }
+        }
         state.focus?.let { focus ->
             val layer = target.labelManager?.layer
             if (myLocation == null) myLocation = layer?.addLabel(LabelOptions.from(focus.location.sdk()).setStyles(LabelStyle.from(myLocationIcon).setApplyDpScale(false)))

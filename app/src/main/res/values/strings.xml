@@ -29,6 +29,22 @@
     <string name="input_search_hint_destination">도착지 이름이나 주소</string>
     <string name="input_search_close">검색 닫기</string>
     <string name="input_search_clear">검색어 지우기</string>
+
+    <!-- 지도에서 위치 선택 (#85) -->
+    <string name="map_pick_open">지도에서 선택</string>
+    <string name="map_pick_title_origin">지도에서 출발지 선택</string>
+    <string name="map_pick_title_destination">지도에서 도착지 선택</string>
+    <string name="map_pick_close">검색으로 돌아가기</string>
+    <string name="map_pick_guide">지도를 움직여 핀을 원하는 위치에 맞춰 주세요.</string>
+    <string name="map_pick_loading">주소를 확인하는 중…</string>
+    <string name="map_pick_unnamed">지도에서 선택한 위치</string>
+    <string name="map_pick_no_address">주소가 없는 곳이에요. 이 위치를 그대로 쓸 수 있어요.</string>
+    <string name="map_pick_address_error">주소를 불러오지 못했어요. 이 위치를 그대로 쓸 수 있어요.</string>
+    <string name="map_pick_confirm_origin">출발지로 선택</string>
+    <string name="map_pick_confirm_destination">도착지로 선택</string>
+    <string name="map_pick_unavailable">지도를 불러오지 못했어요.\n뒤로 가서 장소를 검색해 주세요.</string>
+    <string name="map_pick_recenter">현재 위치로 지도 이동</string>
+    <string name="map_pick_description">%1$s 지도. 가운데 핀 위치: %2$s</string>
     <string name="input_dismiss">닫기</string>
     <string name="common_ok">확인</string>
     <string name="common_cancel">취소</string>

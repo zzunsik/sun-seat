@@ -53,6 +53,9 @@ class FakeKakaoServer : AutoCloseable {
     @Volatile var places: () -> MockResponse = { json(fixture("kakao/place_keyword.json")) }
     @Volatile var transit: () -> MockResponse = { json(fixture("kakao/transit_routes.json")) }
     @Volatile var car: () -> MockResponse = { json(fixture("kakao/car_directions.json")) }
+    /** 좌표→주소(#85). 직접 만든 주소 응답이며 실제 응답이 아니다. */
+    @Volatile var addressRequests = 0
+    @Volatile var address: () -> MockResponse = { json(fixture("kakao/coord2address.json")) }
 
     init {
         server.dispatcher = object : Dispatcher() {
@@ -60,6 +63,7 @@ class FakeKakaoServer : AutoCloseable {
                 "/v2/local/search/keyword.json" -> { placeRequests++; places() }
                 "/v2/routing/publictraffic" -> { transitRequests++; transit() }
                 "/v1/directions" -> { carRequests++; car() }
+                "/v2/local/geo/coord2address.json" -> { addressRequests++; address() }
                 else -> MockResponse.Builder().code(404).build()
             }
         }

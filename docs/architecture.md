@@ -96,6 +96,14 @@ com.sunseat.app
 - 응답: `documents[]`(`id`, `place_name`, `address_name`, `road_address_name`, `category_name`, `category_group_code`, `phone`, `place_url`, `distance`, `x`=경도, `y`=위도, 좌표는 문자열), `meta`(`total_count`, `pageable_count`, `is_end`, `same_name`)
 - 결과가 없으면 `documents`가 빈 배열(200). 좌표를 해석할 수 없는 문서는 건너뛴다. 빈 검색어는 호출하지 않는다
 
+### 4.4 좌표→주소(#85)
+`GET https://dapi.kakao.com/v2/local/geo/coord2address.json` → `ReverseGeocodeApi.address(location)` → `String?`(도로명 주소, 없으면 지번 주소, 둘 다 없으면 null)
+
+- 장소 검색과 같은 REST 키·호스트·오류 분류(`kakaoCall`)를 쓴다
+- 요청: `x`(경도)·`y`(위도) 필수, `input_coord`(기본 WGS84). 앱은 x·y만 쓴다
+- 응답: `documents[]`의 `road_address`(`address_name`, `building_name` 등, 없으면 null)와 `address`(`address_name` 등). 주소가 없는 좌표(바다 등)는 빈 배열
+- 지도 선택 화면이 지도가 멈출 때만 디바운스해 부른다(매 프레임 호출 금지). 건물 이름·근처 상호는 장소 이름으로 쓰지 않는다
+
 ## 5. 저장
 - 설정(#15): DataStore
 - 최근 검색(#16): 검색어와 수단만. 좌표와 경로 결과는 저장하지 않는다

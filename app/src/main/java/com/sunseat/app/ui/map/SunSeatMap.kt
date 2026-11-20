@@ -71,12 +71,25 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
     val subwayLabel = stringResource(R.string.common_subway)
     val moreLines = stringResource(R.string.map_line_more)
     if (fitPolicy.shouldFit(state)) { camera.points = state.points(); camera.padding = state.padding; camera.revision++ }
-    LaunchedEffect(camera.revision) { pan = Offset.Zero }
-    Box(modifier.pointerInput(Unit) { detectDragGestures { change, drag -> change.consume(); pan += drag; onGesture() } }) {
+    LaunchedEffect(camera.revision, state.center) { pan = Offset.Zero }
+    val latest by rememberUpdatedState(state)
+    Box(modifier.pointerInput(Unit) {
+        // Map picker (#85): the pin is the view centre, so report the coordinate under it when a drag ends.
+        // Uses the same projection as drawing, computed from layout size (drawing may not run in tests).
+        fun reportCentre() {
+            val idle = latest.onCameraIdle ?: return
+            val top = camera.padding.top.toPx()
+            val width = size.width.toFloat()
+            val height = size.height.toFloat()
+            val projection = MapProjection(latest.projectionBase(camera.points), width, (height - top - camera.padding.bottom.toPx()).coerceAtLeast(1f), Sizes.mapInset.toPx())
+            idle(projection.unproject(width / 2 - pan.x, height / 2 - top - pan.y))
+        }
+        detectDragGestures(onDragEnd = { reportCentre() }, onDragCancel = { reportCentre() }) { change, drag -> change.consume(); pan += drag; onGesture() }
+    }) {
     Canvas(Modifier.fillMaxSize().background(scheme.surfaceContainer)) {
         val top = camera.padding.top.toPx()
         val bottom = camera.padding.bottom.toPx()
-        val projection = MapProjection(state.focus?.let { listOf(it.location) } ?: camera.points, size.width, (size.height - top - bottom).coerceAtLeast(1f), Sizes.mapInset.toPx())
+        val projection = MapProjection(state.projectionBase(camera.points), size.width, (size.height - top - bottom).coerceAtLeast(1f), Sizes.mapInset.toPx())
         fun position(point: com.sunseat.app.domain.LatLng): Offset = projection.project(point).let { Offset(it.first, it.second + top) + pan }
         val grid = Sizes.mapInset.toPx()
         var x = 0f
@@ -179,6 +192,9 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
     }
 }
 
+/** 테스트 지도가 투영의 기준으로 삼는 좌표: 카메라 요청(지도 선택) → 현재 위치 초점 → 맞춤 좌표. */
+private fun MapState.projectionBase(fitted: List<com.sunseat.app.domain.LatLng>) = (center ?: focus)?.let { listOf(it.location) } ?: fitted
+
 private class PreviewCamera {
     var revision = 0L
     var points: List<com.sunseat.app.domain.LatLng> = emptyList()
@@ -211,7 +227,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRouteLine(path:
 }
 
 /** 출발(흰 채움 + 경로 색 테두리)·도착(경로 색 채움) 글자 표식. 꼬리 끝이 좌표다. */
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPlaceMarker(tip: Offset, text: androidx.compose.ui.text.TextLayoutResult, filled: Boolean, surface: androidx.compose.ui.graphics.Color) {
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPlaceMarker(tip: Offset, text: androidx.compose.ui.text.TextLayoutResult, filled: Boolean, surface: androidx.compose.ui.graphics.Color) {
     val tail = Sizes.mapMarkerTail.toPx()
     val height = Sizes.mapMarker.toPx() - tail
     val width = maxOf(height, text.size.width + Spacing.xs.toPx() * 4)

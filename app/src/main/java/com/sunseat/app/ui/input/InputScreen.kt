@@ -73,6 +73,14 @@ data class InputActions(
     val setSchedule: (LocalDateTime?) -> Unit = {},
     val setGoal: (SunGoal) -> Unit = {},
     val submit: () -> Unit = {},
+    /** 지도에서 위치 선택(#85) */
+    val openMapPick: () -> Unit = {},
+    val cancelMapPick: () -> Unit = {},
+    val confirmMapPick: () -> Unit = {},
+    val onPickCameraMoving: () -> Unit = {},
+    val onPickCameraIdle: (com.sunseat.app.domain.LatLng) -> Unit = {},
+    val retryPickAddress: () -> Unit = {},
+    val onPickMapUnavailable: () -> Unit = {},
 )
 
 
@@ -117,7 +125,9 @@ fun InputScreen(
                     Icon(painterResource(R.drawable.ic_ms_my_location), stringResource(R.string.location_use_current), tint = scheme.onSurface)
                 }
             }
-            if (state.search != null) PlaceSearchScreen(state.search, actions, favorites = state.favorites, noticeRes = state.favoriteMessageRes ?: state.recentMessageRes, recent = state.recent, showRecent = true, near = state.origin?.takeIf { it.isCurrentLocation }?.place?.location)
+            if (state.search != null && state.pick != null) MapPickScreen(state.pick, actions, state.origin?.place, state.destination?.place,
+                mapLocating = state.mapLocating, notice = pickLocationNotice(state, actions))
+            else if (state.search != null) PlaceSearchScreen(state.search, actions, favorites = state.favorites, noticeRes = state.favoriteMessageRes ?: state.recentMessageRes, recent = state.recent, showRecent = true, near = state.origin?.takeIf { it.isCurrentLocation }?.place?.location)
         }
     }
     if (showTime) TimeSheet(state.departure, state.mode, onDismiss = { showTime = false }, onApply = actions.setSchedule, now = now)
@@ -199,6 +209,11 @@ internal fun EndpointRow(label: String, value: String?, placeholder: String, ico
         }
     }
 }
+
+/** 지도 선택 중의 위치 안내. '직접 검색'은 지도 선택을 닫고 아래 검색으로 돌아간다. */
+internal fun pickLocationNotice(state: InputUiState, actions: InputActions): (@Composable () -> Unit)? =
+    if (state.locationMessageRes == null) null
+    else { { LocationNotice(state, actions.copy(openSearch = { actions.dismissLocationMessage(); actions.cancelMapPick() })) } }
 
 @Composable
 internal fun LocationNotice(state: InputUiState, actions: InputActions) {

@@ -126,6 +126,19 @@ internal fun PlaceSearchScreen(search: SearchState, actions: InputActions, modif
                     HorizontalDivider(color = scheme.outlineVariant, modifier = Modifier.padding(horizontal = Spacing.screen))
                 }
             }
+            // Map pick (#85) is an endpoint input only; favourites keep their own search (map editing is out of scope).
+            // Shown with a query too: endpoint edits open prefilled with the current name (#70).
+            if (showLocation) {
+                item {
+                    ResultRow(
+                        title = stringResource(R.string.map_pick_open),
+                        subtitle = null,
+                        iconRes = R.drawable.ic_ms_map,
+                        onClick = actions.openMapPick,
+                    )
+                    HorizontalDivider(color = scheme.outlineVariant, modifier = Modifier.padding(horizontal = Spacing.screen))
+                }
+            }
             if (showFavorites && search.query.isBlank()) {
                 items(favorites, key = { "favorite-" + it.id }) { favorite ->
                     ResultRow(com.sunseat.app.ui.favorites.favoriteName(favorite), favorite.address, R.drawable.ic_ms_star_filled, { actions.chooseFavorite(favorite) })
