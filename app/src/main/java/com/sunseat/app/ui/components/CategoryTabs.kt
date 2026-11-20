@@ -30,7 +30,11 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.CollectionInfo
+import androidx.compose.ui.semantics.CollectionItemInfo
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.collectionInfo
+import androidx.compose.ui.semantics.collectionItemInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -72,7 +76,8 @@ fun CategoryTabs(tabs: List<CategoryTab>, selected: Int, modifier: Modifier = Mo
                     start - edgePx < scroll.value -> scroll.scrollTo((start - edgePx).coerceAtLeast(0))
                 }
             }
-            Row(Modifier.fillMaxWidth().horizontalScroll(scroll).selectableGroup()) {
+            Row(Modifier.fillMaxWidth().horizontalScroll(scroll).selectableGroup()
+                .semantics { collectionInfo = CollectionInfo(rowCount = 1, columnCount = tabs.size) }) {
                 // 끝 여백을 자식으로 두어 탭 위치(positionInParent)가 스크롤 내용 좌표와 같게 한다.
                 androidx.compose.foundation.layout.Spacer(Modifier.width(edge))
                 tabs.forEachIndexed { index, tab ->
@@ -85,7 +90,10 @@ fun CategoryTabs(tabs: List<CategoryTab>, selected: Int, modifier: Modifier = Mo
                             .selectable(isSelected, role = Role.Tab) {
                                 if (!isSelected) { haptics.selectionChanged(); onSelect(index) }
                             }
-                            .semantics { contentDescription = tab.description }
+                            .semantics {
+                                contentDescription = tab.description
+                                collectionItemInfo = CollectionItemInfo(rowIndex = 0, rowSpan = 1, columnIndex = index, columnSpan = 1)
+                            }
                             .drawBehind {
                                 if (isSelected) {
                                     val height = Sizes.tabIndicator.toPx()
