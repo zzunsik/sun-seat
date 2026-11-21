@@ -218,7 +218,7 @@ GitHub 설정으로 강제하는 것들이다. 설정을 바꾸면 이 절도 �
 - 비공개 취약점 제보가 켜져 있다.
 - CodeQL 기본 설정이 코드와 워크플로를 검사한다. 경고는 다른 결함처럼 이슈로 다룬다.
 - Dependabot이 보안 알림과 보안 업데이트 PR을 보내고, 주 1회 의존성 업데이트를 종류별로 PR 하나에 모아 보낸다(`.github/dependabot.yml`). Dependabot PR은 이슈 없이 받고 다른 PR과 같은 검사를 거친다.
-  - 보안 알림은 기본 브랜치(`develop`)의 의존성 그래프를 따른다. GitHub은 Gradle 빌드 파일을 정적으로 읽지 못하므로 `.github/workflows/dependency-submission.yml`이 `develop`·`main` push마다 Gradle 의존성(앱 런타임, 테스트, 빌드 도구 classpath 전부)을 의존성 제출 API로 올린다(#197). 이 job만 `contents: write`를 받는다. push에서만 돌아 PR에는 결과가 없으므로 `ci-passed`에 넣지 않는다. 실패하면 그래프가 이전 커밋 상태로 남으니 Actions에서 실패를 보면 고친다.
+  - 보안 알림은 기본 브랜치(`develop`)의 의존성 그래프를 따른다. GitHub은 Gradle 빌드 파일을 정적으로 읽지 못하므로 `.github/workflows/dependency-submission.yml`이 `develop`·`main` push마다 앱 모듈의 `debugRuntimeClasspath`·`releaseRuntimeClasspath`(APK에 들어가는 의존성)를 의존성 제출 API로 올린다(#197). 빌드 도구(AGP·lint)와 테스트 classpath는 올리지 않는다(플러그인이 모두 runtime 범위로 표시해 APK에 없는 전이 의존성 알림이 섞이고 Dependabot이 고칠 수 없다). 그쪽은 주간 버전 업데이트로 따라간다. 이 job만 `contents: write`를 받는다. push에서만 돌아 PR에는 결과가 없으므로 `ci-passed`에 넣지 않는다. 실패하면 그래프가 이전 커밋 상태로 남으니 Actions에서 실패를 보면 고친다.
 - Actions:
   - 워크플로의 기본 토큰 권한은 읽기 전용이다.
   - GitHub 소유 액션, 인증된 제작자의 액션, 허용 목록(`android-actions/setup-android`, `gradle/actions`)만 실행된다. 외부 액션은 SHA로 고정해야 실행된다.

@@ -5,7 +5,7 @@ name: Dependency submission
 # Dependabot은 기본 브랜치(develop)의 의존성 그래프로 알림을 낸다. main은 릴리스 상태의 그래프를 남기려고 함께 돈다.
 # PR·포크 이벤트에서는 돌지 않는다(쓰기 권한이 필요하므로 pull_request·pull_request_target·workflow_run 트리거 없음).
 # 시크릿을 쓰지 않고 local.properties 없이(빈 키) 의존성만 해석한다.
-# 범위: 모든 구성(앱 런타임, 테스트, 빌드 도구 classpath)을 올린다. 빌드 도구도 CI와 개발 PC에서 돌기 때문이다.
+# 범위: APK에 들어가는 앱 런타임 classpath(debug·release)만 올린다. 아래 include-configurations 주석 참고.
 on:
   push:
     branches: [develop, main, chore/197-gradle-dependency-submission] # 임시: 머지 전 검증용
@@ -43,3 +43,7 @@ jobs:
         with:
           dependency-graph: generate-and-submit
           additional-arguments: --no-configuration-cache
+          # 전 구성을 올리면 빌드 도구(AGP·lint)와 테스트(Robolectric) classpath까지 439개가 모두 runtime 범위로 잡혀
+          # (플러그인이 범위를 구분하지 않는다) APK에 없는 전이 의존성 알림이 섞이고, Dependabot이 고칠 수도 없다.
+          # 그쪽은 주간 버전 업데이트(AGP·Robolectric 등)로 따라간다. 앱 모듈 구성 이름이 바뀌면 이 정규식도 고친다.
+          dependency-graph-include-configurations: ^(debug|release)RuntimeClasspath$
