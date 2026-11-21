@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -180,7 +181,7 @@ fun CandidatesScreen(
     LaunchedEffect(routes, options?.selectedId) { userMoved = false; fitTrigger++ }
     // 이 화면 안에서 미리보기를 연 적이 있을 때만 닫힘을 맞춤 시점으로 본다(첫 구성·결과에서 복귀는 위 후보 집합 맞춤이 맡는다).
     var previewShown by remember { mutableStateOf(false) }
-    LaunchedEffect(preview) {
+    LaunchedEffect(preview, landscape) {
         if (preview) { previewShown = true; restorePending = true; androidx.compose.runtime.withFrameNanos { }; if (!landscape) scaffoldState.bottomSheetState.partialExpand(); fitTrigger++ }
         // #135: 목록으로 돌아오면 시트가 목록 높이에 자리 잡은 뒤(아래 맞춤 효과가 기다린다) 보이는 지도 띠에 선택 경로를 다시 맞춘다.
         // 완전 확장으로 돌아오면 보이는 지도 띠가 없어 맞춤은 사용자가 시트를 내려 지도가 처음 보일 때까지 기다린다.
@@ -242,10 +243,10 @@ fun CandidatesScreen(
         }
     }
     val offset = runCatching { with(density) { scaffoldState.bottomSheetState.requireOffset().toDp() } }.getOrDefault(maxHeight - peek)
-    // 미리보기의 지도 맞춤 행동 아래로 경로를 맞춰 출발·도착 표식이 행동에 가리지 않게 한다. 가로 화면은 지도가 낮아 위 여백을 빼면 경로가 거의 안 보이므로 주지 않는다.
-    // 가로(#144)는 지도가 시트에 덮이지 않는다.
-    val mapPadding = com.sunseat.app.ui.map.sheetMapPadding(mapTop, mapHeight, if (landscape) mapTop + mapHeight else scaffoldTop + offset)
-        .let { if (preview && mapHeight >= mapWidth) it.copy(top = fitActionBottom) else it }
+    // 미리보기의 지도 맞춤 행동 아래로 경로를 맞춰 출발·도착 표식이 행동에 가리지 않게 한다. 세로 비율 지도와 가로 미리보기(#144: 지도가 화면 높이 대부분)에 준다.
+    // 가로(#144)는 지도가 패널에 덮이지 않고, 아래 내비게이션 바(제스처 막대)만 피한다.
+    val mapPadding = com.sunseat.app.ui.map.sheetMapPadding(mapTop, mapHeight, if (landscape) mapTop + mapHeight - navigationBottom else scaffoldTop + offset)
+        .let { if (preview && (landscape || mapHeight >= mapWidth)) it.copy(top = fitActionBottom) else it }
     LaunchedEffect(fitTrigger, mapHeight, mapWidth, landscape) {
         if (fittedTrigger == fitTrigger) return@LaunchedEffect
         // #144: 가로는 시트가 없어 지도 영역 크기가 자리 잡으면(같은 대기 시간) 바로 맞춘다.
@@ -321,7 +322,7 @@ fun CandidatesScreen(
                     is CandidatesState.Options -> if (state.visible.isEmpty()) Message(content, R.drawable.ic_ms_search, stringResource(R.string.candidates_filtered_empty), null, stringResource(R.string.candidates_clear_filters) to { actions.onCategory(RouteCategory.ALL); scope.launch { listScroll.scrollToItem(0) } }, stringResource(R.string.candidates_edit_input) to actions.onBack)
                         else OptionList(state.visible, state.selectedId, request, content, if (request.mode == TravelMode.TRANSIT) stringResource(if (state.sort == CandidateSort.WALK) R.string.candidates_walk_scope_sort else R.string.candidates_walk_scope) else null, actions.copy(onHighlight = {
                             userMoved = false
-                            sheetBeforePreview = if (scaffoldState.bottomSheetState.targetValue == SheetValue.Expanded) SheetValue.Expanded else SheetValue.PartiallyExpanded
+                            sheetBeforePreview = if (!landscape && scaffoldState.bottomSheetState.targetValue == SheetValue.Expanded) SheetValue.Expanded else SheetValue.PartiallyExpanded
                             showPreview = true
                             actions.onHighlight(it)
                         }), listScroll, revealSelected)
@@ -366,13 +367,13 @@ fun CandidatesScreen(
     if (landscape) Row(Modifier.fillMaxSize().background(scheme.background).onGloballyPositioned { scaffoldTop = with(density) { it.positionInRoot().y.toDp() } }) {
         // #144: 왼쪽은 펼친 헤더(또는 미리보기 축약 여정 바)와 그 아래 지도, 오른쪽은 화면 높이 전체의 목록·미리보기 패널.
         // 시트가 없으므로 완전 확장·축약 여정 바 전환(#101)은 없고, 헤더는 항상 통째로 보인다.
-        Column(Modifier.weight(1f).fillMaxHeight()) {
+        Column(Modifier.weight(1f).fillMaxHeight().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Start)).consumeWindowInsets(WindowInsets.safeDrawing.only(WindowInsetsSides.End))) {
             header()
             Box(Modifier.weight(1f).fillMaxWidth()) { mapArea() }
         }
         VerticalDivider(thickness = Sizes.hairline, color = scheme.outlineVariant)
         Surface(color = scheme.surface, modifier = Modifier.weight(1f).fillMaxHeight()) {
-            Box(Modifier.statusBarsPadding().windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.End)).padding(top = Spacing.s)) { panel() }
+            Box(Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.End)).consumeWindowInsets(WindowInsets.safeDrawing.only(WindowInsetsSides.Start)).padding(top = Spacing.s)) { panel() }
         }
     } else BottomSheetScaffold(
         modifier = Modifier.fillMaxSize().onGloballyPositioned { scaffoldTop = with(density) { it.positionInRoot().y.toDp() } }, scaffoldState = scaffoldState, containerColor = scheme.background,
@@ -646,7 +647,7 @@ private fun Message(
 ) {
     val scheme = SunSeatTheme.scheme
     Column(
-        Modifier.fillMaxSize().padding(content),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(content), // #144: 가로 패널은 낮아 안내·버튼이 넘칠 수 있다.
         verticalArrangement = Arrangement.spacedBy(Spacing.m),
     ) {
         Spacer(Modifier.height(Spacing.xl))

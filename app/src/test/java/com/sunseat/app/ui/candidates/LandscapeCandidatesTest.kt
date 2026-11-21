@@ -12,6 +12,9 @@ import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import com.sunseat.app.ui.map.LocalMapRenderer
 import com.sunseat.app.ui.map.MapCameraRevisionKey
@@ -66,6 +69,27 @@ class LandscapeCandidatesTest {
         val visible = map()[MapVisibleHeightKey]
         assertTrue("landscape list map must leave a fit-able visible area, was $visible", visible > Sizes.mapInset.value * 2)
         assertTrue("landscape list map must be fitted to the candidates", map()[MapCameraRevisionKey] > 0)
+    }
+
+    /** 낮은 가로 패널에서 빈 범주 안내의 두 행동은 큰 글자에서도 스크롤해 누를 수 있다. */
+    @Test fun landscapeEmptyFilterActionsReachableAtLargeText() {
+        val items = CandidatesFixtures.options.toUi(java.time.LocalDateTime.of(2026, 11, 15, 9, 0))
+        val state = CandidatesState.Options(items, category = RouteCategory.MIXED)
+        var cleared = 0
+        var backs = 0
+        compose.setContent {
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            CompositionLocalProvider(LocalMapRenderer provides MapRenderer.PREVIEW,
+                androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, 1.5f)) {
+                SunSeatTheme { CandidatesScreen(CandidatesFixtures.transitRequest, state, CandidatesActions(onCategory = { cleared++ }, onBack = { backs++ })) }
+            }
+        }
+        settle()
+        assertTrue("precondition: the filter is empty", state.visible.isEmpty())
+        compose.onNodeWithText("장소 바꾸기").performScrollTo().assertIsDisplayed().performClick()
+        assertEquals(1, backs)
+        compose.onNodeWithText("전체 보기").performScrollTo().assertIsDisplayed().performClick()
+        assertEquals(1, cleared)
     }
 
     @Test fun landscapePreviewAndBackKeepCardAndMap() {
