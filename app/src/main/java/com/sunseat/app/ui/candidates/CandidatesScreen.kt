@@ -351,7 +351,9 @@ fun CandidatesScreen(
             with(density) { mapTop = it.positionInRoot().y.toDp(); mapHeight = it.size.height.toDp(); mapWidth = it.size.width.toDp() }
         })
         // #102: 선택 경로 맞춤은 카메라만 옮기는 조용한 행동이다(DESIGN 13). 다른 후보를 다시 그리지 않는다(#99).
-        if (preview) {
+        // #141: 목록에서는 사용자가 지도를 직접 움직였을 때만(미리보기에서 움직이고 닫은 경우 포함) 보인다. 맞춰져 있는 동안에는 낮은 지도 띠를 가리지 않는다.
+        val listFit = !preview && userMoved && mapRoutes.routes.isNotEmpty() && mapHeight - mapPadding.bottom > Sizes.mapInset * 2
+        if (preview || listFit) {
             val fitLabel = stringResource(R.string.candidates_fit_route_action)
             FloatingCapsule(Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)).padding(Spacing.s)
                 .onGloballyPositioned { fitActionBottom = with(density) { (it.positionInRoot().y + it.size.height).toDp() } - mapTop }) {
