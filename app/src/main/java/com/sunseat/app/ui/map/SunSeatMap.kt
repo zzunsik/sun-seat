@@ -97,6 +97,18 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
             labelWidth = { stop -> textMeasurer.measure(stopName(stop), labelStyle).size.width + Spacing.xs.toPx() * 3 },
         )
     }
+    // #170: 표식 배치 크기(그리기와 같은 측정). 이름표 폭은 상자 폭(글자 + 안쪽 여백)이다.
+    val markSizes = with(density) {
+        val pin = { text: String -> placeMarkerWidth(textMeasurer.measure(text, labelStyle).size.width.toFloat(), Sizes.mapMarker.toPx(), Sizes.mapMarkerTail.toPx(), Spacing.xs.toPx()) }
+        MarkSizes(
+            marker = Sizes.mapMarker.toPx(), tail = Sizes.mapMarkerTail.toPx(), gap = Spacing.xs.toPx(),
+            originWidth = pin(originLabel), destinationWidth = pin(destinationLabel),
+            stopRadius = Sizes.mapStopMarker.toPx() / 2,
+            labelHeight = maxOf(Sizes.mapLabelHeight.toPx(), textMeasurer.measure("0", labelStyle).size.height.toFloat()),
+            vehicle = Sizes.mapMarker.toPx(), currentLocation = Sizes.mapMarker.toPx() * 2 / 3,
+            labelWidth = { stop -> textMeasurer.measure(stopName(stop), labelStyle).size.width + Spacing.xs.toPx() * 2 },
+        )
+    }
     fun report() {
         val status = CameraStatus(policy.mode, policy.fits)
         if (status != camera.reported) { camera.reported = status; latest.onCameraStatus?.invoke(status) }
@@ -119,18 +131,28 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
         val height = if (constraints.hasBoundedHeight) constraints.maxHeight.toFloat() else 0f
         val viewport = with(density) { Viewport(width, height, top = state.padding.top.toPx(), bottom = state.padding.bottom.toPx()) }
         val footprints = state.footprints(sizes)
+        // #170: 맞춤은 줌마다 표식 배치 결과(비킨 자리, 숨긴 표식 제외)를 발자국으로 쓴다.
+        val footprintsAt = state.layoutFootprints(markSizes, scale)
         val gap = with(density) { fitGap(viewport, Sizes.mapInset.toPx(), Spacing.s.toPx(), sizes.markerHeight) }
-        policy.update(state, CameraInput(viewport, scale, footprints, state.fitTarget, gap, camera.position))?.let { camera.position = it }
+        policy.update(state, CameraInput(viewport, scale, footprints, state.fitTarget, gap, camera.position, footprintsAt = footprintsAt))?.let { camera.position = it }
         // 정책이 아직 카메라를 정하지 않았으면(맞춤 대기) 뷰 전체에 맞춘 모습을 보인다. 맞춤 횟수에는 넣지 않는다.
         val whole = Viewport(width, height)
-        camera.shown = camera.position ?: fitCamera(footprints, whole, scale, gap)
+        camera.shown = camera.position ?: (if (footprints.isEmpty()) null else fitCamera(footprintsAt, whole, scale, gap))
             ?: (state.center ?: state.focus)?.let { if (whole.ready) centerCamera(it.location, FIT_MAX_ZOOM, whole, scale) else null }
         val shown = camera.shown
         moves.let { } // 끌기 뒤 다시 구성한다.
-        val boxes = shown?.let { cam -> footprints.map { cam.screenBox(it, width, height, scale) } }.orEmpty()
+        val boxes = shown?.let { cam -> (if (footprints.isEmpty()) emptyList() else footprintsAt(cam.zoom)).map { cam.screenBox(it, width, height, scale) } }.orEmpty()
+        // #170: 표식 배치(그리기와 같은 카메라). 보이는 표식 상자는 테스트가 의미 속성으로 본다.
+        val layout = shown?.let { cam -> state.marks(markSizes) { at -> cam.toScreen(at, width, height, scale) }.let { marks -> marks.zip(markerLayout(marks)) } }.orEmpty()
+        val placements = layout.associate { (_, placement) -> placement.key to placement }
+        val markBoxes = layout.filter { (_, placement) -> !placement.hidden }.map { (mark, placement) ->
+            mark.kind.name to mark.variants[placement.variant].let { ScreenBox(mark.x + it.left, mark.y + it.top, mark.x + it.right, mark.y + it.bottom) } }
+        val hiddenMarks = layout.filter { (_, placement) -> placement.hidden }.map { (mark, _) -> mark.kind.name to mark.fallback }
         SideEffect { report() }
     Box(Modifier.fillMaxSize().semantics {
         this[MapFootprintBoxesKey] = boxes
+        this[MapMarkBoxesKey] = markBoxes
+        this[MapHiddenMarksKey] = hiddenMarks
         this[MapVisibleAreaKey] = ScreenBox(viewport.visibleLeft, viewport.visibleTop, viewport.visibleRight, viewport.visibleBottom)
     })
     Canvas(Modifier.fillMaxSize().background(scheme.surfaceContainer)) {
@@ -170,32 +192,20 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
                 if (started) drawRouteLine(path, RouteLinePolicy.forLeg(leg.mode, leg.lineName, RouteRole.PASSED))
             }
         }
-        val markerPx = Sizes.mapMarker.toPx()
-        fun covered(at: com.sunseat.app.domain.LatLng) = state.coveredByVehicle(at, markerPx) { a, b -> (position(a) - position(b)).getDistance() }
         val originText = textMeasurer.measure(originLabel, labelStyle.copy(color = MapRouteColors.transit))
         val destinationText = textMeasurer.measure(destinationLabel, labelStyle.copy(color = MapRouteColors.casing))
-        val marker = Sizes.mapMarker.toPx()
-        val tail = Sizes.mapMarkerTail.toPx()
-        fun pinWidth(text: androidx.compose.ui.text.TextLayoutResult) = placeMarkerWidth(text.size.width.toFloat(), marker, tail, Spacing.xs.toPx())
-        // #153: 보이는 출발·도착 표식(꼬리 끝 위치, 몸통 폭). 정류장 이름표가 이 표식 밑에 들어가지 않게 민다.
-        val pins = listOfNotNull(state.origin?.takeUnless { covered(it.location) }?.let { position(it.location) to pinWidth(originText) },
-            state.destination?.takeUnless { covered(it.location) }?.let { position(it.location) to pinWidth(destinationText) })
-        selected?.let { route -> RouteLinePolicy.stops(route).forEach { stop ->
+        // #170: 표식 배치(우선순위·비키기·숨김)는 네이티브와 같은 markerLayout이 정한다(위에서 같은 카메라로 잰 결과).
+        selected?.let { route -> RouteLinePolicy.stops(route).forEachIndexed { index, stop ->
             val p = position(stop.location)
             val radius = Sizes.mapStopMarker.toPx() / 2 - Sizes.mapStopBorder.toPx() / 2
             drawCircle(MapRouteColors.casing, radius, p)
             drawCircle(stop.color, radius, p, style = Stroke(Sizes.mapStopBorder.toPx()))
-            if (stop.labeled && !covered(stop.location)) {
-                val name = when {
-                    stop.lines.isEmpty() -> if (stop.mode == Mode.SUBWAY) subwayLabel else busLabel
-                    stop.lines.size == 1 -> stop.lines.first()
-                    else -> String.format(moreLines, stop.lines.first(), stop.lines.size - 1)
-                }
-                val text = textMeasurer.measure(name, labelStyle.copy(color = scheme.onSurface))
+            val placement = placements[MarkKey.StopLabel(index)]
+            if (stop.labeled && placement != null && !placement.hidden) {
+                val text = textMeasurer.measure(stopName(stop), labelStyle.copy(color = scheme.onSurface))
                 val pad = Spacing.xs.toPx()
-                val box = androidx.compose.ui.geometry.Size(text.size.width + pad * 2, maxOf(Sizes.mapLabelHeight.toPx(), text.size.height.toFloat()))
-                val boxes = pins.map { (tip, width) -> placeMarkerBox(tip.x - p.x, tip.y - p.y, width, marker, tail) }
-                val offset = stopLabelOffset(stop.labelOnLeft, box.width, box.height, Sizes.mapStopMarker.toPx() / 2, boxes, Spacing.xs.toPx(), (pins.maxOfOrNull { it.second } ?: 0f) + Spacing.xs.toPx())
+                val box = androidx.compose.ui.geometry.Size(text.size.width + pad * 2, markSizes.labelHeight)
+                val offset = labelOffset(placement, markSizes)
                 val left = if (stop.labelOnLeft) p.x - offset - box.width else p.x + offset
                 val corner = androidx.compose.ui.geometry.CornerRadius(box.height / 2)
                 drawRoundRect(MapRouteColors.casing, Offset(left, p.y - box.height / 2), box, corner)
@@ -203,8 +213,8 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
                 drawText(text, topLeft = Offset(left + pad, p.y - text.size.height / 2f))
             }
         } }
-        state.origin?.takeUnless { covered(it.location) }?.let { drawPlaceMarker(position(it.location), originText, filled = false, surface = MapRouteColors.casing) }
-        state.destination?.takeUnless { covered(it.location) }?.let { drawPlaceMarker(position(it.location), destinationText, filled = true, surface = MapRouteColors.casing) }
+        state.origin?.let { place -> placements[MarkKey.Origin]?.takeUnless { it.hidden }?.let { drawPlaceMarker(position(place.location), originText, filled = false, surface = MapRouteColors.casing, side = pinSide(it)) } }
+        state.destination?.let { place -> placements[MarkKey.Destination]?.takeUnless { it.hidden }?.let { drawPlaceMarker(position(place.location), destinationText, filled = true, surface = MapRouteColors.casing, side = pinSide(it)) } }
         state.focus?.let { val p = position(it.location); val radius = Sizes.mapMarker.toPx() / 3; drawCircle(scheme.surface, radius, p); drawCircle(scheme.onSurface, radius, p, style = Stroke(Sizes.mapRouteWalk.toPx())); drawCircle(scheme.onSurface, radius / 3, p) }
         state.visibleCursor?.let { cursor ->
             val p = position(cursor.position)
@@ -284,19 +294,30 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRouteLine(path:
     }
 }
 
-/** 출발(흰 채움 + 경로 색 테두리)·도착(경로 색 채움) 글자 표식. 꼬리 끝이 좌표다. */
-internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPlaceMarker(tip: Offset, text: androidx.compose.ui.text.TextLayoutResult, filled: Boolean, surface: androidx.compose.ui.graphics.Color) {
+/**
+ * 출발(흰 채움 + 경로 색 테두리)·도착(경로 색 채움) 글자 표식. 꼬리 끝이 좌표다. [side]는 몸통이 좌표의 어느 쪽에 있는지다(#170: 겹치면 비킨다).
+ */
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPlaceMarker(tip: Offset, text: androidx.compose.ui.text.TextLayoutResult, filled: Boolean, surface: androidx.compose.ui.graphics.Color, side: PinSide = PinSide.UP) {
     val tail = Sizes.mapMarkerTail.toPx()
-    val height = Sizes.mapMarker.toPx() - tail
-    val width = placeMarkerWidth(text.size.width.toFloat(), Sizes.mapMarker.toPx(), tail, Spacing.xs.toPx())
-    val top = tip.y - Sizes.mapMarker.toPx()
+    val marker = Sizes.mapMarker.toPx()
+    val height = marker - tail
+    val width = placeMarkerWidth(text.size.width.toFloat(), marker, tail, Spacing.xs.toPx())
+    val box = pinBox(side, width, marker, tail)
+    val rect = androidx.compose.ui.geometry.Rect(tip.x + box.left, tip.y + box.top, tip.x + box.right, tip.y + box.bottom)
+    // 꼬리: 몸통에서 좌표 쪽 변의 가운데에서 좌표까지.
+    val (b1, b2) = when (side) {
+        PinSide.UP -> Offset(tip.x - tail, rect.bottom - 1) to Offset(tip.x + tail, rect.bottom - 1)
+        PinSide.DOWN -> Offset(tip.x - tail, rect.top + 1) to Offset(tip.x + tail, rect.top + 1)
+        PinSide.RIGHT -> Offset(rect.left + 1, tip.y - tail) to Offset(rect.left + 1, tip.y + tail)
+        PinSide.LEFT -> Offset(rect.right - 1, tip.y - tail) to Offset(rect.right - 1, tip.y + tail)
+    }
     val body = Path().apply {
-        addRoundRect(androidx.compose.ui.geometry.RoundRect(tip.x - width / 2, top, tip.x + width / 2, top + height, androidx.compose.ui.geometry.CornerRadius(height / 2)))
-        moveTo(tip.x - tail, top + height - 1); lineTo(tip.x, tip.y); lineTo(tip.x + tail, top + height - 1); close()
+        addRoundRect(androidx.compose.ui.geometry.RoundRect(rect, androidx.compose.ui.geometry.CornerRadius(height / 2)))
+        moveTo(b1.x, b1.y); lineTo(tip.x, tip.y); lineTo(b2.x, b2.y); close()
     }
     drawPath(body, if (filled) MapRouteColors.transit else surface)
     drawPath(body, MapRouteColors.transit, style = Stroke(Sizes.mapStopBorder.toPx(), join = androidx.compose.ui.graphics.StrokeJoin.Round))
-    drawText(text, topLeft = Offset(tip.x - text.size.width / 2f, top + (height - text.size.height) / 2))
+    drawText(text, topLeft = Offset(rect.center.x - text.size.width / 2f, rect.center.y - text.size.height / 2f))
 }
 
 /** "선택 경로: 1호선 서울역 승차 → 시청 2호선 환승 → 강남 하차". 탑승 구간이 없으면 null. */

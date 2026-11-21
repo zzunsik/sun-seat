@@ -96,13 +96,19 @@ internal const val FIT_MIN_ZOOM = 1
  * 발자국 [footprints]가 모두 보이는 영역 안(네 변 [gap] 안쪽)에 드는 가장 큰 정수 줌과, 그 줌에서 발자국 묶음을 보이는 영역 가운데에 두는 카메라.
  * 가장 작은 줌에서도 들지 않으면 그 줌에서 가운데에 둔다. 발자국이 없거나 뷰 크기를 모르면 null.
  */
-internal fun fitCamera(footprints: List<Footprint>, viewport: Viewport, scale: MapScale, gap: Float, maxZoom: Int = FIT_MAX_ZOOM, minZoom: Int = FIT_MIN_ZOOM): CameraPosition? {
-    if (footprints.isEmpty() || !viewport.ready) return null
-    val xs = footprints.map { Mercator.x(it.at.longitude) }
-    val ys = footprints.map { Mercator.y(it.at.latitude) }
+internal fun fitCamera(footprints: List<Footprint>, viewport: Viewport, scale: MapScale, gap: Float, maxZoom: Int = FIT_MAX_ZOOM, minZoom: Int = FIT_MIN_ZOOM): CameraPosition? =
+    if (footprints.isEmpty()) null else fitCamera({ footprints }, viewport, scale, gap, maxZoom, minZoom)
+
+/** [fitCamera]와 같되 발자국이 줌마다 다르다(표식 배치는 화면 거리에 따라 바뀐다, #170). */
+internal fun fitCamera(footprintsAt: (Int) -> List<Footprint>, viewport: Viewport, scale: MapScale, gap: Float, maxZoom: Int = FIT_MAX_ZOOM, minZoom: Int = FIT_MIN_ZOOM): CameraPosition? {
+    if (!viewport.ready) return null
     val roomX = (viewport.visibleWidth - 2 * gap).toDouble()
     val roomY = (viewport.visibleHeight - 2 * gap).toDouble()
     for (zoom in maxZoom downTo minZoom) {
+        val footprints = footprintsAt(zoom)
+        if (footprints.isEmpty()) return null
+        val xs = footprints.map { Mercator.x(it.at.longitude) }
+        val ys = footprints.map { Mercator.y(it.at.latitude) }
         val s = scale.worldPx(zoom)
         val left = footprints.indices.minOf { xs[it] * s + footprints[it].box.left }
         val right = footprints.indices.maxOf { xs[it] * s + footprints[it].box.right }
@@ -219,6 +225,8 @@ internal data class CameraInput(
     val followTarget: LatLng? = null,
     val followRadiusMeters: Double = FOLLOW_RADIUS_METERS,
     val defaultZoom: Int = FIT_MAX_ZOOM,
+    /** 줌마다 다른 발자국(표식 배치 결과, #170). 있으면 [footprints] 대신 쓴다. */
+    val footprintsAt: ((Int) -> List<Footprint>)? = null,
 )
 
 /** 정책 결과: 옮길 카메라(없으면 그대로)와 다음 모드. */
@@ -231,7 +239,7 @@ internal fun cameraPolicy(mode: CameraMode, request: CameraRequest, input: Camer
     val (action, next) = cameraAction(mode, request)
     val move = when (action) {
         CameraAction.NONE -> null
-        CameraAction.FIT -> fitCamera(input.footprints, input.viewport, input.scale, input.gap)
+        CameraAction.FIT -> input.footprintsAt?.let { fitCamera(it, input.viewport, input.scale, input.gap) } ?: fitCamera(input.footprints, input.viewport, input.scale, input.gap)
         CameraAction.FRAME_FOLLOW -> (if (request is CameraRequest.FollowStart) request.target else input.followTarget)?.let { at ->
             // 차량 둘레 2×반경 범위를 보이는 영역에 넣는 줌에서 차량을 보이는 영역 가운데에 둔다(#146).
             val zoom = fitCamera(followBounds(at, input.followRadiusMeters).map { Footprint(it) }, input.viewport, input.scale, 0f)?.zoom ?: return@let null

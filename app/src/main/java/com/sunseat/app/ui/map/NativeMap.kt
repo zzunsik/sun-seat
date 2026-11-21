@@ -188,20 +188,23 @@ private class MapSession(context: Context, private val ink: Int, private val sur
     private var lastRayAltitude: Double? = null
     private var lastVehicleLight: Int? = null
     private var gesture: () -> Unit = {}
-    private val startIcon = placeIcon(metrics.origin, filled = false)
-    private val endIcon = placeIcon(metrics.destination, filled = true)
+    /** 출발·도착 표식의 몸통 방향별 그림(#170: 겹치면 비킨다). */
+    private val startIcons = PinSide.entries.associateWith { placeIcon(metrics.origin, filled = false, side = it) }
+    private val endIcons = PinSide.entries.associateWith { placeIcon(metrics.destination, filled = true, side = it) }
+    private val startIcon = startIcons.getValue(PinSide.UP)
+    private val endIcon = endIcons.getValue(PinSide.UP)
     private val arrows = HashMap<Int, Bitmap>()
     private var decorRoute: Route? = null
     private var decorZoom: Int? = null
     private var lineDensity = 1f
     private val decorations = mutableListOf<Label>()
     /** 재생 중 차량과 겹치면 숨기는 글자 표식(출발·도착·노선 배지)과 그 좌표(#146). */
-    private val textLabels = mutableListOf<Pair<Label, LatLng>>()
     /** 정류장 노선 이름표와 지금 정류장에서 떨어진 거리(#153), 출발·도착 표식과 그 좌표·몸통 폭. */
-    private class StopName(val label: Label, val stop: StopMarker, val name: String, var offset: Int)
+    private class StopName(val label: Label, val stop: StopMarker, val name: String, val index: Int, var offset: Int, var hidden: Boolean = false)
     private val stopNames = mutableListOf<StopName>()
-    private val pinLabels = mutableListOf<Triple<Label, LatLng, Float>>()
-    private val hiddenLabels = mutableSetOf<Label>()
+    /** 출발·도착 표식, 지금 몸통 방향과 숨김. */
+    private class PinLabel(val label: Label, val key: MarkKey, val icons: Map<PinSide, Bitmap>, var side: PinSide = PinSide.UP, var hidden: Boolean = false)
+    private val pinLabels = mutableListOf<PinLabel>()
     private var metersPerPx = 0.0
     private var coverState: MapState? = null
     private val walkLines = mutableListOf<com.kakao.vectormap.route.RouteLine>()
@@ -228,7 +231,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
             target.setOnCameraMoveEndListener { moved, position, _ ->
                 view.post { if (map === moved) { measureScale(moved)?.let { scale = it }; scheduleLog() } }
                 if (position.zoomLevel != decorZoom) view.post { if (map === moved) decorate(moved) }
-                else view.post { if (map === moved) placeNames(moved) } // 회전 등 줌 밖의 카메라 변화(#153)
+                else view.post { if (map === moved) layoutMarks(moved) } // 회전 등 줌 밖의 카메라 변화(#153)
                 // Map picker (#85): the pin sits at the view centre with no padding, so the camera target is the pin.
                 cameraIdle?.let { report -> val at = LatLng(position.position.latitude, position.position.longitude); view.post { if (map === moved) report(at) } }
             }
@@ -261,20 +264,20 @@ private class MapSession(context: Context, private val ink: Int, private val sur
                 }
             }
             target.labelManager?.layer?.let { layer ->
-                layer.removeAll(); cursor = null; ray = null; myLocation = null; lastCursor = null; lastRayAltitude = null; lastVehicleLight=null; textLabels.clear(); hiddenLabels.clear(); stopNames.clear(); pinLabels.clear()
+                layer.removeAll(); cursor = null; ray = null; myLocation = null; lastCursor = null; lastRayAltitude = null; lastVehicleLight=null; stopNames.clear(); pinLabels.clear()
                 state.routes.getOrNull(state.selectedRoute)?.let { route ->
-                    RouteLinePolicy.stops(route).forEach { stop ->
+                    RouteLinePolicy.stops(route).forEachIndexed { index, stop ->
                         layer.addLabel(LabelOptions.from(stop.location.sdk()).setRank(STOP_RANK).setStyles(LabelStyle.from(stopIcon(stop.color.toArgb())).setApplyDpScale(false).setAnchorPoint(.5f, .5f)))
                         if (stop.labeled) {
                             // Line name beside the marker, on the side away from the outgoing line; dropped on collision.
                             val name = metrics.stopLabel(stop)
                             layer.addLabel(LabelOptions.from(stop.location.sdk()).setRank(STOP_NAME_RANK).setStyles(LabelStyle.from(nameIcon(name, stop.color.toArgb(), stop.labelOnLeft, (metrics.stop / 2).toInt())).setApplyDpScale(false).setAnchorPoint(if (stop.labelOnLeft) 1f else 0f, .5f)))
-                                ?.let { textLabels += it to stop.location; stopNames += StopName(it, stop, name, (metrics.stop / 2).toInt()) }
+                                ?.let { stopNames += StopName(it, stop, name, index, (metrics.stop / 2).toInt()) }
                         }
                     }
                 }
-                state.origin?.let { place -> layer.addLabel(LabelOptions.from(place.location.sdk()).setRank(PLACE_RANK).setStyles(LabelStyle.from(startIcon).setApplyDpScale(false).setAnchorPoint(.5f, 1f)))?.let { textLabels += it to place.location; pinLabels += Triple(it, place.location, startIcon.width.toFloat()) } }
-                state.destination?.let { place -> layer.addLabel(LabelOptions.from(place.location.sdk()).setRank(PLACE_RANK).setStyles(LabelStyle.from(endIcon).setApplyDpScale(false).setAnchorPoint(.5f, 1f)))?.let { textLabels += it to place.location; pinLabels += Triple(it, place.location, endIcon.width.toFloat()) } }
+                state.origin?.let { place -> layer.addLabel(LabelOptions.from(place.location.sdk()).setRank(PLACE_RANK).setStyles(LabelStyle.from(startIcon).setApplyDpScale(false).setAnchorPoint(.5f, 1f)))?.let { pinLabels += PinLabel(it, MarkKey.Origin, startIcons) } }
+                state.destination?.let { place -> layer.addLabel(LabelOptions.from(place.location.sdk()).setRank(PLACE_RANK).setStyles(LabelStyle.from(endIcon).setApplyDpScale(false).setAnchorPoint(.5f, 1f)))?.let { pinLabels += PinLabel(it, MarkKey.Destination, endIcons) } }
             }
             decorRoute = state.routes.getOrNull(state.selectedRoute); decorZoom = null; lineDensity = density; walkLines.clear(); decorations.clear()
         }
@@ -285,7 +288,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         if (geometryChanged || footprints.isEmpty()) footprints = state.footprints(markerSizes(state))
         if (scale == null && viewport.ready) scale = measureScale(target)
         scale?.let { scale ->
-            val input = CameraInput(viewport, scale, footprints, state.fitTarget, fitGap(viewport, metrics.inset, metrics.edge, metrics.marker + metrics.textPadding), currentCamera(target))
+            val input = CameraInput(viewport, scale, footprints, state.fitTarget, fitGap(viewport, metrics.inset, metrics.edge, metrics.marker + metrics.textPadding), currentCamera(target), footprintsAt = state.layoutFootprints(markSizes(), scale))
             fitPolicy.update(state, input)?.let { move -> target.moveCamera(CameraUpdateFactory.newCenterPosition(move.center.sdk(), move.zoom)) }
         }
         reportStatus()
@@ -326,29 +329,59 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         }
         lastCursor = position
         coverState = state
-        uncover()
         // #153: 새로 만든 이름표·차량에 가려 숨기거나 다시 보인 표식에 맞춰 이름표 자리를 다시 잰다(바뀐 것만 다시 그린다).
-        placeNames(target)
+        layoutMarks(target)
+    }
+
+    /** #170: 표식 배치 크기(px). 그리기와 같은 측정이다. */
+    private fun markSizes(): MarkSizes {
+        val paint = textPaint(ink)
+        return MarkSizes(
+            marker = metrics.marker, tail = metrics.tail, gap = metrics.textPadding,
+            originWidth = startIcon.width.toFloat(), destinationWidth = endIcon.width.toFloat(),
+            stopRadius = metrics.stop / 2, labelHeight = nameHeight(paint),
+            vehicle = metrics.marker, currentLocation = metrics.marker * 2 / 3,
+            labelWidth = { stop -> paint.measureText(metrics.stopLabel(stop)) + metrics.textPadding * 2 },
+        )
     }
 
     /**
-     * #153: 출발·도착 표식 밑에 들어간 정류장 노선 이름표를 표식 바깥으로 민다([stopLabelOffset], 테스트 지도와 같은 규칙).
-     * 화면에서 표식과 정류장 사이 거리는 카메라에 따라 바뀌므로 [update]마다와 카메라 이동이 끝날 때 다시 잰다.
+     * #170: 표식 배치(markerLayout, 테스트 지도와 같은 규칙)를 SDK 투영으로 다시 재서 출발·도착 표식의 몸통 방향, 정류장 이름표의 비킨 거리와 숨김을 적용한다.
+     * 화면 거리는 카메라에 따라 바뀌므로 [update]마다와 카메라 이동이 끝날 때(줌 변경 포함) 다시 잰다. 바뀐 표식만 다시 그린다(changeStyles, #153).
      */
-    private fun placeNames(target: KakaoMap) {
-        if (stopNames.isEmpty()) return
-        val paint = textPaint(ink)
-        val height = nameHeight(paint)
-        val pins = pinLabels.filter { it.first !in hiddenLabels }.mapNotNull { (_, at, width) -> target.toScreenPoint(at.sdk())?.let { it to width } }
-        val maxPush = (pins.maxOfOrNull { it.second } ?: 0f) + metrics.textPadding
+    private fun layoutMarks(target: KakaoMap) {
+        val state = coverState ?: return
+        if (stopNames.isEmpty() && pinLabels.isEmpty()) return
+        val sizes = markSizes()
+        val marks = state.marks(sizes) { at -> target.toScreenPoint(at.sdk())?.let { it.x.toFloat() to it.y.toFloat() } ?: (Float.NaN to Float.NaN) }
+        val placements = markerLayout(marks).associateBy { it.key }
+        pinLabels.forEach { pin ->
+            val placement = placements[pin.key] ?: return@forEach
+            if (placement.hidden != pin.hidden) { pin.hidden = placement.hidden; if (placement.hidden) pin.label.hide() else pin.label.show() }
+            val side = pinSide(placement)
+            if (!placement.hidden && side != pin.side) {
+                pin.side = side
+                pin.label.changeStyles(com.kakao.vectormap.label.LabelStyles.from(pinStyle(pin.icons.getValue(side), side)))
+            }
+        }
         stopNames.forEach { name ->
-            val stop = target.toScreenPoint(name.stop.location.sdk()) ?: return@forEach
-            val boxes = pins.map { (tip, width) -> placeMarkerBox((tip.x - stop.x).toFloat(), (tip.y - stop.y).toFloat(), width, metrics.marker, metrics.tail) }
-            val offset = stopLabelOffset(name.stop.labelOnLeft, paint.measureText(name.name) + metrics.textPadding * 2, height, metrics.stop / 2, boxes, metrics.textPadding, maxPush).toInt()
-            if (offset != name.offset) {
+            val placement = placements[MarkKey.StopLabel(name.index)] ?: return@forEach
+            if (placement.hidden != name.hidden) { name.hidden = placement.hidden; if (placement.hidden) name.label.hide() else name.label.show() }
+            val offset = labelOffset(placement, sizes).toInt()
+            if (!placement.hidden && offset != name.offset) {
                 name.offset = offset
                 name.label.changeStyles(com.kakao.vectormap.label.LabelStyles.from(LabelStyle.from(nameIcon(name.name, name.stop.color.toArgb(), name.stop.labelOnLeft, offset)).setApplyDpScale(false).setAnchorPoint(if (name.stop.labelOnLeft) 1f else 0f, .5f)))
             }
+        }
+    }
+
+    /** 몸통 방향에 맞춘 출발·도착 표식 스타일: 꼬리 끝(좌표)이 기준점이다. */
+    private fun pinStyle(icon: Bitmap, side: PinSide): LabelStyle = LabelStyle.from(icon).setApplyDpScale(false).let {
+        when (side) {
+            PinSide.UP -> it.setAnchorPoint(.5f, 1f)
+            PinSide.DOWN -> it.setAnchorPoint(.5f, 0f)
+            PinSide.RIGHT -> it.setAnchorPoint(0f, .5f)
+            PinSide.LEFT -> it.setAnchorPoint(1f, .5f)
         }
     }
 
@@ -427,15 +460,6 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         android.util.Log.d(LOG_TAG, "mode=$mode zoom=${target.cameraPosition?.zoomLevel} view=${viewport.width.toInt()}x${viewport.height.toInt()} visible=$visible route=$route marks=$marks")
     }
 
-    /** 차량과 겹치는 글자 표식을 숨기고 나머지는 보인다. 줌이 바뀌면 [decorate]가 다시 부른다. */
-    private fun uncover() {
-        val state = coverState ?: return
-        textLabels.forEach { (label, at) ->
-            val covered = metersPerPx > 0 && state.coveredByVehicle(at, metrics.marker) { a, b -> (com.sunseat.app.domain.ExposureAnalyzer.distanceMeters(a, b) / metersPerPx).toFloat() }
-            if (covered != (label in hiddenLabels)) { if (covered) { label.hide(); hiddenLabels += label } else { label.show(); hiddenLabels -= label } }
-        }
-    }
-
     /** 현재 위치 원·차량 화살표와 짧은 해 방향 선. */
     private fun marker(kind: Int, color: Int, lightSide: Int=0,altitude: Double=20.0): Bitmap {
         val width = (if(kind==3) metrics.ray*2 else metrics.marker).toInt().coerceAtLeast(1)
@@ -503,8 +527,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         if (!(metersPerPx > 0)) return
         decorZoom = target.cameraPosition?.zoomLevel
         this.metersPerPx = metersPerPx
-        uncover()
-        placeNames(target)
+        layoutMarks(target)
         walkLines.forEach { it.remove() }; walkLines.clear()
         target.labelManager?.layer?.let { layer -> decorations.forEach { layer.remove(it) } }
         decorations.clear()
@@ -580,24 +603,39 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         }
     }
 
-    /** 출발(흰 채움 + 경로 색 테두리)·도착(경로 색 채움 + 흰 글자) 글자 표식. 꼬리 끝이 좌표다. */
-    private fun placeIcon(text: String, filled: Boolean): Bitmap {
+    /**
+     * 출발(흰 채움 + 경로 색 테두리)·도착(경로 색 채움 + 흰 글자) 글자 표식. 꼬리 끝이 좌표다. [side]는 몸통이 꼬리 끝의 어느 쪽에 있는지다(#170).
+     */
+    private fun placeIcon(text: String, filled: Boolean, side: PinSide = PinSide.UP): Bitmap {
         val transit = com.sunseat.app.ui.theme.MapRouteColors.transit.toArgb()
         val paint = textPaint(if (filled) surface else transit)
-        val height = metrics.marker - metrics.tail
-        val width = placeMarkerWidth(paint.measureText(text), metrics.marker, metrics.tail, metrics.textPadding)
-        return createBitmap(width.toInt(), metrics.marker.toInt()).also { bitmap ->
+        val tail = metrics.tail
+        val height = metrics.marker - tail
+        val width = placeMarkerWidth(paint.measureText(text), metrics.marker, tail, metrics.textPadding)
+        val vertical = side == PinSide.UP || side == PinSide.DOWN
+        val w = if (vertical) width else width + tail
+        val h = if (vertical) metrics.marker else height
+        return createBitmap(w.toInt(), h.toInt()).also { bitmap ->
             val canvas = Canvas(bitmap)
             val stroke = metrics.stopBorder
-            val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = if (filled) transit else surface }
+            // 몸통 상자와 꼬리(몸통의 좌표 쪽 변 가운데 → 꼬리 끝).
+            val (bl, bt) = when (side) { PinSide.UP -> 0f to 0f; PinSide.DOWN -> 0f to tail; PinSide.RIGHT -> tail to 0f; PinSide.LEFT -> 0f to 0f }
+            val br = bl + width; val bb = bt + height
             val body = Path().apply {
-                addRoundRect(stroke / 2, stroke / 2, width - stroke / 2, height - stroke / 2, height / 2, height / 2, Path.Direction.CW)
-                moveTo(width / 2 - metrics.tail, height - stroke); lineTo(width / 2, metrics.marker.toFloat() - stroke / 2); lineTo(width / 2 + metrics.tail, height - stroke); close()
+                addRoundRect(bl + stroke / 2, bt + stroke / 2, br - stroke / 2, bb - stroke / 2, height / 2, height / 2, Path.Direction.CW)
+                when (side) {
+                    PinSide.UP -> { moveTo(w / 2 - tail, bb - stroke); lineTo(w / 2, h - stroke / 2); lineTo(w / 2 + tail, bb - stroke) }
+                    PinSide.DOWN -> { moveTo(w / 2 - tail, bt + stroke); lineTo(w / 2, stroke / 2); lineTo(w / 2 + tail, bt + stroke) }
+                    PinSide.RIGHT -> { moveTo(bl + stroke, h / 2 - tail); lineTo(stroke / 2, h / 2); lineTo(bl + stroke, h / 2 + tail) }
+                    PinSide.LEFT -> { moveTo(br - stroke, h / 2 - tail); lineTo(w - stroke / 2, h / 2); lineTo(br - stroke, h / 2 + tail) }
+                }
+                close()
             }
+            val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = if (filled) transit else surface }
             canvas.drawPath(body, fill)
             fill.color = transit; fill.style = Paint.Style.STROKE; fill.strokeWidth = stroke; fill.strokeJoin = Paint.Join.ROUND
             canvas.drawPath(body, fill)
-            canvas.drawText(text, (width - paint.measureText(text)) / 2, height / 2 - (paint.ascent() + paint.descent()) / 2, paint)
+            canvas.drawText(text, bl + (width - paint.measureText(text)) / 2, bt + height / 2 - (paint.ascent() + paint.descent()) / 2, paint)
         }
     }
 }

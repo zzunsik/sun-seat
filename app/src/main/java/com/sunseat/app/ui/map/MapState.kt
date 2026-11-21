@@ -104,6 +104,7 @@ internal val MapState.visibleCursor: MapCursor? get() = cursor?.takeUnless { arr
  * 재생 중 차량 표식과 화면에서 겹치는 글자 표식(출발·도착·노선 배지)은 숨긴다(#146). 차량이 지금 보여 줄 정보이고,
  * 출발지가 곧 승차 정류장이면 줌과 관계없이 세 표식이 한 점에 겹친다. 정류장 원은 남긴다.
  * 도착한 뒤에는 차량을 그리지 않으므로([visibleCursor]) 아무것도 숨기지 않는다(#152).
+ * #170부터 렌더러의 숨김·비키기는 [markerLayout]이 정한다(차량은 고정 표식, 글자 표식은 비킨 뒤에도 겹칠 때만 정보 카드가 있으면 숨김). 이 거리 판정은 그 규칙의 "차량에 가림" 정의로 남긴다.
  * [distancePx]는 렌더러의 현재 투영으로 잰 두 좌표의 화면 거리, [markerPx]는 차량 표식 크기다.
  */
 internal fun MapState.coveredByVehicle(at: LatLng, markerPx: Float, distancePx: (LatLng, LatLng) -> Float): Boolean {
@@ -234,6 +235,10 @@ internal val MapVisibleHeightKey = androidx.compose.ui.semantics.SemanticsProper
 internal val MapTopPaddingKey = androidx.compose.ui.semantics.SemanticsPropertyKey<Float>("MapTopPadding")
 /** 테스트 지도가 지금 카메라로 그린 발자국 상자(px, 지도 뷰 기준, 테스트 관측용, #168). */
 internal val MapFootprintBoxesKey = androidx.compose.ui.semantics.SemanticsPropertyKey<List<ScreenBox>>("MapFootprintBoxes")
+/** 테스트 지도의 보이는 표식(종류 이름, 화면 상자 px, 테스트 관측용, #170). */
+internal val MapMarkBoxesKey = androidx.compose.ui.semantics.SemanticsPropertyKey<List<Pair<String, ScreenBox>>>("MapMarkBoxes")
+/** 테스트 지도가 숨긴 표식(종류 이름, 정보가 남는 곳, 테스트 관측용, #170). */
+internal val MapHiddenMarksKey = androidx.compose.ui.semantics.SemanticsPropertyKey<List<Pair<String, Fallback>>>("MapHiddenMarks")
 /** 카메라 정책의 보이는 영역(px, 지도 뷰 기준, 테스트 관측용, #168). */
 internal val MapVisibleAreaKey = androidx.compose.ui.semantics.SemanticsPropertyKey<ScreenBox>("MapVisibleArea")
 
@@ -340,18 +345,11 @@ internal fun placeMarkerBox(dx: Float, dy: Float, width: Float, marker: Float, t
  * 이름표가 정류장에서 너무 떨어지면 어느 정류장 것인지 읽히지 않는다.
  */
 internal fun stopLabelOffset(onLeft: Boolean, labelWidth: Float, labelHeight: Float, stopRadius: Float, pins: List<PinBox>, gap: Float, maxPush: Float): Float {
-    var offset = stopRadius
-    // 한 표식을 비키면 다른 표식에 걸릴 수 있어 바뀌지 않을 때까지 다시 본다(표식은 둘뿐이다).
-    repeat(pins.size + 1) {
-        var moved = false
-        for (pin in pins) {
-            val left = if (onLeft) -offset - labelWidth else offset
-            val covered = left < pin.right && left + labelWidth > pin.left && -labelHeight / 2 < pin.bottom && labelHeight / 2 > pin.top
-            if (!covered) continue
-            val needed = (if (onLeft) -pin.left else pin.right) + gap
-            if (needed > offset && needed - stopRadius <= maxPush) { offset = needed; moved = true }
-        }
-        if (!moved) return offset
-    }
-    return offset
+    // #170: 표식 배치 규칙(markerLayout) 위의 얇은 함수다. 표식은 고정, 이름표는 반지름에서 바깥으로 gap씩 maxPush까지 비킨다. 비킬 자리가 없으면 제자리.
+    val origin = LatLng(0.0, 0.0)
+    val marks = pins.mapIndexed { i, pin -> Mark("pin$i", MarkKind.ORIGIN, origin, 0f, 0f, listOf(ScreenBox(pin.left, pin.top, pin.right, pin.bottom)), MarkPriority.ORIGIN, fixed = true) } +
+        Mark("label", MarkKind.STOP_LABEL, origin, 0f, 0f, labelVariants(onLeft, labelWidth, labelHeight, stopRadius, gap, maxPush), MarkPriority.STOP_LABEL, Fallback.TALKBACK_SUMMARY)
+    val placement = markerLayout(marks).last()
+    return if (placement.hidden) stopRadius else stopRadius + placement.variant * gap
+
 }
