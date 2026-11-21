@@ -97,6 +97,9 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
         }
     } ?: (0f to 0f)
     val latestLabels by rememberUpdatedState(labelSides)
+    // #151: 정류장 이름표 상자 높이(그리기와 같은 규칙) + 위아래 가장자리 틈(Spacing.xs). 이름표가 없으면 0.
+    val stopLabelHeight = if (labelSides.first > 0f || labelSides.second > 0f) with(density) { maxOf(Sizes.mapLabelHeight.toPx(), textMeasurer.measure("0", labelStyle).size.height.toFloat()) + Spacing.xs.toPx() * 2 } else 0f
+    val latestLabelHeight by rememberUpdatedState(stopLabelHeight)
     Box(modifier.pointerInput(Unit) {
         // Map picker (#85): the pin is the view centre, so report the coordinate under it when a drag ends.
         // Uses the same projection as drawing, computed from layout size (drawing may not run in tests).
@@ -104,7 +107,7 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
             val idle = latest.onCameraIdle ?: return
             val width = size.width.toFloat()
             val height = size.height.toFloat()
-            val frame = previewFitFrame(camera.padding, width, height, latestLabels)
+            val frame = previewFitFrame(camera.padding, width, height, latestLabels, latestLabelHeight)
             val top = frame.top
             val projection = MapProjection(latest.projectionBase(camera.points), (width - frame.left - frame.right).coerceAtLeast(1f), (height - top - frame.bottom).coerceAtLeast(1f), frame.inset)
             idle(projection.unproject(width / 2 - frame.left - pan.x, height / 2 - top - pan.y))
@@ -112,7 +115,7 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
         detectDragGestures(onDragEnd = { reportCentre() }, onDragCancel = { reportCentre() }) { change, drag -> change.consume(); pan += drag; onGesture() }
     }) {
     Canvas(Modifier.fillMaxSize().background(scheme.surfaceContainer)) {
-        val frame = previewFitFrame(camera.padding, size.width, size.height, labelSides)
+        val frame = previewFitFrame(camera.padding, size.width, size.height, labelSides, stopLabelHeight)
         val top = frame.top
         val projection = MapProjection(state.projectionBase(camera.points), (size.width - frame.left - frame.right).coerceAtLeast(1f), (size.height - top - frame.bottom).coerceAtLeast(1f), frame.inset)
         fun position(point: com.sunseat.app.domain.LatLng): Offset = projection.project(point).let { Offset(it.first + frame.left, it.second + top) + pan }
@@ -298,5 +301,5 @@ internal fun routeSummary(route: com.sunseat.app.domain.Route?): String? {
 }
 
 /** 테스트 지도의 맞춤 틀. 실제 SDK 지도(NativeMap)와 같은 [fitFrame] 규칙이다(#138). */
-private fun androidx.compose.ui.unit.Density.previewFitFrame(padding: MapPadding, width: Float, height: Float, labels: Pair<Float, Float>): FitFrame =
-    fitFrame(padding.top.toPx(), padding.bottom.toPx(), width, height, Sizes.mapInset.toPx(), com.sunseat.app.ui.theme.Spacing.s.toPx(), Sizes.mapMarker.toPx() + com.sunseat.app.ui.theme.Spacing.xs.toPx(), labels.first, labels.second)
+private fun androidx.compose.ui.unit.Density.previewFitFrame(padding: MapPadding, width: Float, height: Float, labels: Pair<Float, Float>, labelHeight: Float): FitFrame =
+    fitFrame(padding.top.toPx(), padding.bottom.toPx(), width, height, Sizes.mapInset.toPx(), com.sunseat.app.ui.theme.Spacing.s.toPx(), Sizes.mapMarker.toPx() + com.sunseat.app.ui.theme.Spacing.xs.toPx(), labels.first, labels.second, labelHeight)

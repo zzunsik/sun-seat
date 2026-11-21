@@ -175,15 +175,19 @@ internal data class FitFrame(val top: Float, val bottom: Float, val side: Float,
  * 위쪽에는 솟는 표식 높이만큼 지도 여백을 더하고(아래는 표식 꼬리 끝이 좌표라 더하지 않는다), 좌우는 줄인 inset만큼 지도 여백으로
  * 돌려 기본 inset과 같은 폭을 남긴다(높이가 맞춤을 제한하므로 손해가 없고, 가장자리 정류장 노선 이름표가 잘리지 않는다).
  * 보이는 높이가 200dp 이상인 지도(미리보기·결과·세로 입력·지도 선택)는 기본 inset 그대로다.
+ *
+ * #151: 정류장 노선 이름표는 정류장 좌표를 세로 가운데로 두므로 [labelHeight](이름표 상자 높이 + 위아래 가장자리 틈)의 절반이
+ * 줄인 inset보다 크면 아래쪽에 그만큼 지도 여백을 더한다(맨 아래 정류장 이름표가 시트 경계에 걸리지 않게). 위쪽은 표식 높이
+ * 여백([markerHeight])이 이미 더 크다. 이 몫은 [FIT_SHARE] 계산에 넣지 않는다(최대 몇 dp라 줌 단계에 거의 영향이 없다).
  */
-internal fun fitFrame(top: Float, bottom: Float, width: Float, height: Float, inset: Float, edge: Float, markerHeight: Float, labelLeft: Float = 0f, labelRight: Float = 0f): FitFrame {
+internal fun fitFrame(top: Float, bottom: Float, width: Float, height: Float, inset: Float, edge: Float, markerHeight: Float, labelLeft: Float = 0f, labelRight: Float = 0f, labelHeight: Float = 0f): FitFrame {
     val visible = (height - top - bottom).coerceAtLeast(0f)
     val spare = visible * (1 - FIT_SHARE) // 맞춤 inset 두 변 + 위쪽 표식 여백에 쓸 수 있는 높이
     // inset이 표식 높이 이상이면 위 여백을 더하지 않으므로 spare를 위아래 inset이 나눠 쓰고, 아니면 표식 높이를 먼저 뺀다.
     val needed = if (spare / 2 >= markerHeight) spare / 2 else spare - markerHeight
     val fitted = minOf(inset, maxOf(edge, needed))
     // #143: 정류장 옆 노선 이름표가 inset보다 넓으면 그쪽 지도 여백을 이름표 폭만큼 둔다(그 밖의 좌우는 기본 inset 폭).
-    return FitFrame(top + (markerHeight - fitted).coerceAtLeast(0f), bottom, inset - fitted, fitted,
+    return FitFrame(top + (markerHeight - fitted).coerceAtLeast(0f), bottom + (labelHeight / 2 - fitted).coerceAtLeast(0f), inset - fitted, fitted,
         left = maxOf(inset, labelLeft) - fitted, right = maxOf(inset, labelRight) - fitted)
 }
 
