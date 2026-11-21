@@ -78,8 +78,8 @@ class MapAvailabilityTest {
         // 지도 선택은 상태만 말하고(행동은 아래 패널) 다른 화면의 "앱 업데이트…"·"자리 추천…" 줄을 쓰지 않는다.
         assertSingleNotice(R.string.map_unavailable_short)
         assertEquals(0, compose.onAllNodes(hasText(text(R.string.map_missing_key), substring = true)).fetchSemanticsNodes().size)
-        // 아래 패널은 다음 행동만 말한다(같은 안내를 두 번 읽지 않는다).
-        assertEquals(1, compose.onAllNodes(hasText(text(R.string.map_pick_unavailable))).fetchSemanticsNodes().size)
+        // #180: 아래에는 같은 안내를 되풀이하는 줄 없이 다음 행동 버튼 하나만 있다.
+        assertEquals(1, compose.onAllNodes(hasText(text(R.string.map_pick_close)) and androidx.compose.ui.test.hasClickAction()).fetchSemanticsNodes().size)
         assertEquals(0, compose.onAllNodes(hasContentDescription("가운데 핀 위치", substring = true)).fetchSemanticsNodes().size)
     }
 
@@ -90,7 +90,7 @@ class MapAvailabilityTest {
         val pick = MapPickState(EndpointField.DESTINATION, pin, MapFocus(pin, 1), status = PickAddressStatus.NONE).copy(mapUnavailable = true)
         render { MapPickScreen(pick, InputActions(cancelMapPick = { cancelled++ }), NamedPlace("서울역", LatLng(37.5547, 126.9707)), null) }
         assertEquals(0, compose.onAllNodes(hasText(text(R.string.map_pick_confirm_destination))).fetchSemanticsNodes().size)
-        compose.onNode(hasText(text(R.string.map_pick_back_to_search))).performTouchInput { click() }
+        compose.onNode(hasText(text(R.string.map_pick_close))).performTouchInput { click() }
         assertEquals(1, cancelled)
     }
 

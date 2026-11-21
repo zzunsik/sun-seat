@@ -107,7 +107,7 @@ fun InputScreen(
     var fittedEndpoints by remember { mutableStateOf(endpoints) }
     var fitRevision by remember { mutableLongStateOf(0L) }
     // #180: 지도를 쓸 수 없으면 카메라만 옮기는 현재 위치 버튼을 숨긴다(없는 지도 위에 남지 않게).
-    var mapUnavailable by remember { mutableStateOf(false) }
+    var mapUnavailable by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(endpoints) { if (endpoints != fittedEndpoints) { fittedEndpoints = endpoints; fitRevision++ } }
     Surface(modifier.fillMaxSize(), color = scheme.background, contentColor = scheme.onSurface) {
         BoxWithConstraints(Modifier.fillMaxSize().onGloballyPositioned { boxTop = with(density) { it.positionInRoot().y.toDp() } }) {

@@ -77,7 +77,7 @@ fun SimulationScreen(
         else MapCursor(p.position, p.heading, p.sun?.azimuth ?: 0.0, if (p.undergroundOrUnknown) -90.0 else p.sun?.altitude ?: -90.0)
     }
     // #180: 지도를 쓸 수 없으면 카메라를 다시 따라가게 하는 따라가기 줄을 두지 않는다(정보 카드는 글자 정보라 남긴다).
-    var mapUnavailable by remember { mutableStateOf(false) }
+    var mapUnavailable by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     @Composable fun JourneyMap(mapModifier: Modifier) {
         Column(mapModifier) {
             Box(Modifier.fillMaxWidth().weight(1f).clipToBounds().testTag("simulation_map")) {
