@@ -53,6 +53,8 @@ class OffscreenCueTest {
         val cue = offscreenCue(585f, -5000f, strip, 60f, keepClear = 150f)!!
         val cx = 585f; val cy = (252f + 603f) / 2
         assertTrue(kotlin.math.abs(cue.x - cx) >= 150f - 0.5f || kotlin.math.abs(cue.y - cy) >= 150f - 0.5f)
+        // 가장자리의 모서리(안쪽 여백만큼 안)로 간다.
+        assertEquals(1170f - 60f, cue.x, 0.5f)
         assertEquals(CueDirection.UP, cue.direction)
         assertEquals(252f + 60f, cue.y, 0.5f)
     }

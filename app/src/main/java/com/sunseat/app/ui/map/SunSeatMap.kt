@@ -2,6 +2,7 @@ package com.sunseat.app.ui.map
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
@@ -403,21 +404,23 @@ private fun OffscreenDestinationCue(x: Float, y: Float, overlays: MapPadding, mo
         val probe = offscreenCue(x, y, visible, 0f) ?: return@BoxWithConstraints
         val label = String.format(template, labels.getValue(probe.direction))
         androidx.compose.ui.layout.Layout(content = {
+            // 지도 위 도착 표식(경로 색 채움)과 다르게 보이도록 지도 바탕 위 조작 칩처럼 흰 바탕 + 가는 테두리로 두고, 화살표를 앞세운다(#186 디자인 리뷰).
             androidx.compose.foundation.layout.Row(
                 Modifier.clearAndSetSemantics { contentDescription = label }
-                    .background(MapRouteColors.transit, androidx.compose.foundation.shape.CircleShape)
+                    .background(com.sunseat.app.ui.theme.LightScheme.surface, androidx.compose.foundation.shape.CircleShape)
+                    .border(Sizes.hairline, com.sunseat.app.ui.theme.LightScheme.outline, androidx.compose.foundation.shape.CircleShape)
                     .padding(horizontal = Spacing.s, vertical = Spacing.xs),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 // 뒤로 화살표(왼쪽, 180°)를 도착지 쪽으로 돌린다.
                 androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_ms_arrow_back), null,
-                    Modifier.size(Sizes.iconSmall).rotate(probe.angleDegrees - 180f), tint = MapRouteColors.casing)
+                    Modifier.size(Sizes.iconMedium).rotate(probe.angleDegrees - 180f), tint = MapRouteColors.transit)
                 androidx.compose.foundation.layout.Spacer(Modifier.width(Spacing.xs))
-                Text(destination, color = MapRouteColors.casing, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
+                Text(destination, color = com.sunseat.app.ui.theme.LightScheme.onSurface, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
             }
         }, modifier = Modifier.fillMaxSize()) { measurables, constraints ->
             val body = measurables.first().measure(androidx.compose.ui.unit.Constraints())
-            val gap = with(density) { Spacing.s.toPx() }
+            val gap = with(density) { Spacing.xs.toPx() }
             // 차량(보이는 영역 가운데, 표식 크기)과 표시가 겹치지 않을 만큼 가운데에서 떨어뜨린다.
             val vehicle = with(density) { Sizes.mapMarker.toPx() }
             val cue = offscreenCue(x, y, visible, maxOf(body.width, body.height) / 2f + gap, keepClear = vehicle / 2 + gap + maxOf(body.width, body.height) / 2f)
