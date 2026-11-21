@@ -139,8 +139,8 @@ fun ResultScreen(
         var topCapsuleBottom by remember { mutableStateOf(0.dp) }
         var bottomCapsuleTop by remember { mutableStateOf(0.dp) }
         val density = androidx.compose.ui.platform.LocalDensity.current
-        val topPadding = if (topCapsuleBottom > 0.dp) topCapsuleBottom + Spacing.s else insets.calculateTopPadding() + Sizes.topCapsuleClearance
-        val bottomPadding = if (bottomCapsuleTop > 0.dp && boxHeight > 0.dp) boxHeight - bottomCapsuleTop + Spacing.s else insets.calculateBottomPadding() + Sizes.bottomCapsuleClearance
+        val topPadding = if (topCapsuleBottom > 0.dp) topCapsuleBottom + Spacing.l else insets.calculateTopPadding() + Sizes.topCapsuleClearance
+        val bottomPadding = if (bottomCapsuleTop > 0.dp && boxHeight > 0.dp) boxHeight - bottomCapsuleTop + Spacing.l else insets.calculateBottomPadding() + Sizes.bottomCapsuleClearance
         Box(Modifier.fillMaxSize().onSizeChanged { boxHeight = with(density) { it.height.toDp() } }) {
             if (result == null) {
                 Loading(insets.calculateTopPadding(), animateIn)
