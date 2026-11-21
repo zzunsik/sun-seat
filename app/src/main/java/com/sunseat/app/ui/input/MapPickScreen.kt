@@ -126,10 +126,8 @@ internal fun MapPickScreen(
                 Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Spacing.screen, vertical = Spacing.m),
                 verticalArrangement = Arrangement.spacedBy(Spacing.s),
             ) {
-                if (pick.mapUnavailable) {
-                    // #173: 이유는 지도 노드(라이브 영역)가 말하고 이 줄은 다음 행동만 말한다(같은 안내를 두 번 알리지 않는다).
-                    Text(stringResource(R.string.map_pick_unavailable), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurface)
-                } else {
+                // #173 #180: 지도를 쓸 수 없으면 이유는 지도 노드(라이브 영역)가 말하고, 다음 행동은 아래 "검색으로 돌아가기" 버튼 하나가 맡는다.
+                if (!pick.mapUnavailable) {
                     Column(Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
                         Text(headline, style = MaterialTheme.typography.titleMedium, color = scheme.onSurface)
                         val detail = when (pick.status) {
@@ -152,7 +150,10 @@ internal fun MapPickScreen(
                     }
                 }
                 notice?.invoke()
-                PrimaryButton(onClick = actions.confirmMapPick, enabled = pick.canConfirm, modifier = Modifier.fillMaxWidth()) {
+                // #180: 지도를 쓸 수 없으면 꺼진 선택 버튼 대신, 안내한 다음 행동(검색으로 돌아가기)을 켜진 버튼으로 준다.
+                if (pick.mapUnavailable) PrimaryButton(onClick = actions.cancelMapPick, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.map_pick_close))
+                } else PrimaryButton(onClick = actions.confirmMapPick, enabled = pick.canConfirm, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(if (isOrigin) R.string.map_pick_confirm_origin else R.string.map_pick_confirm_destination))
                 }
             }

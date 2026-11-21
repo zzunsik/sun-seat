@@ -6,6 +6,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -85,11 +89,13 @@ fun SimulationScreen(
     // #161 #172: 지도 위 정보 카드(오버레이)의 측정 아래끝. 지도 보이는 영역은 그 아래에서 시작하고, 고정값은 측정 전 첫 프레임 어림으로만 쓴다.
     var infoCardBottom by remember { mutableStateOf(0.dp) }
     val mapTop = measuredOr(infoCardBottom, Sizes.simulationMapInfo)
+    // #180: 지도를 쓸 수 없으면 카메라를 다시 따라가게 하는 따라가기 줄을 두지 않는다(정보 카드는 글자 정보라 남긴다).
+    var mapUnavailable by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     @Composable fun JourneyMap(mapModifier: Modifier) {
         Column(mapModifier) {
             Box(Modifier.fillMaxWidth().weight(1f).clipToBounds().testTag("simulation_map")) {
                 SunSeatMap(MapState(routes = listOf(route), origin = request.origin, destination = request.destination,
-                    cursor = cursor, followCursor = state.following, onGesture = actions.unfollow,
+                    cursor = cursor, followCursor = state.following, onGesture = actions.unfollow, onUnavailable = { mapUnavailable = true },
                     routeProgress = point?.routeProgress ?: 0f, showDecorations = false,
                     padding=MapPadding(top=mapTop,bottom=Spacing.s)), Modifier.fillMaxSize())
                 Surface(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(Spacing.s).testTag("simulation_info_card").overlay("simulation_info_card") { _, bottom -> infoCardBottom = bottom + Spacing.s },color=scheme.surface,shape=MaterialTheme.shapes.medium) {
@@ -118,7 +124,7 @@ fun SimulationScreen(
                 }
             }
             // A separate row cannot cover the SDK logo or any map marker, at any font size.
-            if (!state.following) Surface(Modifier.fillMaxWidth().testTag("simulation_follow_row"), color = scheme.surface) {
+            if (!state.following && !mapUnavailable) Surface(Modifier.fillMaxWidth().testTag("simulation_follow_row"), color = scheme.surface) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.s), horizontalArrangement = Arrangement.End) {
                     QuietButton(onClick = actions.follow) { Text(stringResource(R.string.simulation_follow)) }
                 }
