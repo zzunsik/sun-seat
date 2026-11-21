@@ -85,19 +85,19 @@ sun-seat 앱이 외부 API를 부를 때 거치는 Cloudflare Workers입니다(#
    npx wrangler deploy
    ```
 
-   끝에 배포 주소가 나옵니다. `https://api.<계정의 workers.dev 하위 도메인>.workers.dev` 형태이고, 하위 도메인이 `sunseat`이면 `https://api.sunseat.workers.dev`입니다. 하위 도메인은 Cloudflare 대시보드의 "Workers & Pages" 화면에서도 확인할 수 있습니다.
+   끝에 배포 주소가 나옵니다. `https://api.<계정의 workers.dev 하위 도메인>.workers.dev` 형태입니다. 하위 도메인은 Cloudflare 대시보드의 "Workers & Pages" 화면에서도 확인할 수 있습니다.
 
 5. 동작을 확인합니다. 장소 검색은 JSON(`documents`)이, 허용 밖 경로는 403이 와야 합니다.
 
    ```bash
-   curl -s "https://api.sunseat.workers.dev/kakao/local/search/keyword?query=%EC%84%9C%EC%9A%B8%EC%97%AD&size=1"
-   curl -s -o /dev/null -w "%{http_code}\n" "https://api.sunseat.workers.dev/kakao/local/search/address?query=a"
+   curl -s "https://api.<하위 도메인>.workers.dev/kakao/local/search/keyword?query=%EC%84%9C%EC%9A%B8%EC%97%AD&size=1"
+   curl -s -o /dev/null -w "%{http_code}\n" "https://api.<하위 도메인>.workers.dev/kakao/local/search/address?query=a"
    ```
 
 6. 앱 빌드 설정에 주소를 넣습니다. 저장소 루트의 `local.properties`(커밋하지 않음)에 다음 줄을 넣고, 예전의 `KAKAO_REST_API_KEY` 줄은 지웁니다. 그 뒤 `./gradlew assembleDebug`로 다시 빌드합니다.
 
    ```properties
-   SUNSEAT_API_BASE_URL=https://api.sunseat.workers.dev
+   SUNSEAT_API_BASE_URL=https://api.<하위 도메인>.workers.dev
    ```
 
    릴리스 빌드(#118)도 같은 이름의 설정을 씁니다. 주소는 비밀이 아니지만 저장소에 고정하지 않고 빌드 설정으로 넣습니다.
