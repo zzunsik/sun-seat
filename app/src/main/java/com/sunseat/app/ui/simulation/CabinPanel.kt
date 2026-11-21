@@ -30,6 +30,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.sunseat.app.R
 import com.sunseat.app.domain.*
 import com.sunseat.app.ui.components.QuietButton
+import com.sunseat.app.ui.components.overlay
+import androidx.compose.ui.platform.LocalDensity
 import com.sunseat.app.ui.input.NeutralFilterChip
 import com.sunseat.app.ui.map.LocalMapRenderer
 import com.sunseat.app.ui.map.MapRenderer
@@ -75,11 +77,13 @@ internal fun CabinPanel(point: TimelinePoint, mode: TravelMode, state: Simulatio
             stringResource(coverageText(light.lit(chosen.id,SeatSurface.BACK))))
     }
     @Composable fun SeatSummary() {
-        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(Spacing.s)) {
-            Column(Modifier.weight(1f)) {
+        // #161: 글이 한 줄에 안 들어가면 "자리 고르기"를 아래로 내려 글이 단어 중간에서 꺾이지 않게 한다(DESIGN 4.4).
+        com.sunseat.app.ui.components.ReflowRow(modifier = Modifier.fillMaxWidth(), text = {
+            Column {
                 Text(stringResource(R.string.simulation_selected_seat,chosen.label()),style=MaterialTheme.typography.titleSmall)
                 Text(profileLabel,style=MaterialTheme.typography.bodySmall,color=SunSeatTheme.scheme.onSurfaceVariant)
             }
+        }, action = {
             Box {
                 QuietButton(onClick={choosing=true}) { Text(stringResource(R.string.simulation_choose_seat)) }
                 DropdownMenu(expanded=choosing,onDismissRequest={choosing=false},modifier=Modifier.heightIn(max=Sizes.cabinHeight)) {
@@ -89,7 +93,7 @@ internal fun CabinPanel(point: TimelinePoint, mode: TravelMode, state: Simulatio
                         onClick={actions.seat(point.legIndex,s.id);choosing=false}) }
                 }
             }
-        }
+        })
         Text(summary,style=MaterialTheme.typography.bodySmall)
     }
     // Keep the full viewport first in the short landscape panel; text remains scrollable below it.
@@ -101,7 +105,7 @@ internal fun CabinPanel(point: TimelinePoint, mode: TravelMode, state: Simulatio
     var toggle by remember { mutableStateOf(IntSize.Zero) }
     Box {
         CabinScene(profile,light,chosen.id,state.interior,description,preview,toggle)
-        Surface(Modifier.align(Alignment.TopEnd).onSizeChanged { toggle=it },color=SunSeatTheme.scheme.surface,shape=MaterialTheme.shapes.small) {
+        Surface(Modifier.align(Alignment.TopEnd).onSizeChanged { toggle=it }.overlay("cabin_view_toggle"),color=SunSeatTheme.scheme.surface,shape=MaterialTheme.shapes.small) {
             QuietButton(onClick={actions.camera(!state.interior)}) { Text(stringResource(if(state.interior) R.string.simulation_overview else R.string.simulation_inside)) }
         }
     }
@@ -127,8 +131,8 @@ private fun BusModelRow(point: TimelinePoint, mode: TravelMode, profile: CabinPr
     val estimate=BusModels.estimate(point.leg.busType)
     var open by remember(point.legIndex) { mutableStateOf(false) }
     @Composable fun Note(text: String) = Text(text,style=MaterialTheme.typography.bodySmall,color=SunSeatTheme.scheme.onSurfaceVariant)
-    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(Spacing.s)) {
-        Column(Modifier.weight(1f)) {
+    com.sunseat.app.ui.components.ReflowRow(modifier = Modifier.fillMaxWidth(), text = {
+        Column {
             Text(stringResource(if(manual!=null) R.string.simulation_bus_model_manual else R.string.simulation_bus_model_estimated,
                 stringResource(if(profile.kind==CabinKind.COACH) R.string.simulation_coach else R.string.simulation_bus)),
                 style=MaterialTheme.typography.bodyMedium)
@@ -139,6 +143,7 @@ private fun BusModelRow(point: TimelinePoint, mode: TravelMode, profile: CabinPr
                 BusModelBasis.UNKNOWN_TYPE -> stringResource(R.string.simulation_bus_basis_unknown,estimate.type!!)
             })
         }
+    }, action = {
         Box {
             QuietButton(onClick={open=true}) { Text(stringResource(R.string.simulation_change_model)) }
             DropdownMenu(expanded=open,onDismissRequest={open=false}) {
@@ -155,7 +160,7 @@ private fun BusModelRow(point: TimelinePoint, mode: TravelMode, profile: CabinPr
                     }) }
             }
         }
-    }
+    })
     state.notice?.takeIf { it.leg==point.legIndex }?.carry?.let { carry ->
         val from=carry.from!!.label()
         Text(stringResource(if(carry.carried) R.string.simulation_seat_carried else R.string.simulation_seat_not_carried,from),style=MaterialTheme.typography.bodySmall)
@@ -193,7 +198,8 @@ private fun CabinScene(profile: CabinProfile, light: CabinLight, selected: Strin
     val modifier=Modifier.fillMaxWidth().height(height).semantics { contentDescription=summary }
     if(preview) {
         // Native GPU verification is separate; tests exercise controls and truthful textual fallback.
-        Box(modifier) { Text(stringResource(R.string.simulation_cabin_preview)) }
+        // #172: 글은 장면 위 시점 전환 버튼(오버레이) 아래에서 시작한다.
+        Box(modifier) { Text(stringResource(R.string.simulation_cabin_preview),Modifier.padding(top=with(LocalDensity.current) { overlay.height.toDp() })) }
         return
     }
     val context=LocalContext.current
@@ -207,7 +213,7 @@ private fun CabinScene(profile: CabinProfile, light: CabinLight, selected: Strin
     val palette=listOf(scheme.outlineVariant.renderColor(),scheme.onSurfaceVariant.renderColor(),colors.sun.renderColor(),colors.shadeContainer.renderColor(),scheme.inverseSurface.renderColor(),scheme.background.renderColor(),scheme.inverseOnSurface.renderColor())
     key(attempt) {
         if(failed) {
-            Column(modifier) {
+            Column(modifier.padding(top=with(LocalDensity.current) { overlay.height.toDp() })) {
                 Text(stringResource(R.string.simulation_cabin_error))
                 QuietButton(onClick={failed=false;attempt++}) { Text(stringResource(R.string.simulation_retry)) }
             }

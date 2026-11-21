@@ -19,6 +19,16 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import com.sunseat.app.ui.components.ScrollEdgeCue
+import com.sunseat.app.ui.components.measuredOr
+import com.sunseat.app.ui.components.overlay
 import com.sunseat.app.R
 import com.sunseat.app.domain.*
 import com.sunseat.app.ui.components.*
@@ -72,14 +82,19 @@ fun SimulationScreen(
         if (p.position == null || p.heading == null) null
         else MapCursor(p.position, p.heading, p.sun?.azimuth ?: 0.0, if (p.undergroundOrUnknown) -90.0 else p.sun?.altitude ?: -90.0)
     }
+    // #161 #172: 지도 위 정보 카드(오버레이)의 측정 아래끝. 지도 보이는 영역은 그 아래에서 시작하고, 고정값은 측정 전 첫 프레임 어림으로만 쓴다.
+    var infoCardBottom by remember { mutableStateOf(0.dp) }
+    val mapTop = measuredOr(infoCardBottom, Sizes.simulationMapInfo)
+    var followRowHeight by remember { mutableStateOf(0.dp) }
+    val density = LocalDensity.current
     @Composable fun JourneyMap(mapModifier: Modifier) {
         Column(mapModifier) {
             Box(Modifier.fillMaxWidth().weight(1f).clipToBounds().testTag("simulation_map")) {
                 SunSeatMap(MapState(routes = listOf(route), origin = request.origin, destination = request.destination,
                     cursor = cursor, followCursor = state.following, onGesture = actions.unfollow,
                     routeProgress = point?.routeProgress ?: 0f, showDecorations = false,
-                    padding=MapPadding(top=Sizes.simulationMapInfo,bottom=Spacing.s)), Modifier.fillMaxSize())
-                Surface(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(Spacing.s).testTag("simulation_info_card"),color=scheme.surface,shape=MaterialTheme.shapes.medium) {
+                    padding=MapPadding(top=mapTop,bottom=Spacing.s)), Modifier.fillMaxSize())
+                Surface(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(Spacing.s).testTag("simulation_info_card").overlay("simulation_info_card") { _, bottom -> infoCardBottom = bottom + Spacing.s },color=scheme.surface,shape=MaterialTheme.shapes.medium) {
                     Column(Modifier.padding(horizontal=Spacing.m,vertical=Spacing.s),verticalArrangement=Arrangement.spacedBy(Spacing.xs)) {
                         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
                             Text(stringResource(if(state.elapsedMillis>=duration) R.string.simulation_arrived_time else if(state.playing) R.string.simulation_moving_time else R.string.simulation_paused_time,currentTime),style=MaterialTheme.typography.titleSmall)
@@ -105,7 +120,8 @@ fun SimulationScreen(
                 }
             }
             // A separate row cannot cover the SDK logo or any map marker, at any font size.
-            if (!state.following) Surface(Modifier.fillMaxWidth().testTag("simulation_follow_row"), color = scheme.surface) {
+            // 가로(#172)에서는 지도 열이 낮아 따라가기 줄을 조작 막대로 옮겨 지도 보이는 높이를 남긴다. 어느 쪽이든 지도 밖이다(#122).
+            if (!state.following && !landscape) Surface(Modifier.fillMaxWidth().testTag("simulation_follow_row").onSizeChanged { followRowHeight = with(density) { it.height.toDp() } }, color = scheme.surface) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.s), horizontalArrangement = Arrangement.End) {
                     QuietButton(onClick = actions.follow) { Text(stringResource(R.string.simulation_follow)) }
                 }
@@ -113,10 +129,15 @@ fun SimulationScreen(
         }
     }
     @Composable fun CabinDetails(detailModifier: Modifier) {
-            Column(detailModifier.testTag("simulation_details").verticalScroll(rememberScrollState()).padding(horizontal=Spacing.screen,vertical=if(landscape) Spacing.s else Spacing.screen), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+        // #155: 조작 패널 위에서 끝나는 스크롤 본문. 더 내릴 내용이 있으면 경계에 "더 있음" 구분선을 둔다(DESIGN 4.5).
+        val detailScroll = rememberScrollState()
+        Box(detailModifier) {
+            Column(Modifier.fillMaxSize().testTag("simulation_details").verticalScroll(detailScroll).padding(horizontal=Spacing.screen,vertical=if(landscape) Spacing.s else Spacing.screen), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                 if (point != null && point.leg.mode != Mode.WALK) CabinPanel(point, request.mode, state, actions)
                 if (result.arrival != result.modeledArrival) Text(stringResource(R.string.simulation_modeled_note, time(result.arrival)), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             }
+            ScrollEdgeCue(detailScroll, "simulation_details", Modifier.align(Alignment.BottomCenter))
+        }
     }
     Surface(modifier.fillMaxSize(), color = scheme.background, contentColor = scheme.onSurface) {
         Column(Modifier.fillMaxSize()) {
@@ -128,9 +149,16 @@ fun SimulationScreen(
             if(landscape) Row(Modifier.fillMaxWidth().weight(1f)) {
                 JourneyMap(Modifier.weight(1f).fillMaxHeight())
                 CabinDetails(Modifier.weight(1f).fillMaxHeight())
-            } else {
-                JourneyMap(Modifier.fillMaxWidth().weight(2f))
-                CabinDetails(Modifier.fillMaxWidth().weight(3f))
+            } else BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+                // 지도:차량 패널은 2:3(#56)이되, 따라가기를 끄면 경로 전체에 맞추므로 정보 카드 아래에 경로를 알아볼 보이는 높이를 남긴다(#172).
+                // 차량 패널은 스크롤하므로 그만큼 줄어도 내용이 사라지지 않는다.
+                val share = maxHeight * 2 / 5
+                val need = mapTop + Sizes.simulationMapMinVisible + Spacing.s + (if (state.following) 0.dp else measuredOr(followRowHeight, Spacing.touch))
+                val mapHeight = maxOf(share, need).coerceAtMost((maxHeight - Spacing.touch * 2).coerceAtLeast(share))
+                Column(Modifier.fillMaxSize()) {
+                    JourneyMap(Modifier.fillMaxWidth().height(mapHeight))
+                    CabinDetails(Modifier.fillMaxWidth().weight(1f))
+                }
             }
             Surface(Modifier.testTag("simulation_controls"), color = scheme.surface) {
                 if(landscape) Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal=Spacing.screen,vertical=Spacing.s),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(Spacing.l)) {
@@ -145,9 +173,10 @@ fun SimulationScreen(
                         }
                     }
                     if(!SunSeatTheme.reduceMotion) Row(horizontalArrangement=Arrangement.spacedBy(Spacing.s),verticalAlignment=Alignment.CenterVertically) {
-                        PrimaryButton(onClick=actions.toggle,modifier=Modifier.width(Sizes.simulationCompactPlay),enabled=point!=null) { Text(stringResource(if(state.playing) R.string.simulation_pause else R.string.simulation_play)) }
+                        PrimaryButton(onClick=actions.toggle,modifier=Modifier.widthIn(min=Sizes.simulationCompactPlay),enabled=point!=null) { Text(stringResource(if(state.playing) R.string.simulation_pause else R.string.simulation_play),softWrap=false) }
                         listOf(1,2,4).forEach { speed -> NeutralFilterChip(state.speed==speed,stringResource(R.string.simulation_speed,speed)) { actions.speed(speed) } }
                     }
+                    if (!state.following) QuietButton(onClick = actions.follow, modifier = Modifier.testTag("simulation_follow_row")) { Text(stringResource(R.string.simulation_follow)) }
                 } else Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Spacing.screen, vertical = Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     if(!landscape) MiniTimeline(result, boundaries)
                     Slider(value = (state.elapsedMillis.toFloat() / duration).coerceIn(0f, 1f), onValueChange = actions.seek,
@@ -158,8 +187,9 @@ fun SimulationScreen(
                         Text(stringResource(R.string.simulation_scrub_time, currentTime), style = MaterialTheme.typography.labelSmall)
                         Text(time(result.modeledArrival), style = MaterialTheme.typography.labelSmall)
                     }
-                    if (!SunSeatTheme.reduceMotion) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalAlignment = Alignment.CenterVertically) {
-                        PrimaryButton(onClick = actions.toggle, modifier = Modifier.weight(1f), enabled = point != null) { Text(stringResource(if (state.playing) R.string.simulation_pause else R.string.simulation_play)) }
+                    // #161: 버튼 글자는 꺾지 않고, 한 줄에 안 들어가면 배속 선택이 다음 줄로 흐른다(DESIGN 4.4).
+                    if (!SunSeatTheme.reduceMotion) FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.xs), itemVerticalAlignment = Alignment.CenterVertically) {
+                        PrimaryButton(onClick = actions.toggle, modifier = Modifier.weight(1f), enabled = point != null) { Text(stringResource(if (state.playing) R.string.simulation_pause else R.string.simulation_play), softWrap = false) }
                         listOf(1, 2, 4).forEach { speed -> NeutralFilterChip(state.speed == speed, stringResource(R.string.simulation_speed, speed)) { actions.speed(speed) } }
                     }
                 }

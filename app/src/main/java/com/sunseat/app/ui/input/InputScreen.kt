@@ -41,6 +41,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.sunseat.app.R
+import com.sunseat.app.ui.components.overlay
 import com.sunseat.app.data.place.Place
 import com.sunseat.app.domain.SunGoal
 import com.sunseat.app.domain.TravelMode
@@ -131,7 +132,7 @@ fun InputScreen(
                 .padding(Spacing.screen)
                 .onGloballyPositioned { with(density) { panelBottom = (it.positionInRoot().y + it.size.height).toDp() - boxTop } },
                 verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                Surface(color = scheme.surface, shape = MaterialTheme.shapes.large) {
+                Surface(Modifier.overlay("input_header"), color = scheme.surface, shape = MaterialTheme.shapes.large) {
                     val headerScroll = rememberScrollState()
                     Box {
                         JourneyHeader(
@@ -154,7 +155,7 @@ fun InputScreen(
                     Text(stringResource(R.string.input_same_endpoints), Modifier.fillMaxWidth().padding(Spacing.l), style = MaterialTheme.typography.bodyMedium, color = scheme.error)
                 }
             }
-            Surface(Modifier.align(Alignment.BottomEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(Spacing.l), shape = androidx.compose.foundation.shape.CircleShape, color = scheme.surface) {
+            Surface(Modifier.align(Alignment.BottomEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(Spacing.l).overlay("input_locate"), shape = androidx.compose.foundation.shape.CircleShape, color = scheme.surface) {
                 IconButton(onClick = actions.showCurrentLocationOnMap, enabled = !state.mapLocating, modifier = Modifier.size(Spacing.touch)) {
                     Icon(painterResource(R.drawable.ic_ms_my_location), stringResource(R.string.location_use_current), tint = scheme.onSurface)
                 }

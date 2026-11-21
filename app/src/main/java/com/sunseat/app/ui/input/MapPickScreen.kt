@@ -37,6 +37,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.rememberTextMeasurer
 import com.sunseat.app.R
+import com.sunseat.app.ui.components.overlay
 import com.sunseat.app.ui.components.PrimaryButton
 import com.sunseat.app.ui.components.QuietButton
 import com.sunseat.app.ui.map.MapState
@@ -109,7 +110,7 @@ internal fun MapPickScreen(
                 if (!pick.mapUnavailable) {
                     PickPin(isOrigin, Modifier.fillMaxSize())
                     Surface(
-                        Modifier.align(Alignment.TopEnd).padding(Spacing.m),
+                        Modifier.align(Alignment.TopEnd).padding(Spacing.m).overlay("map_pick_recenter"),
                         shape = CircleShape, color = scheme.surface, contentColor = scheme.onSurface,
                     ) {
                         IconButton(onClick = actions.showCurrentLocationOnMap, enabled = !mapLocating, modifier = Modifier.size(Spacing.touch)) {
