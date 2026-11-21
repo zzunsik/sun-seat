@@ -57,10 +57,10 @@ jobs:
           WAIT_MINUTES: "40"
         run: bash scripts/release-gate.sh ci "$SHA"
 
-      # 앞 릴리스 뒤 게이트웨이(workers/api)가 바뀌었으면, main의 Deploy API gateway 실행이 이 커밋의 게이트웨이 코드를
-      # 운영 Worker에 배포해 성공했어야 한다. 배포가 실패한 릴리스는 내보내지 않는다(AGENTS.md "저장소 설정").
+      # main의 최근 Deploy API gateway 실행이 성공했고 이 커밋과 같은 게이트웨이 코드(workers/api)를 운영 Worker에 배포했어야 한다.
+      # 게이트웨이가 바뀌지 않은 릴리스는 앞 배포가 같은 코드라 바로 통과한다. 앞 v 태그가 실패해 Release 없이 남았을 수 있어서
+      # "앞 태그 뒤 변경 없음"으로 건너뛰지 않고 항상 본다. 배포가 실패한 릴리스는 내보내지 않는다(AGENTS.md "저장소 설정").
       - name: 운영 게이트웨이 배포 확인
-        if: steps.tag.outputs.gateway-changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ steps.tag.outputs.sha }}
@@ -153,17 +153,12 @@ jobs:
         run: |
           apk=app/build/outputs/apk/release/app-release.apk
           test -f "$apk" || { echo "::error::서명한 릴리스 APK가 없습니다: $apk"; ls -l app/build/outputs/apk/release/ || true; exit 1; }
-          bash scripts/check-release-apk.sh "$apk" --tag "$TAG"
+          # --signed: apksigner verify, 서명자 하나, 인증서 SHA-256 지문을 cert-sha256 출력으로 남긴다.
+          bash scripts/check-release-apk.sh "$apk" --tag "$TAG" --signed
           bash scripts/check-apk-secrets.sh release
           build_config=app/build/generated/source/buildConfig/release/com/sunseat/app/BuildConfig.java
           grep -q 'SUNSEAT_API_BASE_URL = "https://' "$build_config" || { echo "::error::릴리스 BuildConfig의 게이트웨이 주소가 비었습니다."; exit 1; }
           grep -q 'KAKAO_NATIVE_APP_KEY = "[^"]' "$build_config" || { echo "::error::릴리스 BuildConfig의 카카오 네이티브 앱 키가 비었습니다."; exit 1; }
-          bt=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
-          "$bt/apksigner" verify --verbose --print-certs "$apk" | tee "$RUNNER_TEMP/certs.txt"
-          grep -qx 'Number of signers: 1' "$RUNNER_TEMP/certs.txt" || { echo "::error::서명자가 하나가 아닙니다."; exit 1; }
-          cert=$(sed -n 's/^Signer #1 certificate SHA-256 digest: \([0-9a-f]\{64\}\)$/\1/p' "$RUNNER_TEMP/certs.txt")
-          [ -n "$cert" ] || { echo "::error::서명 인증서 SHA-256 지문을 읽지 못했습니다."; exit 1; }
-          echo "cert-sha256=$cert" >> "$GITHUB_OUTPUT"
 
       - name: 배포 파일과 체크섬
         id: dist
@@ -184,13 +179,15 @@ jobs:
           path: ${{ runner.temp }}/dist/${{ env.APK_NAME }}
           if-no-files-found: error
           retention-days: 1
+          # 다시 돌린 실행에서 지우지 못한 같은 이름의 아티팩트가 남아 있어도 덮어쓴다.
+          overwrite: true
 
       - name: 키스토어 지우기
         if: always()
         run: rm -f "$RUNNER_TEMP/release.p12"
 
   # 빌드 출처 증명(SLSA provenance). 파일 없이 build job이 계산한 다이제스트에 증명을 단다.
-  # 확인: gh attestation verify sun-seat-<태그>.apk -R zzunsik/sun-seat
+  # 확인: gh attestation verify sun-seat-<태그>.apk -R zzunsik/sun-seat --signer-workflow zzunsik/sun-seat/.github/workflows/release.yml
   attest:
     needs: build
     runs-on: ubuntu-latest
@@ -244,7 +241,7 @@ jobs:
           ## 확인
           - APK SHA-256: \`$SHA256\`
           - 서명 인증서 SHA-256: \`$CERT_SHA256\`
-          - 빌드 출처: \`gh attestation verify $APK_NAME -R $GITHUB_REPOSITORY\`
+          - 빌드 출처: \`gh attestation verify $APK_NAME -R $GITHUB_REPOSITORY --signer-workflow $GITHUB_REPOSITORY/.github/workflows/release.yml\`
 
           EOF
           prerelease=()

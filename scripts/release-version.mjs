@@ -15,6 +15,8 @@
 //     빌드 파일의 versionName이 규칙에 맞고 versionCode가 계산값과 같은지 본다. --tag가 있으면 태그와도 견준다.
 //   node scripts/release-version.mjs apk <aapt2 dump badging 출력 파일> [--tag <태그>]
 //     APK의 versionName·versionCode를 같은 방법으로 본다.
+//   node scripts/release-version.mjs signer <apksigner verify --verbose --print-certs 출력 파일>
+//     서명자가 하나인지 보고 서명 인증서 SHA-256 지문(소문자 16진수 64자)을 출력한다.
 // 종료 코드: 0 통과, 1 규칙 위반, 2 사용법 오류.
 //
 // Node 내장 모듈만 쓴다. 자체 테스트는 scripts/release-version.test.mjs다(CI release-version job).
@@ -99,7 +101,26 @@ export function checkVersion(actual, source, tag) {
   return errors;
 }
 
-export const checkGradle = (text, tag) => checkVersion(readGradle(text), 'app/build.gradle.kts', tag);
+// apksigner verify --verbose --print-certs 출력에서 서명 인증서 SHA-256 지문을 꺼낸다.
+// build-tools 버전과 서명 방식에 따라 줄 머리가 "Signer #1 certificate …"(36)이나 "V2 Signer: certificate …"(37)로 다르다.
+// 서명자가 하나이고 서로 다른 지문이 정확히 하나여야 한다. 공개 키 지문(public key SHA-256) 줄은 보지 않는다.
+export function readSignerCert(text) {
+  const lines = text.split(/\r?\n/);
+  const signers = lines.map((l) => /^Number of signers: (\d+)$/.exec(l)).find(Boolean);
+  if (!signers || signers[1] !== '1') {
+    throw new VersionError(`서명자가 하나가 아닙니다(${signers ? signers[1] : 'Number of signers 줄 없음'}).`);
+  }
+  const certs = new Set(
+    lines
+      .map((l) => /^(?:Signer #\d+|V[0-9.]+ Signer(?: #\d+)?:) certificate SHA-256 digest: ([0-9a-f]{64})$/.exec(l))
+      .filter(Boolean)
+      .map((m) => m[1]),
+  );
+  if (certs.size !== 1) throw new VersionError(`서명 인증서 SHA-256 지문이 하나가 아닙니다(${certs.size}개).`);
+  return [...certs][0];
+}
+
+export const checkGradle =(text, tag) => checkVersion(readGradle(text), 'app/build.gradle.kts', tag);
 export const checkApk = (badging, tag) => checkVersion(readBadging(badging), 'APK', tag);
 
 function main(argv) {
@@ -111,6 +132,10 @@ function main(argv) {
       console.log(`version-name=${v.versionName}`);
       console.log(`version-code=${v.versionCode}`);
       console.log(`prerelease=${v.prerelease}`);
+      return 0;
+    }
+    if (command === 'signer' && arg && rest.length === 0) {
+      console.log(readSignerCert(readFileSync(arg, 'utf8')));
       return 0;
     }
     if ((command === 'gradle' || command === 'apk') && arg && tagOption) {
@@ -133,7 +158,7 @@ function main(argv) {
     }
     throw e;
   }
-  console.error('사용: node scripts/release-version.mjs tag <태그> | gradle <app/build.gradle.kts> [--tag <태그>] | apk <badging 파일> [--tag <태그>]');
+  console.error('사용: node scripts/release-version.mjs tag <태그> | gradle <app/build.gradle.kts> [--tag <태그>] | apk <badging 파일> [--tag <태그>] | signer <apksigner 출력 파일>');
   return 2;
 }
 

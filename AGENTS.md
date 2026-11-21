@@ -127,7 +127,7 @@
 
 1. 릴리스 이슈(라벨 `세팅`, 마일스톤 `vX.Y.Z`)를 만들고, 그 이슈로 버전 올림 PR(`versionName`·`versionCode`)을 `develop`에 머지한다. 마일스톤의 이슈가 모두 닫혔는지 본다.
 2. 릴리스 PR: `develop` → `main` PR을 열고 `ci-passed`가 통과하면 머지 커밋으로 합친다(`gh pr merge <PR> --merge`). 작업 PR과 달리 squash하지 않는다.
-3. `main` push로 CI와, 게이트웨이(`workers/api`·`deploy-api.yml`)가 바뀌었으면 `Deploy API gateway`(운영 Worker `api`)가 돈다. 둘 다 성공했는지 본다(`gh run list --branch main --limit 5`). 배포가 실패하면 태그를 달지 않는다.
+3. `main` push로 CI와, 게이트웨이(`workers/api`·`deploy-api.yml`)가 바뀌었으면 `Deploy API gateway`(운영 Worker `api`)가 돈다. `main`의 CI는 뒤 push가 와도 취소되지 않는다. 둘 다 성공했는지 본다(`gh run list --branch main --limit 5`). 배포가 실패하면 태그를 달지 않는다.
 4. 태그: `main`의 릴리스 머지 커밋에 단다.
 
    ```bash
@@ -138,7 +138,7 @@
    ```
 
 5. 릴리스 워크플로가 자동으로 돈다(Actions > Release).
-   - `verify`(읽기 권한): 태그 형식, 커밋이 `main`에 있는지, 빌드 파일 버전이 태그와 같은지(`scripts/release-gate.sh tag`), 태그 커밋의 `ci-passed`가 성공했는지(최대 40분 기다림), 앞 릴리스 뒤 게이트웨이가 바뀌었으면(첫 릴리스 포함) `main`의 최근 `Deploy API gateway` 실행이 성공했고 이 커밋과 같은 게이트웨이 코드를 배포했는지(최대 20분 기다림)
+   - `verify`(읽기 권한): 태그 형식, 커밋이 `main`에 있는지, 빌드 파일 버전이 태그와 같은지(`scripts/release-gate.sh tag`), 태그 커밋의 `ci-passed`가 성공했는지(최대 40분 기다림), `main`의 최근 `Deploy API gateway` 실행이 성공했고 이 커밋과 같은 게이트웨이 코드를 배포했는지(최대 20분 기다림, 게이트웨이를 바꾸지 않은 릴리스는 앞 배포로 바로 통과)
    - `build`(읽기 권한, 환경 `release`): 서명한 `assembleRelease`, APK 확인(버전·매니페스트·권한 허용 목록, REST 키 경로, 게이트웨이 주소·네이티브 키가 비지 않았는지), `apksigner verify`와 서명 인증서 SHA-256 지문, `sun-seat-vX.Y.Z.apk`의 SHA-256
    - `attest`(`id-token`·`attestations` 쓰기): APK 다이제스트에 빌드 출처 증명(`actions/attest-build-provenance`)
    - `publish`(`contents: write`): `gh release create --generate-notes`로 공개한다. 첨부는 `sun-seat-vX.Y.Z.apk`와 `.sha256`. 노트 앞에 설치 안내·APK 다이제스트·인증서 지문·확인 명령을 붙이고, 뒤에 앞 릴리스 이후 PR을 `.github/release.yml`의 라벨 묶음(버그 수정, 기능·화면, 빌드·설정, 의존성, 기타)으로 붙인다.
@@ -168,7 +168,7 @@
 ```bash
 gh release download vX.Y.Z -R zzunsik/sun-seat
 sha256sum -c sun-seat-vX.Y.Z.apk.sha256
-gh attestation verify sun-seat-vX.Y.Z.apk -R zzunsik/sun-seat
+gh attestation verify sun-seat-vX.Y.Z.apk -R zzunsik/sun-seat --signer-workflow zzunsik/sun-seat/.github/workflows/release.yml
 apksigner verify --print-certs sun-seat-vX.Y.Z.apk   # 인증서 SHA-256이 릴리스 노트·이전 릴리스와 같다
 ```
 
@@ -319,4 +319,4 @@ GitHub 설정으로 강제하는 것들이다. 설정을 바꾸면 이 절도 �
   - 각 환경에 시크릿 `CLOUDFLARE_API_TOKEN`(이 계정의 Workers Scripts 편집만), 변수 `CLOUDFLARE_ACCOUNT_ID`를 둔다. 토큰 교체는 저장소 소유자가 한다.
   - 카카오 REST 키는 Worker마다 `wrangler secret put`으로 따로 넣는다. 워크플로는 키를 다루지 않는다.
   - 릴리스 순서: 릴리스 PR `main` 머지 → 운영 게이트웨이 배포·스모크 통과 확인 → 태그 → APK 릴리스(#118). 배포가 실패하면 태그를 달지 않는다.
-  - 운영 배포 경로는 이 워크플로가 `main`에 처음 들어가는 첫 릴리스 PR 머지 때 처음 검증된다(`api-production`은 `main`에서만 실행되고, 수동 실행도 `main`에 있는 워크플로 파일로 돈다). 그 릴리스에서는 `main`의 `Deploy API gateway` 실행이 성공했는지 Actions에서 보고 나서 태그를 단다. 릴리스 워크플로의 `verify` job도 앞 릴리스 뒤 게이트웨이가 바뀌었으면(첫 릴리스 포함) 이 실행이 성공했는지 확인한다.
+  - 운영 배포 경로는 이 워크플로가 `main`에 처음 들어가는 첫 릴리스 PR 머지 때 처음 검증된다(`api-production`은 `main`에서만 실행되고, 수동 실행도 `main`에 있는 워크플로 파일로 돈다). 그 릴리스에서는 `main`의 `Deploy API gateway` 실행이 성공했는지 Actions에서 보고 나서 태그를 단다. 릴리스 워크플로의 `verify` job도 이 실행이 성공했고 태그 커밋과 같은 게이트웨이 코드를 배포했는지 확인한다.

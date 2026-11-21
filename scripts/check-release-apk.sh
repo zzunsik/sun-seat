@@ -5,27 +5,38 @@
 #   - 디버그 전용 화면(app/src/debug의 LocationDebugActivity·SimulationFixtureActivity)이 들어 있지 않다
 #   - 권한이 아래 허용 목록과 같다. 의존성이 권한을 더하면 여기서 실패하므로, 의도한 것인지 보고 목록을 고친다.
 #   - versionName·versionCode가 버전 규칙(scripts/release-version.mjs)에 맞고, --tag가 있으면 태그와 같다
+#   - --signed: apksigner verify가 통과하고 서명자가 하나다. 서명 인증서 SHA-256을 출력하고
+#     GITHUB_OUTPUT이 있으면 cert-sha256=으로 쓴다(minSdk 26이라 v1 없이 v2/v3로 서명돼 줄 머리가 "V2 Signer:"처럼 바뀐다)
 #
-# 사용법: scripts/check-release-apk.sh <apk> [--tag <태그>]   (저장소 최상위에서)
-# aapt2는 ANDROID_HOME(없으면 ANDROID_SDK_ROOT, Windows는 %LOCALAPPDATA%/Android/Sdk)의 가장 새 build-tools에서 찾는다.
+# 사용법: scripts/check-release-apk.sh <apk> [--tag <태그>] [--signed]   (저장소 최상위에서)
+# aapt2·apksigner는 ANDROID_HOME(없으면 ANDROID_SDK_ROOT, Windows는 %LOCALAPPDATA%/Android/Sdk)의 가장 새 build-tools에서 찾는다.
 # 종료 코드: 0 통과, 1 위반, 2 사용법 오류·도구 없음
 set -euo pipefail
 
-usage() { echo "사용법: $0 <apk> [--tag <태그>]"; exit 2; }
-[ $# -eq 1 ] || [ $# -eq 3 ] || usage
+usage() { echo "사용법: $0 <apk> [--tag <태그>] [--signed]"; exit 2; }
+[ $# -ge 1 ] || usage
 apk=$1
+shift
 tag_args=()
-if [ $# -eq 3 ]; then
-  [ "$2" = --tag ] || usage
-  tag_args=(--tag "$3")
-fi
+signed=false
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --tag) [ $# -ge 2 ] || usage; tag_args=(--tag "$2"); shift 2 ;;
+    --signed) signed=true; shift ;;
+    *) usage ;;
+  esac
+done
 [ -f "$apk" ] || { echo "APK가 없습니다: $apk"; exit 2; }
 
 sdk=${ANDROID_HOME:-${ANDROID_SDK_ROOT:-${LOCALAPPDATA:-}/Android/Sdk}}
 bt=$(find "$sdk/build-tools" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -V | tail -n 1)
-aapt2="$bt/aapt2"
-[ -x "$aapt2" ] || aapt2="$bt/aapt2.exe"
-[ -x "$aapt2" ] || { echo "aapt2를 찾지 못했습니다: $bt"; exit 2; }
+tool() { # tool <이름>: build-tools의 실행 파일(Windows는 .exe/.bat)
+  local t
+  for t in "$bt/$1" "$bt/$1.exe" "$bt/$1.bat"; do [ -f "$t" ] && { echo "$t"; return; }; done
+  echo "$1을(를) 찾지 못했습니다: $bt" >&2
+  exit 2
+}
+aapt2=$(tool aapt2)
 
 package=com.sunseat.app
 allowed_permissions=(
@@ -63,6 +74,23 @@ if [ "$actual" != "$expected" ]; then
 fi
 
 node "$(dirname "$0")/release-version.mjs" apk "$tmp/badging.txt" "${tag_args[@]}" || found=1
+
+if [ "$signed" = true ]; then
+  apksigner=$(tool apksigner)
+  if ! "$apksigner" verify --verbose --print-certs "$apk" | tr -d '\r' > "$tmp/certs.txt"; then
+    report "apksigner verify 실패(서명이 없거나 깨졌습니다)."
+  else
+    grep -E '^Verified using|^Number of signers|certificate DN:|certificate SHA-256 digest:' "$tmp/certs.txt" || true
+    # 서명자 수와 인증서 지문 읽기는 release-version.mjs signer(build-tools 버전마다 다른 줄 형식을 모두 받는다).
+    if cert=$(node "$(dirname "$0")/release-version.mjs" signer "$tmp/certs.txt"); then
+      echo "서명 인증서 SHA-256: $cert"
+      [ -z "${GITHUB_OUTPUT:-}" ] || echo "cert-sha256=$cert" >> "$GITHUB_OUTPUT"
+    else
+      echo "$cert"
+      found=1
+    fi
+  fi
+fi
 
 if [ "$found" -ne 0 ]; then
   echo "릴리스 APK 확인 실패: $apk"

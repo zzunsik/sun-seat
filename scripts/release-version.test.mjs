@@ -6,7 +6,9 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { checkApk, checkGradle, parseTag, parseVersionName, readBadging, readGradle, VersionError } from './release-version.mjs';
+import {
+  checkApk, checkGradle, parseTag, parseVersionName, readBadging, readGradle, readSignerCert, VersionError,
+} from './release-version.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const script = join(here, 'release-version.mjs');
@@ -129,6 +131,42 @@ test('APK versionName이나 versionCode가 태그·규칙과 다르면 실패한
   assert.equal(checkApk(badging('0.1', 100)).length, 1);
 });
 
+// apksigner verify --verbose --print-certs 출력(지문은 지어낸 값). build-tools 36과 37은 줄 머리가 다르다.
+const certA = 'a'.repeat(64);
+const certB = 'b'.repeat(64);
+const pubKey = 'c'.repeat(64);
+const signer36 = (cert = certA, n = 1) => `Verifies
+Verified using v2 scheme (APK Signature Scheme v2): true
+Number of signers: ${n}
+Signer #1 certificate DN: CN=example
+Signer #1 certificate SHA-256 digest: ${cert}
+Signer #1 certificate SHA-1 digest: ${'d'.repeat(40)}
+Signer #1 public key SHA-256 digest: ${pubKey}
+`;
+const signer37 = (cert = certA) => `Verifies
+Verified using v2 scheme (APK Signature Scheme v2): true
+Verified using v3 scheme (APK Signature Scheme v3): true
+Number of signers: 1
+V2 Signer: certificate DN: CN=example
+V2 Signer: certificate SHA-256 digest: ${cert}
+V2 Signer: public key SHA-256 digest: ${pubKey}
+V3 Signer: certificate DN: CN=example
+V3 Signer: certificate SHA-256 digest: ${cert}
+`;
+
+test('apksigner 출력에서 서명 인증서 지문을 읽는다(build-tools 36·37 형식)', () => {
+  assert.equal(readSignerCert(signer36()), certA);
+  assert.equal(readSignerCert(signer37()), certA);
+  assert.equal(readSignerCert(signer37().replaceAll('\n', '\r\n')), certA);
+});
+
+test('서명자가 둘이거나 지문이 없거나 여럿이면 거부한다', () => {
+  assert.throws(() => readSignerCert(signer36(certA, 2)), VersionError);
+  assert.throws(() => readSignerCert('Verifies\nNumber of signers: 1\n'), VersionError);
+  assert.throws(() => readSignerCert(signer37() + `V3 Signer: certificate SHA-256 digest: ${certB}\n`), VersionError);
+  assert.throws(() => readSignerCert(signer36().replace('Number of signers: 1\n', '')), VersionError);
+});
+
 test('명령줄: 종료 코드와 GITHUB_OUTPUT 줄', () => {
   const run = (...args) => spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' });
   const ok = run('tag', 'v0.2.0-rc.1');
@@ -153,6 +191,13 @@ test('명령줄: 종료 코드와 GITHUB_OUTPUT 줄', () => {
     writeFileSync(apk, badging('0.1.0', 100));
     assert.equal(run('apk', apk, '--tag', 'v0.1.0').status, 0);
     assert.equal(run('apk', apk, '--tag', 'v0.2.0').status, 1);
+    const certs = join(dir, 'certs.txt');
+    writeFileSync(certs, signer37());
+    const signer = run('signer', certs);
+    assert.equal(signer.status, 0);
+    assert.equal(signer.stdout, `${certA}\n`);
+    writeFileSync(certs, signer36(certA, 2));
+    assert.equal(run('signer', certs).status, 1);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

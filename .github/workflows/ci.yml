@@ -14,7 +14,8 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # main push의 CI는 취소하지 않는다. 릴리스 머지 커밋의 ci-passed가 취소되면 그 커밋에 태그를 달 수 없다(#118).
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   build:

@@ -6,13 +6,15 @@
 #     - 태그 형식(vX.Y.Z, 시험판 vX.Y.Z-rc.N)과 versionCode 계산(scripts/release-version.mjs)
 #     - 커밋이 main에 있다(develop → main 릴리스 PR의 머지 커밋, 또는 그 뒤 main 커밋)
 #     - 그 커밋의 app/build.gradle.kts versionName·versionCode가 태그와 같다
-#     - 바로 앞 릴리스 태그와 그 뒤 앱 API 게이트웨이(workers/api, deploy-api.yml)가 바뀌었는지
+#     - (참고용) 바로 앞 v 태그와 그 뒤 앱 API 게이트웨이(workers/api, deploy-api.yml)가 바뀌었는지. 앞 태그는 실패해
+#       Release 없이 남은 태그일 수도 있어서 배포 확인을 건너뛰는 데 쓰지 않는다(gateway는 항상 돈다).
 #     key=value 줄을 출력하고 GITHUB_OUTPUT이 있으면 거기에도 쓴다: version-name, version-code, prerelease, sha, previous-tag, gateway-changed
 #   scripts/release-gate.sh ci <커밋>
 #     그 커밋의 ci-passed 검사(main push로 생긴다)가 끝날 때까지 기다리고 성공이어야 통과한다.
 #   scripts/release-gate.sh gateway <커밋>
 #     main의 가장 최근 "Deploy API gateway" 실행이 끝날 때까지 기다리고, 성공했으며 그 실행이 배포한 커밋의
 #     workers/api·deploy-api.yml이 이 커밋과 같아야 통과한다(운영 게이트웨이가 이 릴리스의 게이트웨이 코드를 돌린다).
+#     게이트웨이가 바뀌지 않은 릴리스는 이미 끝난 앞 배포가 같은 코드라 바로 통과한다.
 #
 # 환경 변수: REPO(owner/name, 기본 GITHUB_REPOSITORY), WAIT_MINUTES(ci 기본 40, gateway 기본 20), POLL_SECONDS(기본 30).
 # 종료 코드: 0 통과, 1 실패, 2 사용법 오류
@@ -50,13 +52,13 @@ cmd_tag() {
   prev=$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude "$tag" "$sha" 2>/dev/null || true)
   if [ -z "$prev" ]; then
     changed=true
-    echo "앞 릴리스 태그가 없습니다(첫 릴리스). 운영 게이트웨이 배포를 확인합니다."
+    echo "앞 v 태그가 없습니다(첫 릴리스)."
   elif git diff --quiet "$prev" "$sha" -- "${gateway_paths[@]}"; then
     changed=false
-    echo "앞 릴리스 $prev 뒤 게이트웨이(${gateway_paths[*]})가 바뀌지 않았습니다."
+    echo "앞 v 태그 $prev 뒤 게이트웨이(${gateway_paths[*]})가 바뀌지 않았습니다."
   else
     changed=true
-    echo "앞 릴리스 $prev 뒤 게이트웨이가 바뀌었습니다. 운영 게이트웨이 배포를 확인합니다."
+    echo "앞 v 태그 $prev 뒤 게이트웨이가 바뀌었습니다."
   fi
   emit "previous-tag=$prev"
   emit "gateway-changed=$changed"
@@ -104,7 +106,9 @@ cmd_gateway() {
       elif [ "$conclusion" != success ]; then
         fail "main의 최근 게이트웨이 배포가 $conclusion 입니다($url). 배포를 고쳐 성공시킨 뒤(Actions에서 다시 실행) 이 실행을 다시 돌리세요. 배포가 실패한 릴리스에는 태그를 달지 않습니다."
       elif ! git cat-file -e "$run_sha^{commit}" 2>/dev/null; then
-        state="배포 커밋 $run_sha 을 받지 못함"
+        # checkout 뒤 main이 움직였으면 배포 커밋이 아직 없다. 다음 확인 전에 main을 다시 받는다(공개 저장소라 인증 없이 된다).
+        state="배포 커밋 $run_sha 을 아직 받지 못함"
+        git fetch --quiet origin main 2>/dev/null || true
       elif git diff --quiet "$run_sha" "$sha" -- "${gateway_paths[@]}"; then
         echo "운영 게이트웨이 배포 성공, 이 커밋과 같은 게이트웨이 코드: $url (배포 커밋 $run_sha)"
         return 0

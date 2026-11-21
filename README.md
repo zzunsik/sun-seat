@@ -93,7 +93,8 @@ JDK 25와 Android SDK(platform 37)가 필요합니다. Android Studio는 없어�
 ```bash
 gh release download vX.Y.Z -R zzunsik/sun-seat
 sha256sum -c sun-seat-vX.Y.Z.apk.sha256                          # 체크섬
-gh attestation verify sun-seat-vX.Y.Z.apk -R zzunsik/sun-seat    # 이 저장소의 릴리스 워크플로가 만들었는지
+# 이 저장소의 릴리스 워크플로가 만들었는지
+gh attestation verify sun-seat-vX.Y.Z.apk -R zzunsik/sun-seat --signer-workflow zzunsik/sun-seat/.github/workflows/release.yml
 apksigner verify --print-certs sun-seat-vX.Y.Z.apk               # 서명 인증서 SHA-256이 릴리스 노트·이전 릴리스와 같은지
 ```
 
@@ -126,7 +127,7 @@ keytool -genkeypair -keystore "$HOME/.sun-seat/release.jks" -alias sun-seat \
   -keyalg RSA -keysize 3072 -validity 10000
 ```
 
-`local.properties`에 다음을 더합니다. 경로는 절대 경로나 저장소 기준 상대 경로입니다. Windows 경로는 `/`를 쓰거나 `\`를 이스케이프합니다. 같은 이름의 환경 변수로 넘겨도 됩니다(`local.properties`가 먼저입니다. 릴리스 워크플로가 이 방법을 씁니다).
+`local.properties`에 다음을 더합니다. 경로는 절대 경로나 저장소 기준 상대 경로입니다. Windows 경로는 `/`를 쓰거나 `\`를 이스케이프합니다. 같은 이름의 환경 변수로 넘겨도 됩니다(`local.properties`가 먼저입니다. 릴리스 워크플로가 이 방법을 씁니다). 셸에 `RELEASE_*` 환경 변수가 남아 있으면 로컬 빌드에도 쓰이고, 값의 앞뒤 공백은 지워집니다.
 
 ```properties
 RELEASE_STORE_FILE=/path/to/.sun-seat/release.jks
