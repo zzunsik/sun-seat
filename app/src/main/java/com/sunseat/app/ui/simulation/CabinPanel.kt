@@ -80,8 +80,8 @@ internal fun CabinPanel(point: TimelinePoint, mode: TravelMode, state: Simulatio
         // #161: 글이 한 줄에 안 들어가면 "자리 고르기"를 아래로 내려 글이 단어 중간에서 꺾이지 않게 한다(DESIGN 4.4).
         com.sunseat.app.ui.components.ReflowRow(modifier = Modifier.fillMaxWidth(), text = {
             Column {
-                Text(stringResource(R.string.simulation_selected_seat,chosen.label()),style=MaterialTheme.typography.titleSmall)
-                Text(profileLabel,style=MaterialTheme.typography.bodySmall,color=SunSeatTheme.scheme.onSurfaceVariant)
+                Text(stringResource(R.string.simulation_selected_seat,chosen.label()),style=MaterialTheme.typography.titleSmall.copy(lineBreak=WordLineBreak))
+                Text(profileLabel,style=MaterialTheme.typography.bodySmall.copy(lineBreak=WordLineBreak),color=SunSeatTheme.scheme.onSurfaceVariant)
             }
         }, action = {
             Box {
@@ -236,3 +236,10 @@ private fun CabinScene(profile: CabinProfile, light: CabinLight, selected: Strin
         onDispose { owner.lifecycle.removeObserver(observer); current?.close() }
     }
 }
+
+/** #161: 좁은 화면·큰 글자에서 라벨이 단어("모형 2번", "시내버스(추정)") 중간에서 꺾이지 않게 어절 단위로 줄을 바꾼다(DESIGN 4.4). */
+private val WordLineBreak = androidx.compose.ui.text.style.LineBreak(
+    strategy = androidx.compose.ui.text.style.LineBreak.Strategy.Balanced,
+    strictness = androidx.compose.ui.text.style.LineBreak.Strictness.Strict,
+    wordBreak = androidx.compose.ui.text.style.LineBreak.WordBreak.Phrase,
+)
