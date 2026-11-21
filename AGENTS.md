@@ -159,7 +159,7 @@
 
 ### 비밀 정보
 
-- `KAKAO_NATIVE_APP_KEY`, 게이트웨이 주소(`SUNSEAT_API_BASE_URL_DEBUG`·`_RELEASE`), `sdk.dir`, 서명 키 정보는 `local.properties`에만 둔다. 이 파일과 키 파일(`*.jks`, `*.keystore`)은 커밋하지 않는다. CI는 빈 키·주소로 빌드하고 저장소 Secrets를 쓰지 않는다. 게이트웨이 배포(`deploy-api.yml`)만 GitHub Environment 시크릿을 쓴다(아래 "저장소 설정").
+- `KAKAO_NATIVE_APP_KEY`, 게이트웨이 주소(`SUNSEAT_API_BASE_URL_DEBUG`·`_RELEASE`, 릴리스 워크플로는 같은 이름의 환경 변수로도 넘길 수 있다), `sdk.dir`, 서명 키 정보는 `local.properties`에만 둔다. 이 파일과 키 파일(`*.jks`, `*.keystore`)은 커밋하지 않는다. CI는 빈 키·주소로 빌드하고 저장소 Secrets를 쓰지 않는다. 게이트웨이 배포(`deploy-api.yml`)만 GitHub Environment 시크릿을 쓴다(아래 "저장소 설정").
 - 카카오 REST API 키는 APK에 넣지 않는다. 앱 API 게이트웨이(`workers/api`, Cloudflare Workers)의 시크릿(`wrangler secret put KAKAO_REST_API_KEY`)에만 두고, 앱은 게이트웨이를 부른다(#189). 로컬 `wrangler dev`용 `workers/api/.dev.vars`도 커밋하지 않는다. CI의 `check-apk-secrets.sh`가 빌드 산출물에 키 경로가 없는지 확인한다.
 - 게이트웨이 주소(운영 `https://api.<하위 도메인>.workers.dev`, 개발 `https://api-dev.<하위 도메인>.workers.dev`)는 비밀이 아니지만 저장소에 고정하지 않고 빌드 설정으로 넣는다. 새 외부 API 키도 같은 방식(게이트웨이 경로 묶음 + 시크릿)으로 붙인다.
 - 워크플로에서 비밀 값이나 환경 전체를 출력하지 않는다(`echo $SECRET`, `env`, 실패 시 설정 덤프).

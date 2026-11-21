@@ -23,6 +23,12 @@ on:
 permissions:
   contents: read
 
+# 같은 브랜치(= 같은 환경)의 실행은 테스트부터 한 번에 하나씩 돈다. 테스트를 job 단위로만 묶으면 늦게 push한 커밋이
+# 먼저 배포되고 앞 커밋이 그 위를 덮을 수 있다. 도는 실행은 취소하지 않고, 기다리는 실행은 가장 최근 것만 남는다.
+concurrency:
+  group: deploy-api-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   # 배포 전에 CI의 api-worker job과 같은 타입 검사·테스트를 다시 돌린다. 이 job에는 시크릿이 없다.
   test:
@@ -75,10 +81,6 @@ jobs:
     environment:
       name: api-${{ needs.test.outputs.target }}
       url: ${{ steps.deploy.outputs.url }}
-    # 같은 환경에는 한 번에 하나만 배포한다. 배포 중인 실행은 취소하지 않는다(뒤 실행은 기다린다).
-    concurrency:
-      group: deploy-api-${{ needs.test.outputs.target }}
-      cancel-in-progress: false
     env:
       TARGET: ${{ needs.test.outputs.target }}
     defaults:
@@ -151,9 +153,10 @@ jobs:
             code=$(status "$allowed")
             [ "$code" = 200 ] && break
             if [ "$code" = 503 ]; then
-              echo "::error::허용 경로가 503(not_configured)입니다. 이 Worker에 시크릿 KAKAO_REST_API_KEY가 없습니다. workers/api/README.md \"카카오 키 넣기\"를 봅니다."
+              echo "::error::허용 경로가 503입니다. 이 Worker의 시크릿 KAKAO_REST_API_KEY가 비었거나(not_configured) 카카오가 503을 돌려줬습니다. workers/api/README.md \"카카오 키 넣기\"를 봅니다."
               exit 1
             fi
+            [ "$i" = 6 ] && break
             echo "허용 경로 응답 $code, 5초 뒤 다시 확인($i/6)"
             sleep 5
           done

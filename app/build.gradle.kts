@@ -49,7 +49,7 @@ android {
         // 카카오 REST 호출은 앱 API 게이트웨이(workers/api)로 간다(#189). REST 키는 게이트웨이의 시크릿에만 두고 APK에 넣지 않는다.
         // 게이트웨이 주소 BuildConfig.SUNSEAT_API_BASE_URL은 빌드 종류마다 다르다(아래 buildTypes, #191).
         if (!localProps.getProperty("KAKAO_REST_API_KEY").isNullOrBlank()) {
-            logger.warn("local.properties의 KAKAO_REST_API_KEY는 더 이상 쓰지 않습니다(#189). 지우고 SUNSEAT_API_BASE_URL을 설정하세요.")
+            logger.warn("local.properties의 KAKAO_REST_API_KEY는 더 이상 쓰지 않습니다(#189). 지우고 SUNSEAT_API_BASE_URL_DEBUG·SUNSEAT_API_BASE_URL_RELEASE를 설정하세요.")
         }
     }
 
