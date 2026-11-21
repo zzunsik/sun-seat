@@ -183,6 +183,18 @@ motion() { [ "$1" = DOWN ] && front_or_exit "motionevent DOWN"; sh_ input motion
 alive() { sh_ pidof "$PKG" | grep -q .; }
 # 지도 카메라 debug 로그(#168)의 마지막 줄에서 경로 외곽 상자와 표식 상자(px)만 꺼낸다. 로그가 없으면 빈 문자열.
 footprints() { "$ADB" -s "$serial" logcat -d -s SunSeatMapCamera:D 2>/dev/null | tr -d '\r' | grep -o 'route=.*' | tail -1; }
+# 지도 카메라 debug 로그의 마지막 줄(모드부터). 로그가 없으면 빈 문자열.
+camera_line() { "$ADB" -s "$serial" logcat -d -s SunSeatMapCamera:D 2>/dev/null | tr -d '\r' | grep -o 'mode=.*' | tail -1; }
+# #181: 첫 지도 맞춤이 적용되고 카메라가 멈출 때까지 기다린다: 마지막 줄이 mode=Fitted(...)이고 2초 뒤에도 같다. 시간(초) 안에 안 되면 1.
+wait_fitted() {
+  local end=$(( SECONDS + ${1:-20} )) prev="" cur
+  while [ $SECONDS -lt $end ]; do
+    cur=$(camera_line)
+    case "$cur" in mode=Fitted*) [ "$cur" = "$prev" ] && return 0 ;; esac
+    prev=$cur; sleep 2
+  done
+  return 1
+}
 wait_id() { # 아이디 시간(초)
   local end=$(( SECONDS + ${2:-15} ))
   while [ $SECONDS -lt $end ]; do dump; has_id "$1" && return 0; alive || return 1; sleep 1; done
@@ -281,7 +293,12 @@ fi
 
 if [ $list_ok = 1 ] && want 3; then
   begin 3 "시트를 약 60dp 올렸다 내림(#148)"
-  dump; s0=$(by_id candidates_sheet_handle); m0=$(map_band_px); f0=$(footprints)
+  # #181: 목록에 막 들어온 직후에는 첫 맞춤(후보 개요)이 아직 끝나지 않았을 수 있다. 맞춤이 적용되고 카메라가 멈춘 뒤에 처음 발자국을 잰다.
+  f0=""; fit_timeout=0
+  if [ -n "$(camera_line)" ]; then
+    if wait_fitted 20; then f0=$(footprints); else fit_timeout=1; fi
+  fi
+  dump; s0=$(by_id candidates_sheet_handle); m0=$(map_band_px)
   if [ -n "$s0" ]; then
     # 손을 떼지 않고 올린 채로 화면을 읽은 뒤 제자리로 내리고 뗀다(input motionevent). 떼고 다시 잡으면 시트가 걸림점으로 돌아가 버린다.
     read -r cx cy <<<"$(center "$s0")"; d=$(px 60)
@@ -306,7 +323,10 @@ if [ $list_ok = 1 ] && want 3; then
     alive; check $? "앱이 살아 있다"
     # #168: 시트만 움직이면 카메라도 지도 내용도 그대로다. debug 로그(보이는 영역·발자국 상자 px)의 마지막 줄을 전후로 비교한다.
     f2=$(footprints)
-    if [ -n "$f0" ] && [ -n "$f2" ]; then
+    if [ "$fit_timeout" = 1 ]; then
+      note "마지막 카메라 로그: [$(camera_line)]"
+      check 1 "첫 지도 맞춤이 20초 안에 끝나지 않아(mode=Fitted 줄이 2초 동안 그대로인 때가 없음) 지도 발자국을 비교하지 못했다"
+    elif [ -n "$f0" ] && [ -n "$f2" ]; then
       note "지도 발자국 처음 [$f0] → 내린 뒤 [$f2]"
       check "$([ "$f0" = "$f2" ] && echo 0 || echo 1)" "시트를 올렸다 내려도 지도 표식 위치가 그대로다(#148)"
     else note "지도 카메라 debug 로그(SunSeatMapCamera)가 없어 지도 발자국은 비교하지 않았다(release 빌드이거나 지도를 쓸 수 없음)"; fi
