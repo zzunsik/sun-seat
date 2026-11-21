@@ -49,10 +49,10 @@ class SimulationScreenshotTest {
         val advisor = TripAdvisor(ExposureAnalyzer(source))
         return TripTimeline(route, advisor.advise(route, start, SunGoal.AVOID, totalDuration = route.duration.plusMinutes(2)), source, advisor)
     }
-    private fun render(minute: Long, dark: Boolean, altitude: Double = 15.0, route: Route = this.route, following: Boolean = true, fontScale: Float = 1f, actions: SimulationActions = SimulationActions()) {
+    private fun render(minute: Long, dark: Boolean, altitude: Double = 15.0, route: Route = this.route, following: Boolean = true, fontScale: Float = 1f, actions: SimulationActions = SimulationActions(), keyAvailable: Boolean? = null) {
         val timeline = timeline(altitude, route)
         compose.enableAccessibilityChecks()
-        compose.setContent { CompositionLocalProvider(LocalMapRenderer provides MapRenderer.PREVIEW, LocalDensity provides Density(LocalDensity.current.density, fontScale)) {
+        compose.setContent { CompositionLocalProvider(LocalMapRenderer provides MapRenderer.PREVIEW, LocalDensity provides Density(LocalDensity.current.density, fontScale), com.sunseat.app.ui.map.LocalMapKeyAvailable provides keyAvailable) {
             SunSeatTheme(darkTheme = dark) {
                 SimulationScreen(request, route, timeline.result, SimulationUiState(minute * 60_000, following = following), timeline.at(start.plusSeconds(minute * 60)), timeline.boundaries, actions, zone = zone)
             }
@@ -125,6 +125,12 @@ class SimulationScreenshotTest {
         val follow = compose.onNodeWithText(app.getString(R.string.simulation_follow)).fetchSemanticsNode().boundsInRoot
         assertTrue("follow control must be outside the map, including native logo and destination markers", follow.top >= map.bottom)
         shot(name)
+    }
+    /** #180: 지도를 쓸 수 없으면 카메라를 다시 따라가게 하는 따라가기 줄을 두지 않는다. */
+    @Test fun followRowIsHiddenWhenTheMapIsUnavailable() {
+        render(6, false, following = false, keyAvailable = false)
+        compose.onNode(androidx.compose.ui.test.hasTestTag("simulation_follow_row")).assertDoesNotExist()
+        compose.onNode(androidx.compose.ui.test.hasTestTag("simulation_info_card")).assertExists()
     }
     @Test fun followButtonRetainsItsAction() {
         var followed = false

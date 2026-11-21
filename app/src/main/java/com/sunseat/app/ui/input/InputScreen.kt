@@ -106,6 +106,8 @@ fun InputScreen(
     val endpoints = state.origin?.place to state.destination?.place
     var fittedEndpoints by remember { mutableStateOf(endpoints) }
     var fitRevision by remember { mutableLongStateOf(0L) }
+    // #180: 지도를 쓸 수 없으면 카메라만 옮기는 현재 위치 버튼을 숨긴다(없는 지도 위에 남지 않게).
+    var mapUnavailable by remember { mutableStateOf(false) }
     LaunchedEffect(endpoints) { if (endpoints != fittedEndpoints) { fittedEndpoints = endpoints; fitRevision++ } }
     Surface(modifier.fillMaxSize(), color = scheme.background, contentColor = scheme.onSurface) {
         BoxWithConstraints(Modifier.fillMaxSize().onGloballyPositioned { boxTop = with(density) { it.positionInRoot().y.toDp() } }) {
@@ -123,6 +125,7 @@ fun InputScreen(
                 automaticFit = false,
                 cameraRevision = fitRevision,
                 fitEnabled = panelBottom > 0.dp,
+                onUnavailable = { mapUnavailable = true },
             ), Modifier.fillMaxSize().testTag(INPUT_MAP_TAG).semantics {
                 this[com.sunseat.app.ui.map.MapTopPaddingKey] = mapTop.value
                 this[com.sunseat.app.ui.map.MapCameraRevisionKey] = fitRevision
@@ -154,7 +157,7 @@ fun InputScreen(
                     Text(stringResource(R.string.input_same_endpoints), Modifier.fillMaxWidth().padding(Spacing.l), style = MaterialTheme.typography.bodyMedium, color = scheme.error)
                 }
             }
-            Surface(Modifier.align(Alignment.BottomEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(Spacing.l), shape = androidx.compose.foundation.shape.CircleShape, color = scheme.surface) {
+            if (!mapUnavailable) Surface(Modifier.align(Alignment.BottomEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(Spacing.l), shape = androidx.compose.foundation.shape.CircleShape, color = scheme.surface) {
                 IconButton(onClick = actions.showCurrentLocationOnMap, enabled = !state.mapLocating, modifier = Modifier.size(Spacing.touch)) {
                     Icon(painterResource(R.drawable.ic_ms_my_location), stringResource(R.string.location_use_current), tint = scheme.onSurface)
                 }

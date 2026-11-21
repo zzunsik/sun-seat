@@ -10,6 +10,8 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ApplicationProvider
 import com.sunseat.app.R
 import com.sunseat.app.domain.LatLng
@@ -79,6 +81,24 @@ class MapAvailabilityTest {
         // 아래 패널은 다음 행동만 말한다(같은 안내를 두 번 읽지 않는다).
         assertEquals(1, compose.onAllNodes(hasText(text(R.string.map_pick_unavailable))).fetchSemanticsNodes().size)
         assertEquals(0, compose.onAllNodes(hasContentDescription("가운데 핀 위치", substring = true)).fetchSemanticsNodes().size)
+    }
+
+    /** #180: 지도 선택에서 지도를 쓸 수 없으면 꺼진 선택 버튼 대신 검색으로 돌아가는 켜진 버튼을 준다(실제 터치로 누른다). */
+    @Test fun mapPickOffersBackToSearchWhenUnavailable() {
+        val pin = LatLng(37.56, 126.98)
+        var cancelled = 0
+        val pick = MapPickState(EndpointField.DESTINATION, pin, MapFocus(pin, 1), status = PickAddressStatus.NONE).copy(mapUnavailable = true)
+        render { MapPickScreen(pick, InputActions(cancelMapPick = { cancelled++ }), NamedPlace("서울역", LatLng(37.5547, 126.9707)), null) }
+        assertEquals(0, compose.onAllNodes(hasText(text(R.string.map_pick_confirm_destination))).fetchSemanticsNodes().size)
+        compose.onNode(hasText(text(R.string.map_pick_back_to_search))).performTouchInput { click() }
+        assertEquals(1, cancelled)
+    }
+
+    /** #180: 입력 화면은 지도를 쓸 수 없으면 카메라만 옮기는 현재 위치 버튼을 숨긴다. */
+    @Test fun inputHidesTheMapLocationButtonWhenUnavailable() {
+        render { com.sunseat.app.ui.input.InputScreen(com.sunseat.app.ui.input.InputUiState(), InputActions()) }
+        compose.mainClock.advanceTimeBy(1000); compose.waitForIdle()
+        assertEquals(0, compose.onAllNodes(hasContentDescription(text(R.string.location_use_current)) and androidx.compose.ui.test.hasClickAction()).fetchSemanticsNodes().size)
     }
 
     @Test fun routeMapReadsOnlyTheNotice() {

@@ -151,7 +151,10 @@ internal fun MapPickScreen(
                     }
                 }
                 notice?.invoke()
-                PrimaryButton(onClick = actions.confirmMapPick, enabled = pick.canConfirm, modifier = Modifier.fillMaxWidth()) {
+                // #180: 지도를 쓸 수 없으면 꺼진 선택 버튼 대신, 안내한 다음 행동(검색으로 돌아가기)을 켜진 버튼으로 준다.
+                if (pick.mapUnavailable) PrimaryButton(onClick = actions.cancelMapPick, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.map_pick_back_to_search))
+                } else PrimaryButton(onClick = actions.confirmMapPick, enabled = pick.canConfirm, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(if (isOrigin) R.string.map_pick_confirm_origin else R.string.map_pick_confirm_destination))
                 }
             }

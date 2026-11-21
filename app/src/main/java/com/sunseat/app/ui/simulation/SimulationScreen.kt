@@ -6,6 +6,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -72,11 +76,13 @@ fun SimulationScreen(
         if (p.position == null || p.heading == null) null
         else MapCursor(p.position, p.heading, p.sun?.azimuth ?: 0.0, if (p.undergroundOrUnknown) -90.0 else p.sun?.altitude ?: -90.0)
     }
+    // #180: 지도를 쓸 수 없으면 카메라를 다시 따라가게 하는 따라가기 줄을 두지 않는다(정보 카드는 글자 정보라 남긴다).
+    var mapUnavailable by remember { mutableStateOf(false) }
     @Composable fun JourneyMap(mapModifier: Modifier) {
         Column(mapModifier) {
             Box(Modifier.fillMaxWidth().weight(1f).clipToBounds().testTag("simulation_map")) {
                 SunSeatMap(MapState(routes = listOf(route), origin = request.origin, destination = request.destination,
-                    cursor = cursor, followCursor = state.following, onGesture = actions.unfollow,
+                    cursor = cursor, followCursor = state.following, onGesture = actions.unfollow, onUnavailable = { mapUnavailable = true },
                     routeProgress = point?.routeProgress ?: 0f, showDecorations = false,
                     padding=MapPadding(top=Sizes.simulationMapInfo,bottom=Spacing.s)), Modifier.fillMaxSize())
                 Surface(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(Spacing.s).testTag("simulation_info_card"),color=scheme.surface,shape=MaterialTheme.shapes.medium) {
@@ -105,7 +111,7 @@ fun SimulationScreen(
                 }
             }
             // A separate row cannot cover the SDK logo or any map marker, at any font size.
-            if (!state.following) Surface(Modifier.fillMaxWidth().testTag("simulation_follow_row"), color = scheme.surface) {
+            if (!state.following && !mapUnavailable) Surface(Modifier.fillMaxWidth().testTag("simulation_follow_row"), color = scheme.surface) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.s), horizontalArrangement = Arrangement.End) {
                     QuietButton(onClick = actions.follow) { Text(stringResource(R.string.simulation_follow)) }
                 }
