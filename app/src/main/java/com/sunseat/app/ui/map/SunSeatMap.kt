@@ -395,7 +395,7 @@ internal fun routeSummary(route: com.sunseat.app.domain.Route?): String? {
  * TalkBack은 "도착지는 화면 밖 오른쪽 위" 같은 방향 글로 읽는다. 누르는 행동은 없다.
  */
 @Composable
-private fun OffscreenDestinationCue(x: Float, y: Float, overlays: MapPadding, modifier: Modifier) {
+private fun OffscreenDestinationCue(x: Float, y: Float, overlays: MapPadding, modifier: Modifier = Modifier) {
     val density = androidx.compose.ui.platform.LocalDensity.current
     val destination = stringResource(R.string.input_destination)
     val labels = CueDirection.entries.associateWith { stringResource(cueDirectionLabel(it)) }
