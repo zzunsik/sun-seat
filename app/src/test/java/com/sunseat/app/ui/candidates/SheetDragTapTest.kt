@@ -10,9 +10,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performTouchInput
 import com.sunseat.app.ui.map.LocalMapRenderer
 import com.sunseat.app.ui.map.MapRenderer
@@ -39,7 +41,7 @@ class SheetDragTapTest {
 
     private fun settle() { compose.mainClock.advanceTimeBy(5000); compose.waitForIdle() }
 
-    private fun render(fontScale: Float = 1f) {
+    private fun render(fontScale: Float = 1f, request: com.sunseat.app.domain.TripRequest = CandidatesFixtures.transitRequest) {
         val base = CandidatesFixtures.options.toUi(java.time.LocalDateTime.of(2026, 11, 15, 9, 0)).first()
         var state by mutableStateOf(CandidatesState.Options((0..9).map { base.copy(id = it) }))
         compose.setContent {
@@ -47,7 +49,7 @@ class SheetDragTapTest {
             val density = androidx.compose.ui.platform.LocalDensity.current
             CompositionLocalProvider(LocalMapRenderer provides MapRenderer.PREVIEW,
                 androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, fontScale)) {
-                SunSeatTheme { CandidatesScreen(CandidatesFixtures.transitRequest, state, CandidatesActions(onHighlight = { state = state.copy(selectedId = it.id) }, onSort = { sorts++ }), scaffoldState = sheet) }
+                SunSeatTheme { CandidatesScreen(request, state, CandidatesActions(onHighlight = { state = state.copy(selectedId = it.id) }, onSort = { sorts++ }), scaffoldState = sheet) }
             }
         }
         settle()
@@ -114,5 +116,49 @@ class SheetDragTapTest {
     fun tapsWorkAfterDragSmallScreenLargeText() {
         render(fontScale = 1.5f)
         dragUpThenTap()
+    }
+
+    /** 두 줄로 감기는 긴 장소명에서도 축약 여정 바 높이를 미리 재어 끄는 도중 시트 높이가 바뀌지 않는다. */
+    @Test fun tapsWorkAfterDragWithLongNames() {
+        val request = CandidatesFixtures.transitRequest
+        render(request = request.copy(origin = request.origin.copy(name = "아주 긴 견본 출발지 이름과 부가 설명"), destination = request.destination.copy(name = "아주 긴 견본 목적지 이름과 부가 설명")))
+        dragUpThenTap()
+    }
+
+    /** 끄는 동안 미뤄 둔 축약 여정 바 높이는 시트가 멈춘 뒤 반영되어, 완전 확장 시트 위끝이 바 바로 아래에 붙는다(틈·겹침 없음, #101). */
+    @Test fun expandedSheetMeetsJourneyBarAfterDrag() {
+        render()
+        compose.onNodeWithContentDescription("출발지와 도착지 바꾸기").assertExists()
+        dragHandle(-3000f)
+        assertSettled(SheetValue.Expanded)
+        val header = compose.onNodeWithTag("candidates_header").fetchSemanticsNode().boundsInRoot
+        val handle = compose.onNodeWithTag("candidates_sheet_handle", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertEquals("expanded sheet top meets the compact journey bar", header.bottom, handle.top, 1f)
+        compose.onNodeWithContentDescription("출발지와 도착지 바꾸기").assertDoesNotExist()
+    }
+
+    /** 완전 확장에서 미리보기 → 자리 결과 → Back(새 구성)으로 시트가 완전 확장으로 돌아온 뒤에도 정착하고 누름이 먹는다(#145 복원 경로). */
+    @Test fun tapsWorkAfterExpandedRestoreFromSeatResult() {
+        val base = CandidatesFixtures.options.toUi(java.time.LocalDateTime.of(2026, 11, 15, 9, 0)).first()
+        var state by mutableStateOf(CandidatesState.Options((0..9).map { base.copy(id = it) }))
+        val restoration = androidx.compose.ui.test.junit4.StateRestorationTester(compose)
+        restoration.setContent {
+            sheet = rememberBottomSheetScaffoldState()
+            CompositionLocalProvider(LocalMapRenderer provides MapRenderer.PREVIEW) {
+                SunSeatTheme { CandidatesScreen(CandidatesFixtures.transitRequest, state, CandidatesActions(onHighlight = { state = state.copy(selectedId = it.id) }), scaffoldState = sheet) }
+            }
+        }
+        settle()
+        dragHandle(-3000f)
+        assertSettled(SheetValue.Expanded)
+        compose.onNodeWithTag("candidate_1").performTouchInput { click() }
+        settle()
+        compose.onNodeWithTag("preview_seat").performTouchInput { click() }
+        restoration.emulateSavedInstanceStateRestore()
+        settle()
+        assertSettled(SheetValue.Expanded)
+        compose.onNodeWithTag("candidate_2").performTouchInput { click() }
+        settle()
+        compose.onNodeWithTag("candidates_preview_sheet").assertExists()
     }
 }

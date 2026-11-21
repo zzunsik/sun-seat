@@ -234,7 +234,12 @@ fun CandidatesScreen(
     val peek = (if (preview) previewPeek.coerceAtMost((maxHeight - peekTop).coerceAtLeast(Spacing.touch) / 2) else Sizes.mapHeight + Sizes.mapHeight / 2 + Spacing.touch + Spacing.xxl)
         .coerceAtMost((maxHeight - peekTop).coerceAtLeast(Spacing.touch))
     // 완전 확장한 시트(손잡이 포함)의 위끝은 축약 여정 바 바로 아래다. 바·손잡이를 재기 전에는 최소 높이로 어림한다.
-    val listSheetMax = (maxHeight - (if (journeyBarHeight > 0.dp) journeyBarHeight else journeyBarEstimate) - (if (dragHandleHeight > 0.dp) dragHandleHeight else Spacing.touch)).coerceAtLeast(Spacing.touch)
+    // #162: 끄는 도중 축약 여정 바가 처음 나타나 높이를 재면 시트 최대 높이(앵커)가 드래그 중에 바뀌고, 그러면 시트가 드래그 상태에 멈춰
+    // 이후 카드·탭·정렬·여정 바 누름을 모두 가져간다. 시트가 끌리거나 움직이는 동안에는 직전 값을 쓰고 멈춘 뒤에 새 높이를 반영한다.
+    val sheetMoving = scaffoldState.bottomSheetState.isAnimationRunning
+    var sheetJourneyBar by remember { mutableStateOf(journeyBarHeight) }
+    if (!sheetMoving && sheetJourneyBar != journeyBarHeight) SideEffect { sheetJourneyBar = journeyBarHeight }
+    val listSheetMax = (maxHeight - (if (sheetJourneyBar > 0.dp) sheetJourneyBar else journeyBarEstimate) - (if (dragHandleHeight > 0.dp) dragHandleHeight else Spacing.touch)).coerceAtLeast(Spacing.touch)
     // 시트가 펼친 헤더 아래끝보다 올라오면(완전 확장·중간 드래그) 펼친 헤더를 통째로 접고 축약 여정 바로 바꾼다.
     // 시트 앵커는 헤더 높이와 무관하므로 바뀌어도 시트가 움직이지 않는다.
     val fullHeaderPx = with(density) { listHeader.toPx() }
