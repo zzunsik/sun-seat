@@ -189,6 +189,10 @@ private class MapSession(context: Context, private val ink: Int, private val sur
     private val decorations = mutableListOf<Label>()
     /** 재생 중 차량과 겹치면 숨기는 글자 표식(출발·도착·노선 배지)과 그 좌표(#146). */
     private val textLabels = mutableListOf<Pair<Label, LatLng>>()
+    /** 정류장 노선 이름표와 지금 정류장에서 떨어진 거리(#153), 출발·도착 표식과 그 좌표·몸통 폭. */
+    private class StopName(val label: Label, val stop: StopMarker, val name: String, var offset: Int)
+    private val stopNames = mutableListOf<StopName>()
+    private val pinLabels = mutableListOf<Triple<Label, LatLng, Float>>()
     private val hiddenLabels = mutableSetOf<Label>()
     private var metersPerPx = 0.0
     private var coverState: MapState? = null
@@ -208,6 +212,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
             target.setOnCameraMoveStartListener { _, type -> if (type != GestureType.Unknown) gesture() }
             target.setOnCameraMoveEndListener { moved, position, _ ->
                 if (position.zoomLevel != decorZoom) view.post { if (map === moved) decorate(moved) }
+                else view.post { if (map === moved) placeNames(moved) } // 회전 등 줌 밖의 카메라 변화(#153)
                 // Map picker (#85): the pin sits at the view centre with no padding, so the camera target is the pin.
                 cameraIdle?.let { report -> val at = LatLng(position.position.latitude, position.position.longitude); view.post { if (map === moved) report(at) } }
             }
@@ -240,20 +245,20 @@ private class MapSession(context: Context, private val ink: Int, private val sur
                 }
             }
             target.labelManager?.layer?.let { layer ->
-                layer.removeAll(); cursor = null; ray = null; myLocation = null; lastCursor = null; lastRayAltitude = null; lastVehicleLight=null; textLabels.clear(); hiddenLabels.clear()
+                layer.removeAll(); cursor = null; ray = null; myLocation = null; lastCursor = null; lastRayAltitude = null; lastVehicleLight=null; textLabels.clear(); hiddenLabels.clear(); stopNames.clear(); pinLabels.clear()
                 state.routes.getOrNull(state.selectedRoute)?.let { route ->
                     RouteLinePolicy.stops(route).forEach { stop ->
                         layer.addLabel(LabelOptions.from(stop.location.sdk()).setRank(STOP_RANK).setStyles(LabelStyle.from(stopIcon(stop.color.toArgb())).setApplyDpScale(false).setAnchorPoint(.5f, .5f)))
                         if (stop.labeled) {
                             // Line name beside the marker, on the side away from the outgoing line; dropped on collision.
                             val name = metrics.stopLabel(stop)
-                            layer.addLabel(LabelOptions.from(stop.location.sdk()).setRank(STOP_NAME_RANK).setStyles(LabelStyle.from(nameIcon(name, stop.color.toArgb(), stop.labelOnLeft)).setApplyDpScale(false).setAnchorPoint(if (stop.labelOnLeft) 1f else 0f, .5f)))
-                                ?.let { textLabels += it to stop.location }
+                            layer.addLabel(LabelOptions.from(stop.location.sdk()).setRank(STOP_NAME_RANK).setStyles(LabelStyle.from(nameIcon(name, stop.color.toArgb(), stop.labelOnLeft, (metrics.stop / 2).toInt())).setApplyDpScale(false).setAnchorPoint(if (stop.labelOnLeft) 1f else 0f, .5f)))
+                                ?.let { textLabels += it to stop.location; stopNames += StopName(it, stop, name, (metrics.stop / 2).toInt()) }
                         }
                     }
                 }
-                state.origin?.let { place -> layer.addLabel(LabelOptions.from(place.location.sdk()).setRank(PLACE_RANK).setStyles(LabelStyle.from(startIcon).setApplyDpScale(false).setAnchorPoint(.5f, 1f)))?.let { textLabels += it to place.location } }
-                state.destination?.let { place -> layer.addLabel(LabelOptions.from(place.location.sdk()).setRank(PLACE_RANK).setStyles(LabelStyle.from(endIcon).setApplyDpScale(false).setAnchorPoint(.5f, 1f)))?.let { textLabels += it to place.location } }
+                state.origin?.let { place -> layer.addLabel(LabelOptions.from(place.location.sdk()).setRank(PLACE_RANK).setStyles(LabelStyle.from(startIcon).setApplyDpScale(false).setAnchorPoint(.5f, 1f)))?.let { textLabels += it to place.location; pinLabels += Triple(it, place.location, startIcon.width.toFloat()) } }
+                state.destination?.let { place -> layer.addLabel(LabelOptions.from(place.location.sdk()).setRank(PLACE_RANK).setStyles(LabelStyle.from(endIcon).setApplyDpScale(false).setAnchorPoint(.5f, 1f)))?.let { textLabels += it to place.location; pinLabels += Triple(it, place.location, endIcon.width.toFloat()) } }
             }
             decorRoute = state.routes.getOrNull(state.selectedRoute); decorZoom = null; lineDensity = density; walkLines.clear(); decorations.clear()
         }
@@ -263,7 +268,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         val move = fitPolicy.camera(state)
         if (geometryChanged) labelSides = state.routes.getOrNull(state.selectedRoute)?.let { route ->
             val paint = textPaint(ink)
-            labelExtents(RouteLinePolicy.stops(route), metrics.stop / 2) { stop -> paint.measureText(metrics.stopLabel(stop)) + metrics.textPadding * 3 } // 상자 폭 + 가장자리 틈(Spacing.xs)
+            labelExtents(RouteLinePolicy.stops(route), metrics.stop / 2, if (state.origin != null) startIcon.width / 2f + metrics.textPadding else 0f) { stop -> paint.measureText(metrics.stopLabel(stop)) + metrics.textPadding * 3 } // 상자 폭 + 가장자리 틈(Spacing.xs)
         } ?: (0f to 0f)
         val labels = if (fitPolicy.labelMargins) labelSides else 0f to 0f
         val top = state.padding.top.value * density
@@ -327,6 +332,29 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         lastCursor = position
         coverState = state
         uncover()
+        // #153: 새로 만든 이름표·차량에 가려 숨기거나 다시 보인 표식에 맞춰 이름표 자리를 다시 잰다(바뀐 것만 다시 그린다).
+        placeNames(target)
+    }
+
+    /**
+     * #153: 출발·도착 표식 밑에 들어간 정류장 노선 이름표를 표식 바깥으로 민다([stopLabelOffset], 테스트 지도와 같은 규칙).
+     * 화면에서 표식과 정류장 사이 거리는 카메라에 따라 바뀌므로 [update]마다와 카메라 이동이 끝날 때 다시 잰다.
+     */
+    private fun placeNames(target: KakaoMap) {
+        if (stopNames.isEmpty()) return
+        val paint = textPaint(ink)
+        val height = nameHeight(paint)
+        val pins = pinLabels.filter { it.first !in hiddenLabels }.mapNotNull { (_, at, width) -> target.toScreenPoint(at.sdk())?.let { it to width } }
+        val maxPush = (pins.maxOfOrNull { it.second } ?: 0f) + metrics.textPadding
+        stopNames.forEach { name ->
+            val stop = target.toScreenPoint(name.stop.location.sdk()) ?: return@forEach
+            val boxes = pins.map { (tip, width) -> placeMarkerBox((tip.x - stop.x).toFloat(), (tip.y - stop.y).toFloat(), width, metrics.marker, metrics.tail) }
+            val offset = stopLabelOffset(name.stop.labelOnLeft, paint.measureText(name.name) + metrics.textPadding * 2, height, metrics.stop / 2, boxes, metrics.textPadding, maxPush).toInt()
+            if (offset != name.offset) {
+                name.offset = offset
+                name.label.changeStyles(com.kakao.vectormap.label.LabelStyles.from(LabelStyle.from(nameIcon(name.name, name.stop.color.toArgb(), name.stop.labelOnLeft, offset)).setApplyDpScale(false).setAnchorPoint(if (name.stop.labelOnLeft) 1f else 0f, .5f)))
+            }
+        }
     }
 
     /** 차량과 겹치는 글자 표식을 숨기고 나머지는 보인다. 줌이 바뀌면 [decorate]가 다시 부른다. */
@@ -406,6 +434,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         decorZoom = target.cameraPosition?.zoomLevel
         this.metersPerPx = metersPerPx
         uncover()
+        placeNames(target)
         walkLines.forEach { it.remove() }; walkLines.clear()
         target.labelManager?.layer?.let { layer -> decorations.forEach { layer.remove(it) } }
         decorations.clear()
@@ -462,15 +491,17 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         }
     }
 
-    /** 탈 노선 이름. 표식 한쪽([onLeft])에 흰 바탕 글자로 두며, 이미지 가장자리에서 표식 반지름만큼 떨어진다. */
-    private fun nameIcon(name: String, color: Int, onLeft: Boolean): Bitmap {
+    private fun nameHeight(paint: Paint) = maxOf(metrics.labelHeight, -paint.ascent() + paint.descent() + metrics.textPadding)
+
+    /** 탈 노선 이름. 표식 한쪽([onLeft])에 흰 바탕 글자로 두며, 이미지 가장자리(정류장 좌표)에서 [offset]만큼 떨어진다(기본 표식 반지름, #153). */
+    private fun nameIcon(name: String, color: Int, onLeft: Boolean, offset: Int): Bitmap {
         val paint = textPaint(ink)
-        val width = paint.measureText(name) + metrics.textPadding * 2 + metrics.stop / 2
-        val height = maxOf(metrics.labelHeight, -paint.ascent() + paint.descent() + metrics.textPadding)
+        val width = paint.measureText(name) + metrics.textPadding * 2 + offset
+        val height = nameHeight(paint)
         return createBitmap(width.toInt().coerceAtLeast(1), height.toInt().coerceAtLeast(1)).also { bitmap ->
             val canvas = Canvas(bitmap)
-            val left = if (onLeft) 0f else metrics.stop / 2
-            val right = if (onLeft) width - metrics.stop / 2 else width
+            val left = if (onLeft) 0f else offset.toFloat()
+            val right = if (onLeft) width - offset else width
             val box = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = surface }
             canvas.drawRoundRect(left, 0f, right, height, height / 2, height / 2, box)
             box.color = color; box.style = Paint.Style.STROKE; box.strokeWidth = metrics.stopBorder / 2
@@ -484,7 +515,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         val transit = com.sunseat.app.ui.theme.MapRouteColors.transit.toArgb()
         val paint = textPaint(if (filled) surface else transit)
         val height = metrics.marker - metrics.tail
-        val width = maxOf(height, paint.measureText(text) + metrics.textPadding * 4)
+        val width = placeMarkerWidth(paint.measureText(text), metrics.marker, metrics.tail, metrics.textPadding)
         return createBitmap(width.toInt(), metrics.marker.toInt()).also { bitmap ->
             val canvas = Canvas(bitmap)
             val stroke = metrics.stopBorder
