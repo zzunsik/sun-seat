@@ -261,7 +261,24 @@ class CandidatesSheetTest {
         ), fontScale = 1.5f)
 
     @Test @Config(qualifiers = "w844dp-h390dp-xxhdpi")
-    fun expandedSheetLandscape() = expandAndCheckCompactBar()
+    fun expandedSheetLandscape() = landscapeHasNoSheetOrHeaderFragment()
+
+    /** #144: 가로는 아래 시트 대신 오른쪽 전체 높이 패널이라 완전 확장 상태가 없다. 펼친 헤더는 통째로 보이고 지도·목록과 겹치지 않는다(#101). */
+    private fun landscapeHasNoSheetOrHeaderFragment() {
+        var backs = 0
+        renderSheet { backs++ }
+        compose.onNodeWithTag("candidates_sheet_handle", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("candidates_journey_bar").assertDoesNotExist()
+        compose.onNodeWithContentDescription("출발지와 도착지 바꾸기").assertIsDisplayed()
+        val header = bounds("candidates_header")
+        val map = bounds("candidate_map")
+        val panel = bounds("candidates_sheet")
+        assertTrue("header $header sits above the map $map", header.bottom <= map.top + 0.5f)
+        assertTrue("list panel $panel sits beside header and map", panel.left >= header.right - 0.5f && panel.left >= map.right - 0.5f)
+        compose.onNodeWithTag("candidate_0").assertIsDisplayed()
+        compose.onNodeWithContentDescription("뒤로").performSemanticsAction(SemanticsActions.OnClick)
+        assertEquals(1, backs)
+    }
 
     @Test fun draggingSheetNeverLeavesHeaderFragment() = dragAcrossHeader()
 
