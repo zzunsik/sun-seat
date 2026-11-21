@@ -109,7 +109,19 @@ class CandidatesScreenshotTest {
     @Test @Config(qualifiers = "w320dp-h640dp-xxhdpi")
     fun expandedSmallLargeText() = expanded(false, "candidates_expanded_small_large_text", transitRequest.copy(origin = transitRequest.origin.copy(name = "아주 긴 견본 출발지 이름과 부가 설명"), destination = transitRequest.destination.copy(name = "아주 긴 견본 목적지 이름과 부가 설명")), 1.5f)
     @Test @Config(qualifiers = "w844dp-h390dp-xxhdpi")
-    fun expandedLandscape() = expanded(false, "candidates_expanded_landscape")
+    fun expandedLandscape() = landscapeList(false, "candidates_list_landscape")
+    @Test @Config(qualifiers = "w844dp-h390dp-xxhdpi")
+    fun listLandscapeDark() = landscapeList(true, "candidates_list_landscape_dark")
+
+    /** #144: 가로 목록 기본 상태. 왼쪽 펼친 헤더 + 지도, 오른쪽 전체 높이 목록 패널(완전 확장 상태 없음). */
+    private fun landscapeList(dark: Boolean, name: String) {
+        compose.enableAccessibilityChecks()
+        render(list, dark)
+        compose.onRoot().tryPerformAccessibilityChecks()
+        compose.onNodeWithContentDescription("출발지와 도착지 바꾸기").assertIsDisplayed()
+        compose.onNodeWithTag("candidate_action_${list.items.first().id}").assertIsDisplayed()
+        shot(name)
+    }
 
     /** 완전 확장: 펼친 헤더 조각 없이 축약 여정 바 + 시트 전체(#101). */
     @OptIn(ExperimentalMaterial3Api::class)
