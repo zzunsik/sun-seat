@@ -165,6 +165,8 @@ private class MapSession(context: Context, private val ink: Int, private val sur
     private var geometry: Triple<List<Route>, Int, Pair<com.sunseat.app.domain.NamedPlace?, com.sunseat.app.domain.NamedPlace?>>? = null
     private var padding: List<Int>? = null
     private var labelSides = 0f to 0f
+    /** #151: 정류장 이름표 높이 + 위아래 틈(이름표가 없으면 0). 경로가 바뀔 때만 잰다. */
+    private var labelHeight = 0f
     private val fitPolicy = MapFitPolicy()
     private var cursor: Label? = null
     private var ray: Label? = null
@@ -271,10 +273,12 @@ private class MapSession(context: Context, private val ink: Int, private val sur
             val paint = textPaint(ink)
             labelExtents(RouteLinePolicy.stops(route), metrics.stop / 2, if (state.origin != null) startIcon.width / 2f + metrics.textPadding else 0f) { stop -> paint.measureText(metrics.stopLabel(stop)) + metrics.textPadding * 3 } // 상자 폭 + 가장자리 틈(Spacing.xs)
         } ?: (0f to 0f)
+        if (geometryChanged) labelHeight = if (labelSides.first > 0f || labelSides.second > 0f) nameHeight(textPaint(ink)) + metrics.textPadding * 2 else 0f
         val labels = if (fitPolicy.labelMargins) labelSides else 0f to 0f
         val top = state.padding.top.value * density
         val bottom = state.padding.bottom.value * density
-        val frame = if (view.width > 0 && view.height > 0) fitFrame(top, bottom, view.width.toFloat(), view.height.toFloat(), metrics.inset, metrics.edge, metrics.marker + metrics.textPadding, labels.first, labels.second)
+        val frame = if (view.width > 0 && view.height > 0) fitFrame(top, bottom, view.width.toFloat(), view.height.toFloat(), metrics.inset, metrics.edge, metrics.marker + metrics.textPadding, labels.first, labels.second,
+            if (fitPolicy.labelMargins) labelHeight else 0f) // #151
             else FitFrame(top, bottom, 0f, metrics.inset)
         val applied = listOf(frame.left.toInt(), frame.top.toInt(), frame.right.toInt(), frame.bottom.toInt())
         if (geometryChanged || padding != applied) {
