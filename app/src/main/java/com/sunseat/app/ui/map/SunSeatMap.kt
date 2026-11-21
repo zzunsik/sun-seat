@@ -70,12 +70,18 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
     val busLabel = stringResource(R.string.common_bus)
     val subwayLabel = stringResource(R.string.common_subway)
     val moreLines = stringResource(R.string.map_line_more)
-    if (fitPolicy.shouldFit(state)) { camera.points = state.points(); camera.padding = state.padding; camera.revision++ }
+    when (fitPolicy.camera(state)) {
+        MapCamera.FIT_ROUTE -> { camera.points = state.points(); camera.padding = state.padding; camera.revision++ }
+        // Drawing follows the vehicle each frame (projectionBase); the framed bounds stay as the camera once following stops.
+        MapCamera.FRAME_FOLLOW -> { camera.points = state.followTarget?.let { followBounds(it) }.orEmpty(); camera.padding = state.padding; camera.revision++ }
+        MapCamera.NONE -> Unit
+    }
     LaunchedEffect(camera.revision, state.center) { pan = Offset.Zero }
     val latest by rememberUpdatedState(state)
     // #143: 정류장 노선 이름표가 정류장에서 뻗는 폭. 그리기와 같은 글자 측정으로 맞춤 틀 좌우 여백을 정한다.
     val density = androidx.compose.ui.platform.LocalDensity.current
-    val labelSides = state.routes.getOrNull(state.selectedRoute)?.let { route ->
+    // 차량을 따라갈 때(#146)는 이름표 여백을 두지 않는다(MapFitPolicy.labelMargins, 네이티브와 같음).
+    val labelSides = state.routes.getOrNull(state.selectedRoute)?.takeIf { fitPolicy.labelMargins }?.let { route ->
         with(density) {
             labelExtents(RouteLinePolicy.stops(route), Sizes.mapStopMarker.toPx() / 2) { stop ->
                 val name = when {
@@ -142,12 +148,14 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
                 if (started) drawRouteLine(path, RouteLinePolicy.forLeg(leg.mode, leg.lineName, RouteRole.PASSED))
             }
         }
+        val markerPx = Sizes.mapMarker.toPx()
+        fun covered(at: com.sunseat.app.domain.LatLng) = state.coveredByVehicle(at, markerPx) { a, b -> (position(a) - position(b)).getDistance() }
         selected?.let { route -> RouteLinePolicy.stops(route).forEach { stop ->
             val p = position(stop.location)
             val radius = Sizes.mapStopMarker.toPx() / 2 - Sizes.mapStopBorder.toPx() / 2
             drawCircle(MapRouteColors.casing, radius, p)
             drawCircle(stop.color, radius, p, style = Stroke(Sizes.mapStopBorder.toPx()))
-            if (stop.labeled) {
+            if (stop.labeled && !covered(stop.location)) {
                 val name = when {
                     stop.lines.isEmpty() -> if (stop.mode == Mode.SUBWAY) subwayLabel else busLabel
                     stop.lines.size == 1 -> stop.lines.first()
@@ -163,8 +171,8 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
                 drawText(text, topLeft = Offset(left + pad, p.y - text.size.height / 2f))
             }
         } }
-        state.origin?.let { drawPlaceMarker(position(it.location), textMeasurer.measure(originLabel, labelStyle.copy(color = MapRouteColors.transit)), filled = false, surface = MapRouteColors.casing) }
-        state.destination?.let { drawPlaceMarker(position(it.location), textMeasurer.measure(destinationLabel, labelStyle.copy(color = MapRouteColors.casing)), filled = true, surface = MapRouteColors.casing) }
+        state.origin?.takeUnless { covered(it.location) }?.let { drawPlaceMarker(position(it.location), textMeasurer.measure(originLabel, labelStyle.copy(color = MapRouteColors.transit)), filled = false, surface = MapRouteColors.casing) }
+        state.destination?.takeUnless { covered(it.location) }?.let { drawPlaceMarker(position(it.location), textMeasurer.measure(destinationLabel, labelStyle.copy(color = MapRouteColors.casing)), filled = true, surface = MapRouteColors.casing) }
         state.focus?.let { val p = position(it.location); val radius = Sizes.mapMarker.toPx() / 3; drawCircle(scheme.surface, radius, p); drawCircle(scheme.onSurface, radius, p, style = Stroke(Sizes.mapRouteWalk.toPx())); drawCircle(scheme.onSurface, radius / 3, p) }
         state.cursor?.let { cursor ->
             val p = position(cursor.position)
@@ -209,8 +217,9 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
     }
 }
 
-/** 테스트 지도가 투영의 기준으로 삼는 좌표: 카메라 요청(지도 선택) → 현재 위치 초점 → 맞춤 좌표. */
-private fun MapState.projectionBase(fitted: List<com.sunseat.app.domain.LatLng>) = (center ?: focus)?.let { listOf(it.location) } ?: fitted
+/** 테스트 지도가 투영의 기준으로 삼는 좌표: 카메라 요청(지도 선택) → 현재 위치 초점 → 따라가는 차량 둘레(#146) → 맞춤 좌표. */
+private fun MapState.projectionBase(fitted: List<com.sunseat.app.domain.LatLng>) =
+    (center ?: focus)?.let { listOf(it.location) } ?: followTarget?.let { followBounds(it) } ?: fitted
 
 private class PreviewCamera {
     var revision = 0L

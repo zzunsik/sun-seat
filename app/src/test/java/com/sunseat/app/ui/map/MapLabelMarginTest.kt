@@ -1,9 +1,15 @@
 package com.sunseat.app.ui.map
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import com.sunseat.app.domain.Leg
+import com.sunseat.app.domain.NamedPlace
+import com.sunseat.app.domain.Route
+import java.time.Duration
 import com.sunseat.app.domain.LatLng
 import com.sunseat.app.domain.Mode
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -46,5 +52,22 @@ class MapLabelMarginTest {
         val (left, right) = labelExtents(stops, stopRadius = 7f) { stop -> if (stop.lines.firstOrNull() == "402") 50f else 60f }
         assertEquals(57f, left, 0.01f)
         assertEquals(67f, right, 0.01f)
+    }
+    @Test fun labelMarginsOnlyForRouteFitAndKeptUntilTheNextFitAfterFollowing() {
+        // 따라가기(#146)는 차량을 가운데에 둔다: 이름표 여백을 두면 차량이 한쪽으로 밀린다.
+        // 따라가기를 드래그로 멈춰도 다음 경로 맞춤 전까지 여백을 바꾸지 않아야 지도가 손가락 아래에서 밀리지 않는다.
+        val a = LatLng(37.555, 126.972); val b = LatLng(37.50, 127.00)
+        val route = Route(listOf(Leg(Mode.BUS, listOf(a, b), Duration.ofMinutes(20), "서울역 정류장", "종점", lineName = "402")))
+        val fit = MapState(routes = listOf(route), origin = NamedPlace("서울역", a), destination = NamedPlace("종점", b), padding = MapPadding(top = 84.dp))
+        val policy = MapFitPolicy()
+        assertEquals(MapCamera.FIT_ROUTE, policy.camera(fit))
+        assertTrue(policy.labelMargins)
+        val following = fit.copy(cursor = MapCursor(a, 30.0, 120.0, 30.0), followCursor = true, routeProgress = 0f)
+        assertEquals(MapCamera.FRAME_FOLLOW, policy.camera(following))
+        assertFalse(policy.labelMargins)
+        assertEquals(MapCamera.NONE, policy.camera(following.copy(followCursor = false)))
+        assertFalse("stopping follow must not change the frame", policy.labelMargins)
+        assertEquals(MapCamera.FIT_ROUTE, policy.camera(following.copy(followCursor = false, cameraRevision = 1)))
+        assertTrue(policy.labelMargins)
     }
 }
