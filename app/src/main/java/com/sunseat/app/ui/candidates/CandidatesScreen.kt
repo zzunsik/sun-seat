@@ -2,13 +2,15 @@ package com.sunseat.app.ui.candidates
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.layout.navigationBarsPadding
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import androidx.compose.foundation.verticalScroll
@@ -150,11 +152,26 @@ fun CandidatesScreen(
     val scheme = SunSeatTheme.scheme
     var showTime by rememberSaveable { mutableStateOf(false) }
     val options = state as? CandidatesState.Options
-    var showPreview by rememberSaveable(request.origin, request.destination, request.mode) { mutableStateOf(false) }
-    val previewCandidate = options?.visible?.firstOrNull { it.id == options.selectedId }
-    val preview = showPreview && previewCandidate != null
+    // #144: 가로 화면은 높이가 낮아 아래 시트로는 펼친 헤더·범주·정렬 아래에 후보 카드가 들어가지 않고 지도도 시트에 덮인다.
+    // 가로에서는 왼쪽에 펼친 헤더와 지도, 오른쪽에 화면 높이 전체의 목록(미리보기) 패널을 나란히 둔다(DESIGN 12.3).
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val landscape = configuration.screenWidthDp > configuration.screenHeightDp
+    // #171: 시트 자리·미리보기·결과에서 돌아오기·시트 움직임·방향·시트 앵커 측정값은 상태 하나다(CandidatesUiState).
+    // 화면은 이벤트만 보내고, 전환 함수가 돌려준 효과(시트 이동·스크롤·초점·카메라 맞춤)를 아래 효과 실행기가 차례로 실행한다.
+    // 회전·재생성·결과 화면 왕복에 남기고, 여정(출발·도착·수단)이 바뀌면 새로 시작한다.
+    var ui by rememberSaveable(request.origin, request.destination, request.mode, stateSaver = CandidatesUiStateSaver) {
+        mutableStateOf(CandidatesUiState(orientation = if (landscape) ScreenOrientation.Landscape else ScreenOrientation.Portrait))
+    }
+    val effects = remember { kotlinx.coroutines.channels.Channel<CandidatesEffect>(kotlinx.coroutines.channels.Channel.UNLIMITED) }
+    fun dispatch(event: CandidatesEvent) {
+        val transition = reduceCandidates(ui, event)
+        ui = transition.state
+        transition.effects.forEach { effects.trySend(it) }
+    }
+    fun measuredJourneyBar(height: Dp) { if (height.value != (ui.pendingJourneyBar ?: ui.journeyBar)) dispatch(CandidatesEvent.JourneyBarMeasured(height.value)) }
+    val previewCandidate = ui.preview?.let { entry -> options?.visible?.firstOrNull { it.id == entry.id } }
+    val preview = previewCandidate != null
     val listScroll = rememberLazyListState()
-    val scope = rememberCoroutineScope()
     var fitTrigger by remember { mutableLongStateOf(0L) }
     var fitRevision by remember { mutableLongStateOf(0L) }
     var fittedTrigger by remember { mutableLongStateOf(-1L) }
@@ -173,45 +190,69 @@ fun CandidatesScreen(
     // 사용자가 지도를 직접 움직였으면(카메라 모드 UserMoved) 미리보기 닫기만으로는 다시 맞추지 않는다(#71, DESIGN 12.3, 카메라 정책).
     val routes = options?.visible?.sortedBy { it.id }.orEmpty().map { it.chosen.route }
     val mapRoutes = candidateMapRoutes(options?.visible.orEmpty(), options?.selectedId, preview)
-    // #144: 가로 화면은 높이가 낮아 아래 시트로는 펼친 헤더·범주·정렬 아래에 후보 카드가 들어가지 않고 지도도 시트에 덮인다.
-    // 가로에서는 왼쪽에 펼친 헤더와 지도, 오른쪽에 화면 높이 전체의 목록(미리보기) 패널을 나란히 둔다(DESIGN 12.3).
-    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-    val landscape = configuration.screenWidthDp > configuration.screenHeightDp
-    // #145: 미리보기에 들어가기 전 목록 시트 높이(완전 확장/기본). 닫으면 이 높이로 되돌려, 펼쳐 둔 목록에서 고른 카드가 시트 아래로 밀리지 않게 한다.
-    // 목록 스크롤 위치는 그대로 두므로 고를 때 보이던 카드가 같은 자리에 다시 보인다. 회전·재생성 뒤에도 유지한다.
-    // 카드를 누를 때 시트가 끌리는 중이면 가장 가까운 앵커(targetValue)를 들어가기 전 높이로 본다.
-    var sheetBeforePreview by rememberSaveable { mutableStateOf(SheetValue.PartiallyExpanded) }
-    // 미리보기를 연 뒤 아직 목록 높이를 되돌리지 않았다. 미리보기에서 자리 결과로 갔다가 Back으로 돌아와도(새 구성) 되돌린다.
-    var restorePending by rememberSaveable { mutableStateOf(false) }
-    // 완전 확장으로 되돌리는 동안에는 시트가 잠깐 기본 앵커를 지나도 펼친 헤더를 끼워 보이지 않고 축약 여정 바를 유지한다(#101).
-    var restoringExpanded by remember { mutableStateOf(restorePending && !landscape && sheetBeforePreview == SheetValue.Expanded) }
-    var revealSelected by remember { mutableLongStateOf(0L) }
-    // 목록이 처음 그려지는 프레임부터 축약 여정 바를 유지하도록 닫기와 함께 표시한다.
-    fun closePreview() { restoringExpanded = !landscape && sheetBeforePreview == SheetValue.Expanded; showPreview = false }
-    BackHandler(enabled = preview) { closePreview() }
-    LaunchedEffect(routes, options?.selectedId) { requestFit(com.sunseat.app.ui.map.FitReason.SELECTION) }
-    // 이 화면 안에서 미리보기를 연 적이 있을 때만 닫힘을 맞춤 시점으로 본다(첫 구성·결과에서 복귀는 위 후보 집합 맞춤이 맡는다).
-    var previewShown by remember { mutableStateOf(false) }
-    LaunchedEffect(preview, landscape) {
-        if (preview) { previewShown = true; restorePending = true; androidx.compose.runtime.withFrameNanos { }; if (!landscape) scaffoldState.bottomSheetState.partialExpand(); requestFit(com.sunseat.app.ui.map.FitReason.PREVIEW_OPEN) }
-        // #135: 목록으로 돌아오면 시트가 목록 높이에 자리 잡은 뒤(아래 맞춤 효과가 기다린다) 보이는 지도 띠에 선택 경로를 다시 맞춘다.
-        // 완전 확장으로 돌아오면 보이는 지도 띠가 없어 맞춤은 사용자가 시트를 내려 지도가 처음 보일 때까지 기다린다.
-        // #145: 목록 내용이 그려진 뒤(목록 기준 앵커) 들어가기 전 시트 높이로 되돌리고, 선택 카드가 화면 밖이면 보이게 옮긴다(회전 등).
-        else if (restorePending || previewShown) {
-            val restore = restorePending
-            restoringExpanded = restore && !landscape && sheetBeforePreview == SheetValue.Expanded
-            try {
-                androidx.compose.runtime.withFrameNanos { }
-                if (restore) {
-                    if (landscape) Unit else if (sheetBeforePreview == SheetValue.Expanded) scaffoldState.bottomSheetState.expand() else scaffoldState.bottomSheetState.partialExpand()
-                    restorePending = false
-                    revealSelected++
+    val sheetState = scaffoldState.bottomSheetState
+    fun sheetTarget() = if (sheetState.targetValue == SheetValue.Expanded) SheetAnchor.Expanded else SheetAnchor.Default
+    BackHandler(enabled = preview) { dispatch(CandidatesEvent.PreviewClose(CloseSource.Back)) }
+    LaunchedEffect(routes, options?.selectedId) { dispatch(CandidatesEvent.CandidatesChanged) }
+    LaunchedEffect(landscape) { dispatch(CandidatesEvent.Rotate(if (landscape) ScreenOrientation.Landscape else ScreenOrientation.Portrait)) }
+    // 미리보기에서 자리 결과로 갔다가 Back으로 돌아오면(새 구성) 들어가기 전 시트 높이·선택 카드·초점으로 돌아간다(#145 #158).
+    LaunchedEffect(Unit) { if (ui.away != null) dispatch(CandidatesEvent.ReturnFromResult) }
+    // 목록 시트가 향하는 자리(끌기 중 가장 가까운 앵커). 미리보기·복원 중의 값은 전환 함수가 거른다.
+    LaunchedEffect(sheetState, landscape) { if (!landscape) snapshotFlow { sheetTarget() }.collect { dispatch(CandidatesEvent.SheetTarget(it)) } }
+    // #162: 시트가 끌리거나 움직이는 동안은 시트 앵커 측정값을 바꾸지 않는다. 움직임을 구성 시점에 읽어 같은 프레임의 측정보다 먼저 알린다.
+    val sheetMoving = !landscape && sheetState.isAnimationRunning
+    if (sheetMoving != (ui.gesture == SheetGesture.Moving)) SideEffect { dispatch(CandidatesEvent.SheetMotion(sheetMoving)) }
+    val density = LocalDensity.current
+    // #145: 목록이 화면에서 실제로 보이는 아래끝(목록 좌표). 기본 높이 시트에서는 목록 아랫부분이 화면 밖에 있다.
+    var listVisibleEnd by remember { mutableFloatStateOf(Float.MAX_VALUE) }
+    // #158: 카드마다 초점 요청자. 화면 읽기가 켜져 있으면 터치 모드에서도 카드가 초점을 받을 수 있게 한다.
+    val cardFocus = remember { HashMap<Int, androidx.compose.ui.focus.FocusRequester>() }
+    val screenReader = rememberTouchExplorationEnabled()
+    val currentScreenReader by rememberUpdatedState(screenReader)
+    val currentOptions by rememberUpdatedState(options)
+    val currentRequest by rememberUpdatedState(request)
+    // 효과 실행기: 전환 함수가 낸 효과를 낸 순서대로 실행한다. 시트 애니메이션이 사용자 끌기로 끊겨도 다음 효과는 실행한다.
+    LaunchedEffect(effects) {
+        suspend fun guarded(block: suspend () -> Unit) {
+            try { block() } catch (e: kotlinx.coroutines.CancellationException) { if (!kotlinx.coroutines.currentCoroutineContext().isActive) throw e }
+        }
+        for (effect in effects) when (effect) {
+            is CandidatesEffect.AnimateSheet -> try {
+                // 시트 내용(목록↔미리보기)이 바뀐 뒤의 앵커로 움직이도록 한 프레임 기다린다.
+                guarded {
+                    androidx.compose.runtime.withFrameNanos { }
+                    if (!ui.landscape) { if (effect.anchor == SheetAnchor.Expanded) sheetState.expand() else sheetState.partialExpand() }
                 }
-            } finally { restoringExpanded = false }
-            if (previewShown) requestFit(com.sunseat.app.ui.map.FitReason.PREVIEW_CLOSE)
+            } finally { dispatch(CandidatesEvent.SheetAnimated(effect.anchor)) }
+            CandidatesEffect.ScrollToTop -> guarded { listScroll.scrollToItem(0) }
+            is CandidatesEffect.Reveal -> guarded {
+                // 목록이 다시 구성되고 시트가 멈춘 뒤 판단한다. 미리보기 요약 높이에서 목록 높이로 시트 앵커가 바뀌는 데 몇 프레임 걸리므로
+                // 목록 윗부분이 화면에 들어올 때(목록 시트는 접혀도 최소 높이가 보인다)까지 기다린다.
+                val minVisible = with(density) { Spacing.touch.toPx() }
+                var frames = 0
+                do { androidx.compose.runtime.withFrameNanos { }; frames++ } while (frames < REVEAL_WAIT_FRAMES &&
+                    (listScroll.layoutInfo.totalItemsCount == 0 || sheetState.isAnimationRunning || listVisibleEnd < minVisible))
+                val items = currentOptions?.visible.orEmpty()
+                val position = items.indexOfFirst { it.id == effect.id }
+                if (position >= 0) {
+                    val index = position + optionListLeadingItems(currentRequest)
+                    val item = listScroll.layoutInfo.visibleItemsInfo.firstOrNull { it.key == effect.id }
+                    // 선택 카드의 윗부분(시간 줄)이 터치 높이만큼 보이면 목록 위치를 그대로 둔다(#99 스크롤 보존).
+                    if (item == null || item.offset < 0 || item.offset + minVisible > listVisibleEnd) listScroll.scrollToItem(index)
+                }
+            }
+            // 화면 읽기가 켜져 있을 때만 옮긴다. 초점을 받은 카드는 목록이 카드 전체를 보이게 스크롤하므로, 보던 위치를 보존하는 터치·키보드 사용에는 쓰지 않는다(#99).
+            is CandidatesEffect.FocusCard -> if (currentScreenReader) guarded {
+                // 카드가 구성되어 초점 요청자가 붙을 때까지 몇 프레임 기다린다(스크롤 직후).
+                for (attempt in 0 until REVEAL_WAIT_FRAMES) {
+                    androidx.compose.runtime.withFrameNanos { }
+                    val requester = cardFocus[effect.id] ?: continue
+                    if (runCatching { requester.requestFocus(androidx.compose.ui.focus.FocusDirection.Enter) }.getOrDefault(false)) break
+                }
+            }
+            is CandidatesEffect.Camera -> requestFit(effect.reason)
         }
     }
-    val density = LocalDensity.current
     var headerHeight by remember { mutableStateOf(0.dp) }
     var mapTop by remember { mutableStateOf(0.dp) }
     var mapHeight by remember { mutableStateOf(0.dp) }
@@ -219,7 +260,6 @@ fun CandidatesScreen(
     var scaffoldTop by remember { mutableStateOf(0.dp) }
     // #101: 목록 상단은 펼친 헤더 전체 또는 축약 여정 바 전체 중 하나만 보인다(DESIGN 5.1, 12.3).
     var fullHeaderHeight by remember { mutableStateOf(0.dp) }
-    var journeyBarHeight by remember { mutableStateOf(0.dp) }
     var dragHandleHeight by remember { mutableStateOf(0.dp) }
     var previewSummaryHeight by remember { mutableStateOf(0.dp) }
     var fitActionBottom by remember { mutableStateOf(0.dp) }
@@ -245,17 +285,16 @@ fun CandidatesScreen(
     // 완전 확장한 시트(손잡이 포함)의 위끝은 축약 여정 바 바로 아래다. 바·손잡이를 재기 전에는 최소 높이로 어림한다.
     // #162: 끄는 도중 축약 여정 바가 처음 나타나 높이를 재면 시트 최대 높이(앵커)가 드래그 중에 바뀌고, 그러면 시트가 드래그 상태에 멈춰
     // 이후 카드·탭·정렬·여정 바 누름을 모두 가져간다. 시트가 끌리거나 움직이는 동안에는 직전 값을 쓰고 멈춘 뒤에 새 높이를 반영한다.
-    val sheetMoving = scaffoldState.bottomSheetState.isAnimationRunning
-    var sheetJourneyBar by remember { mutableStateOf(journeyBarHeight) }
-    if (!sheetMoving && sheetJourneyBar != journeyBarHeight) SideEffect { sheetJourneyBar = journeyBarHeight }
+    // #171: 이 규칙은 상태 모델의 일반 규칙이다(CandidatesUiState.journeyBar, 전환 함수가 움직이는 동안의 측정을 미룬다).
+    val sheetJourneyBar = ui.journeyBar.dp
     val listSheetMax = (maxHeight - (if (sheetJourneyBar > 0.dp) sheetJourneyBar else journeyBarEstimate) - (if (dragHandleHeight > 0.dp) dragHandleHeight else Spacing.touch)).coerceAtLeast(Spacing.touch)
     // 시트가 펼친 헤더 아래끝보다 올라오면(완전 확장·중간 드래그) 펼친 헤더를 통째로 접고 축약 여정 바로 바꾼다.
     // 시트 앵커는 헤더 높이와 무관하므로 바뀌어도 시트가 움직이지 않는다.
     val fullHeaderPx = with(density) { listHeader.toPx() }
-    val compactHeader by remember(preview, fullHeaderPx, landscape) {
+    val compactHeader by remember(preview, fullHeaderPx, landscape, ui.holdCompactHeader) {
         derivedStateOf {
             val top = runCatching { scaffoldState.bottomSheetState.requireOffset() }.getOrDefault(Float.NaN)
-            !landscape && !preview && (restoringExpanded || top.isFinite() && top < fullHeaderPx - 0.5f)
+            !landscape && !preview && (ui.holdCompactHeader || top.isFinite() && top < fullHeaderPx - 0.5f)
         }
     }
     val offset = runCatching { with(density) { scaffoldState.bottomSheetState.requireOffset().toDp() } }.getOrDefault(maxHeight - peek)
@@ -281,9 +320,9 @@ fun CandidatesScreen(
     val header: @Composable () -> Unit = {
             Surface(color = scheme.surface, modifier = Modifier.testTag("candidates_header").onSizeChanged { headerHeight = with(density) { it.height.toDp() } }) {
                 // #102: 미리보기 상단은 축약 여정 바(뒤로 하나 + 2줄까지 여정). 편집은 목록에서 하므로 누름 동작은 없다(DESIGN 12.3).
-                if (preview) JourneyBar(request, now, ::closePreview, Modifier.windowInsetsPadding(cutoutSides), backLabel = stringResource(R.string.candidates_preview_close), onExpand = null)
-                else if (compactHeader) JourneyBar(request, now, actions.onBack, Modifier.windowInsetsPadding(cutoutSides).onSizeChanged { journeyBarHeight = with(density) { it.height.toDp() } }) {
-                    scope.launch { scaffoldState.bottomSheetState.partialExpand() }
+                if (preview) JourneyBar(request, now, { dispatch(CandidatesEvent.PreviewClose(CloseSource.Button)) }, Modifier.windowInsetsPadding(cutoutSides), backLabel = stringResource(R.string.candidates_preview_close), onExpand = null)
+                else if (compactHeader) JourneyBar(request, now, actions.onBack, Modifier.windowInsetsPadding(cutoutSides).onSizeChanged { measuredJourneyBar(with(density) { it.height.toDp() }) }) {
+                    dispatch(CandidatesEvent.JourneyBarTap)
                 } else Column(Modifier.onSizeChanged { fullHeaderHeight = with(density) { it.height.toDp() } }.fillMaxWidth().heightIn(max = headerLimit).verticalScroll(headerScroll).statusBarsPadding().windowInsetsPadding(cutoutSides).padding(horizontal = Spacing.screen, vertical = Spacing.s)) {
                     // #103: 입력 화면과 같은 펼친 여정 헤더(DESIGN 5.1). 앞에 뒤로 하나, 설정은 두지 않는다.
                     com.sunseat.app.ui.input.JourneyHeader(
@@ -305,7 +344,7 @@ fun CandidatesScreen(
                 // 그래서 펼친 헤더가 보이는 동안에도 같은 바를 그리지 않고(배치·접근성 제외) 높이만 미리 잰다.
                 if (!preview && !compactHeader && !landscape) Box(Modifier.clearAndSetSemantics { }.layout { measurable, constraints ->
                     val bar = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
-                    journeyBarHeight = with(density) { bar.height.toDp() }
+                    measuredJourneyBar(with(density) { bar.height.toDp() })
                     layout(0, 0) { }
                 }) { JourneyBar(request, now, {}, Modifier.windowInsetsPadding(cutoutSides), onExpand = {}) }
             }
@@ -317,7 +356,7 @@ fun CandidatesScreen(
                 Column(Modifier.testTag("candidates_preview_sheet").semantics { this.paneTitle = paneTitle }.fillMaxWidth()
                     .then(if (landscape) Modifier.fillMaxHeight() else Modifier.heightIn(max = (viewportHeight - headerHeight - (if (dragHandleHeight > 0.dp) dragHandleHeight else Spacing.touch)).coerceAtLeast(Spacing.touch)))
                     .verticalScroll(rememberScrollState()).navigationBarsPadding()) {
-                    RoutePreviewSheet(previewCandidate, request, onSeat = { previewShown = false; showPreview = false; actions.onSelect(previewCandidate) }) { previewSummaryHeight = with(density) { it.toDp() } }
+                    RoutePreviewSheet(previewCandidate, request, onSeat = { dispatch(CandidatesEvent.SeatOpen); actions.onSelect(previewCandidate) }) { previewSummaryHeight = with(density) { it.toDp() } }
                 }
             } else Column(Modifier.testTag("candidates_sheet").fillMaxWidth().then(if (landscape) Modifier.fillMaxHeight() else Modifier.heightIn(max = listSheetMax)).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                 if (options != null && request.mode == TravelMode.TRANSIT) {
@@ -331,13 +370,13 @@ fun CandidatesScreen(
                         // 미리보기·결과에서 돌아올 때는 이 경로를 타지 않으므로 목록 위치 복원(#99)은 그대로다.
                         val changed = category != options.category
                         actions.onCategory(category)
-                        if (changed) scope.launch { listScroll.scrollToItem(0) }
+                        dispatch(CandidatesEvent.CategoryChange(changed))
                     }
                     // #83: 정렬은 현재 기준이 보이는 드롭다운 하나. 기준을 바꾸면 목록을 맨 위(새 1순위)부터 보인다.
                     Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.s), horizontalArrangement = Arrangement.End) {
                         SortDropdown(options.sort, request.goal) { sort ->
                             actions.onSort(sort)
-                            scope.launch { listScroll.scrollToItem(0) }
+                            dispatch(CandidatesEvent.SortChange(changed = true))
                         }
                     }
                 }
@@ -345,12 +384,13 @@ fun CandidatesScreen(
                 val content = if (options != null && request.mode == TravelMode.TRANSIT) PaddingValues(start = Spacing.screen, end = Spacing.screen, bottom = Spacing.screen) else PaddingValues(Spacing.screen)
                 when (state) {
                     is CandidatesState.Loading -> Loading(content, state.mode, animateLoader)
-                    is CandidatesState.Options -> if (state.visible.isEmpty()) Message(content, R.drawable.ic_ms_search, stringResource(R.string.candidates_filtered_empty), null, stringResource(R.string.candidates_clear_filters) to { actions.onCategory(RouteCategory.ALL); scope.launch { listScroll.scrollToItem(0) } }, stringResource(R.string.candidates_edit_input) to actions.onBack)
+                    is CandidatesState.Options -> if (state.visible.isEmpty()) Message(content, R.drawable.ic_ms_search, stringResource(R.string.candidates_filtered_empty), null, stringResource(R.string.candidates_clear_filters) to { actions.onCategory(RouteCategory.ALL); dispatch(CandidatesEvent.CategoryChange(changed = true)) }, stringResource(R.string.candidates_edit_input) to actions.onBack)
                         else OptionList(state.visible, state.selectedId, request, content, if (request.mode == TravelMode.TRANSIT) stringResource(if (state.sort == CandidateSort.WALK) R.string.candidates_walk_scope_sort else R.string.candidates_walk_scope) else null, actions.copy(onHighlight = {
-                            sheetBeforePreview = if (!landscape && scaffoldState.bottomSheetState.targetValue == SheetValue.Expanded) SheetValue.Expanded else SheetValue.PartiallyExpanded
-                            showPreview = true
+                            // 시트가 끌리는 중이면 가장 가까운 앵커(targetValue)를 들어가기 전 높이로 본다(#145).
+                            if (!landscape) dispatch(CandidatesEvent.SheetTarget(sheetTarget()))
+                            dispatch(CandidatesEvent.CardTap(it.id))
                             actions.onHighlight(it)
-                        }), listScroll, revealSelected)
+                        }), listScroll, { listVisibleEnd = it }, { cardFocus.getOrPut(it) { androidx.compose.ui.focus.FocusRequester() } }, screenReader)
                     is CandidatesState.NoRoute -> Message(content, R.drawable.ic_ms_directions_bus, stringResource(state.titleRes), state.detailRes?.let { stringResource(it) }, if (state.suggestCar) stringResource(R.string.candidates_search_by_car) to actions.onSearchByCar else null, stringResource(R.string.candidates_edit_input) to actions.onBack)
                     is CandidatesState.Error -> Message(content, state.iconRes, stringResource(state.messageRes), null, if (state.canRetry) stringResource(R.string.search_retry) to actions.onRetry else null, stringResource(R.string.candidates_edit_input) to actions.onBack)
                 }
@@ -384,7 +424,7 @@ fun CandidatesScreen(
             val fitLabel = stringResource(if (mapRoutes.selectedRoute < 0) R.string.candidates_fit_all_action else R.string.candidates_fit_route_action)
             FloatingCapsule(Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)).padding(Spacing.s)
                 .onGloballyPositioned { fitActionBottom = with(density) { (it.positionInRoot().y + it.size.height).toDp() } - mapTop }) {
-                QuietButton(onClick = { requestFit(com.sunseat.app.ui.map.FitReason.EXPLICIT) }, modifier = Modifier.semantics { onClick(label = fitLabel) { requestFit(com.sunseat.app.ui.map.FitReason.EXPLICIT); true } }) {
+                QuietButton(onClick = { dispatch(CandidatesEvent.FitAction) }, modifier = Modifier.semantics { onClick(label = fitLabel) { dispatch(CandidatesEvent.FitAction); true } }) {
                     Icon(painterResource(R.drawable.ic_ms_fit_screen), null, Modifier.size(Sizes.iconSmall))
                     Spacer(Modifier.width(Spacing.xs))
                     Text(stringResource(R.string.candidates_fit_route), style = MaterialTheme.typography.labelLarge)
@@ -540,7 +580,7 @@ private fun Bar(width: Dp, height: Dp, shape: androidx.compose.ui.graphics.Shape
 }
 
 @Composable
-private fun OptionList(items: List<CandidateUi>, selectedId: Int?, request: TripRequest, content: PaddingValues, scopeNotice: String?, actions: CandidatesActions, listState: LazyListState, reveal: Long = 0L) {
+private fun OptionList(items: List<CandidateUi>, selectedId: Int?, request: TripRequest, content: PaddingValues, scopeNotice: String?, actions: CandidatesActions, listState: LazyListState, onVisibleEnd: (Float) -> Unit, cardFocus: (Int) -> androidx.compose.ui.focus.FocusRequester, screenReader: Boolean) {
     val haptics = rememberSunSeatHaptics()
     var showScope by remember { mutableStateOf(false) }
     if (showScope && scopeNotice != null) AlertDialog(
@@ -552,26 +592,13 @@ private fun OptionList(items: List<CandidateUi>, selectedId: Int?, request: Trip
         } },
         confirmButton = { QuietButton(onClick = { showScope = false }) { Text(stringResource(R.string.candidates_scope_close)) } },
     )
-    // #145: 목록이 화면에서 실제로 보이는 아래끝(목록 좌표). 기본 높이 시트에서는 목록 아랫부분이 화면 밖에 있다.
-    var visibleEnd by remember { mutableFloatStateOf(Float.MAX_VALUE) }
+    // #145: 목록이 화면에서 실제로 보이는 아래끝(목록 좌표)을 화면에 알린다. 선택 카드 보이기(Reveal 효과)가 쓴다.
+    // 목록이 사라지면(미리보기) 이전 위치를 쓰지 않도록 모른다고 알린다.
+    val currentOnVisibleEnd by rememberUpdatedState(onVisibleEnd)
+    DisposableEffect(Unit) { onDispose { currentOnVisibleEnd(Float.NEGATIVE_INFINITY) } }
     val navigationBottomPx = with(LocalDensity.current) { WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding().toPx() }
-    val minVisiblePx = with(LocalDensity.current) { Spacing.touch.toPx() }
-    val currentItems by rememberUpdatedState(items)
-    val currentSelected by rememberUpdatedState(selectedId)
-    // 목록이 다시 구성될 때(미리보기 닫힘 직후, 시트가 아직 되돌아가기 전)의 값은 이미 처리한 것으로 보고, 새 요청만 처리한다.
-    var handled by remember { mutableLongStateOf(reveal) }
-    LaunchedEffect(reveal) {
-        if (reveal == handled) return@LaunchedEffect
-        handled = reveal
-        val id = currentSelected ?: return@LaunchedEffect
-        val position = currentItems.indexOfFirst { it.id == id }.takeIf { it >= 0 } ?: return@LaunchedEffect
-        val index = position + (if (scopeNotice != null) 1 else 0) + (if (request.departure != null) 1 else 0)
-        val item = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == id }
-        // 선택 카드의 윗부분(시간 줄)이 터치 높이만큼 보이면 목록 위치를 그대로 둔다(#99 스크롤 보존).
-        if (item == null || item.offset < 0 || item.offset + minVisiblePx > visibleEnd) listState.scrollToItem(index)
-    }
     LazyColumn(Modifier.fillMaxSize().testTag("candidate_list").onGloballyPositioned {
-        visibleEnd = it.findRootCoordinates().size.height - navigationBottomPx - it.positionInRoot().y
+        onVisibleEnd(it.findRootCoordinates().size.height - navigationBottomPx - it.positionInRoot().y)
     }, state = listState, contentPadding = PaddingValues(top = content.calculateTopPadding(), bottom = content.calculateBottomPadding())) {
         if (scopeNotice != null) item(key = "walk_scope") {
             QuietButton(onClick = { showScope = true }, modifier = Modifier.testTag("walk_scope_notice").padding(horizontal = Spacing.xs)) {
@@ -588,7 +615,9 @@ private fun OptionList(items: List<CandidateUi>, selectedId: Int?, request: Trip
         } }
         items(items, key = { it.id }) { item ->
             Column {
-                CandidateCard(item, item.id == selectedId, request, onClick = { haptics.selectionChanged(); actions.onHighlight(item) }, onView = { haptics.press(); actions.onSelect(item) })
+                CandidateCard(item, item.id == selectedId, request, onClick = { haptics.selectionChanged(); actions.onHighlight(item) }, onView = { haptics.press(); actions.onSelect(item) },
+                    // #158: 미리보기를 닫으면 이 카드로 초점을 돌린다. 화면 읽기가 켜져 있으면 터치 모드에서도 초점을 받는다(키보드 모드는 원래 받는다).
+                    modifier = Modifier.focusRequester(cardFocus(item.id)).focusProperties { if (screenReader) canFocus = true })
                 HorizontalDivider(Modifier.padding(start = Spacing.l), thickness = Sizes.hairline, color = SunSeatTheme.scheme.outlineVariant)
             }
         }
@@ -596,13 +625,13 @@ private fun OptionList(items: List<CandidateUi>, selectedId: Int?, request: Trip
 }
 
 @Composable
-internal fun CandidateCard(item: CandidateUi, selected: Boolean, request: TripRequest, onClick: () -> Unit, onView: () -> Unit) {
+internal fun CandidateCard(item: CandidateUi, selected: Boolean, request: TripRequest, onClick: () -> Unit, onView: () -> Unit, modifier: Modifier = Modifier) {
     val scheme = SunSeatTheme.scheme
     val routeColors = SunSeatTheme.route
     val taxi = request.mode == TravelMode.TAXI
     val selectedDescription = stringResource(R.string.candidates_map_selected)
     Surface(color = if (selected) routeColors.selectionContainer else scheme.surface,
-        modifier = Modifier.fillMaxWidth().testTag("candidate_${item.id}").semantics { this.selected = selected; if (selected) stateDescription = selectedDescription }
+        modifier = modifier.fillMaxWidth().testTag("candidate_${item.id}").semantics { this.selected = selected; if (selected) stateDescription = selectedDescription }
             .clickable(role = Role.Button, onClickLabel = stringResource(R.string.candidates_highlight), onClick = onClick)) {
         Box {
             if (selected) androidx.compose.foundation.Canvas(Modifier.matchParentSize()) {
@@ -693,4 +722,24 @@ private fun Message(
             Text(secondary.first, style = MaterialTheme.typography.labelLarge)
         }
     }
+}
+
+/** [CandidatesEffect.Reveal]·[CandidatesEffect.FocusCard]가 목록·카드 구성을 기다리는 최대 프레임 수. */
+private const val REVEAL_WAIT_FRAMES = 10
+
+/** 목록에서 후보 카드 앞에 오는 항목 수: 대중교통 도보 범위 안내(#73), 시각 기준 안내(#128). [OptionList]의 항목 순서와 같다. */
+private fun optionListLeadingItems(request: TripRequest): Int =
+    (if (request.mode == TravelMode.TRANSIT) 1 else 0) + (if (request.departure != null) 1 else 0)
+
+/** 화면 읽기(터치 탐색)가 켜져 있는가. 켜고 끄면 다시 구성한다. */
+@Composable
+private fun rememberTouchExplorationEnabled(): Boolean {
+    val manager = LocalContext.current.getSystemService(android.view.accessibility.AccessibilityManager::class.java) ?: return false
+    var enabled by remember(manager) { mutableStateOf(manager.isTouchExplorationEnabled) }
+    DisposableEffect(manager) {
+        val listener = android.view.accessibility.AccessibilityManager.TouchExplorationStateChangeListener { enabled = it }
+        manager.addTouchExplorationStateChangeListener(listener)
+        onDispose { manager.removeTouchExplorationStateChangeListener(listener) }
+    }
+    return enabled
 }
