@@ -32,7 +32,7 @@ class KakaoReverseGeocodeApiTest {
         val result = api.address(LatLng(37.5, 127.01))
         assertEquals(ApiResult.Success("서울 가상구 예시로 200"), result)
         val url = server.takeRequest().url
-        assertEquals("/v2/local/geo/coord2address.json", url.encodedPath)
+        assertEquals("/kakao/local/geo/coord2address", url.encodedPath)
         assertEquals("127.01", url.queryParameter("x"))
         assertEquals("37.5", url.queryParameter("y"))
     }
@@ -47,7 +47,7 @@ class KakaoReverseGeocodeApiTest {
     @Test fun classifiesErrorsLikeOtherKakaoCalls() = runBlocking {
         server.enqueueJson("""{"errorType":"AccessDeniedError","message":"denied"}""", code = 401)
         assertEquals(ApiResult.Failure(ApiError.UNAUTHORIZED, 401), api.address(LatLng(37.5, 127.0)))
-        val noKey = KakaoReverseGeocodeApi(server.kakaoRetrofit(apiKey = ""))
+        val noKey = KakaoReverseGeocodeApi(server.kakaoRetrofit(apiConfigured = false))
         assertEquals(ApiResult.Failure(ApiError.MISSING_KEY), noKey.address(LatLng(37.5, 127.0)))
     }
 }

@@ -261,6 +261,18 @@ class CandidatesViewModelTest {
     }
 
     @Test
+    fun gatewayRefusalAndRateLimitCanRetryLater() = runTest(dispatcher) {
+        // 앱 API 게이트웨이(#189)의 403(거부)·429(호출 제한)는 "잠시 이용할 수 없어요"와 다시 시도로 안내한다.
+        for (error in listOf(ApiError.UNAUTHORIZED, ApiError.QUOTA_EXCEEDED)) {
+            val vm = CandidatesViewModel(transitRequest, FakeTransit(ApiResult.Failure(error)), noCar, compute = dispatcher)
+            advanceUntilIdle()
+            val err = vm.state.value as CandidatesState.Error
+            assertEquals(error.name, R.string.candidates_error_quota, err.messageRes)
+            assertTrue(error.name, err.canRetry)
+        }
+    }
+
+    @Test
     fun carRouteIsAutoSelected() = runTest(dispatcher) {
         val car = FakeCar(ApiResult.Success(CarRouteResult(CarRouteOption(carRoute, 9000, 0, 12000))))
         val vm = CandidatesViewModel(carRequest, noTransit, car, compute = dispatcher)

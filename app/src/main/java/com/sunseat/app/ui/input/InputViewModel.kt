@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.sunseat.app.R
 import com.sunseat.app.data.network.ApiError
 import com.sunseat.app.data.network.ApiResult
+import com.sunseat.app.data.network.retryable
 import com.sunseat.app.data.place.Place
 import com.sunseat.app.data.place.PlaceSearchApi
 import com.sunseat.app.domain.NamedPlace
@@ -107,7 +108,8 @@ data class InputUiState(
 @StringRes
 internal fun ApiError.messageRes(): Int = when (this) {
     ApiError.MISSING_KEY -> R.string.search_error_unavailable
-    ApiError.UNAUTHORIZED -> R.string.search_error_unavailable
+    // 앱 API 게이트웨이·카카오의 거부는 서버 쪽에서 고칠 수 있으므로 "잠시 뒤 다시"로 안내한다(#189).
+    ApiError.UNAUTHORIZED -> R.string.search_error_quota
     ApiError.QUOTA_EXCEEDED -> R.string.search_error_quota
     ApiError.NETWORK -> R.string.search_error_network
     ApiError.UNKNOWN -> R.string.search_error_unknown
@@ -249,7 +251,7 @@ class InputViewModel(
                         results = emptyList(),
                         loading = false,
                         messageRes = result.error.messageRes(),
-                        canRetry = result.error != ApiError.MISSING_KEY && result.error != ApiError.UNAUTHORIZED,
+                        canRetry = result.error.retryable,
                     )
                 }.let { s.copy(search = it) }
             }
@@ -518,7 +520,7 @@ class InputViewModel(
                     is ApiResult.Success -> if (result.value != null) pick.copy(status = PickAddressStatus.FOUND, address = result.value, canRetry = false)
                         else pick.copy(status = PickAddressStatus.NONE, address = null, canRetry = false)
                     is ApiResult.Failure -> pick.copy(status = PickAddressStatus.FAILED, address = null,
-                        canRetry = result.error != ApiError.MISSING_KEY && result.error != ApiError.UNAUTHORIZED)
+                        canRetry = result.error.retryable)
                 })
             }
         }

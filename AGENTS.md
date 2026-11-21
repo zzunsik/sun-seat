@@ -159,7 +159,9 @@
 
 ### 비밀 정보
 
-- `KAKAO_REST_API_KEY`, `KAKAO_NATIVE_APP_KEY`, `sdk.dir`, 서명 키 정보는 `local.properties`에만 둔다. 이 파일과 키 파일(`*.jks`, `*.keystore`)은 커밋하지 않는다. CI는 빈 API 키로 빌드하고 저장소 Secrets를 쓰지 않는다.
+- `KAKAO_NATIVE_APP_KEY`, `SUNSEAT_API_BASE_URL`, `sdk.dir`, 서명 키 정보는 `local.properties`에만 둔다. 이 파일과 키 파일(`*.jks`, `*.keystore`)은 커밋하지 않는다. CI는 빈 키·주소로 빌드하고 저장소 Secrets를 쓰지 않는다.
+- 카카오 REST API 키는 APK에 넣지 않는다. 앱 API 게이트웨이(`workers/api`, Cloudflare Workers)의 시크릿(`wrangler secret put KAKAO_REST_API_KEY`)에만 두고, 앱은 게이트웨이를 부른다(#189). 로컬 `wrangler dev`용 `workers/api/.dev.vars`도 커밋하지 않는다. CI의 `check-apk-secrets.sh`가 빌드 산출물에 키 경로가 없는지 확인한다.
+- 게이트웨이 주소(`https://api.<하위 도메인>.workers.dev`)는 비밀이 아니지만 저장소에 고정하지 않고 빌드 설정으로 넣는다. 새 외부 API 키도 같은 방식(게이트웨이 경로 묶음 + 시크릿)으로 붙인다.
 - 워크플로에서 비밀 값이나 환경 전체를 출력하지 않는다(`echo $SECRET`, `env`, 실패 시 설정 덤프).
 - 앱에 들어가는 키(Kakao 네이티브 앱 키)는 APK에서 꺼낼 수 있다고 본다. Kakao 개발자 콘솔에서 패키지명과 서명 키 해시로 사용을 제한한다.
 - 키가 유출되면 먼저 키를 폐기·재발급하고, 히스토리 수정 여부는 그다음에 정한다. 이슈에는 키 값 없이 "폐기 완료"만 적는다.

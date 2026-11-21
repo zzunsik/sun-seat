@@ -1,0 +1,6 @@
+# 의존성·로컬 실행 산출물
+node_modules/
+.wrangler/
+# 로컬 시크릿(wrangler dev용). 커밋하지 않는다.
+.dev.vars*
+.env*

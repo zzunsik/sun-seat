@@ -16,11 +16,14 @@ JDK 25와 Android SDK(platform 37)가 필요합니다. Android Studio는 없어�
 
    ```properties
    sdk.dir=/path/to/Android/sdk
-   KAKAO_REST_API_KEY=<카카오 REST API 키>
+   SUNSEAT_API_BASE_URL=https://api.<workers.dev 하위 도메인>.workers.dev
    KAKAO_NATIVE_APP_KEY=<카카오 네이티브 앱 키>
    ```
 
-   키가 없어도 빌드는 됩니다. 이때 장소 검색·경로 찾기와 지도가 동작하지 않고, 지도 자리에는 안내가 나옵니다. 키를 받는 방법은 아래 "카카오 지도 설정"에 있습니다.
+   - `SUNSEAT_API_BASE_URL`: 앱 API 게이트웨이(`workers/api`, Cloudflare Workers) 주소입니다. 장소 검색·지도에서 위치 고르기·대중교통·자동차 경로는 모두 이 서버를 거쳐 카카오 REST API를 부릅니다. 카카오 REST API 키는 게이트웨이의 시크릿에만 두고 앱(APK)에는 넣지 않습니다(#189). 배포 방법은 [workers/api/README.md](workers/api/README.md)에 있습니다.
+   - `KAKAO_NATIVE_APP_KEY`: 지도 SDK 키입니다. 받는 방법은 아래 "카카오 지도 설정"에 있습니다.
+
+   값이 없어도 빌드는 됩니다. 주소가 없으면 장소 검색·경로 찾기가, 네이티브 앱 키가 없으면 지도가 동작하지 않고 안내가 나옵니다. 예전의 `KAKAO_REST_API_KEY`는 더 이상 읽지 않습니다. 남아 있으면 빌드가 경고하니 지웁니다.
 
 2. 디버그 APK를 빌드합니다.
 
@@ -61,12 +64,13 @@ JDK 25와 Android SDK(platform 37)가 필요합니다. Android Studio는 없어�
 | 위치 | Play services location |
 | 비동기 | kotlinx.coroutines |
 | 테스트 | JUnit 4, Robolectric, Compose UI 테스트, Roborazzi(스크린샷 비교), MockWebServer, `kotlinx-coroutines-test`, compose-lints |
+| 앱 API 게이트웨이 | Cloudflare Workers(TypeScript, `workers/api`), Wrangler, Vitest(`@cloudflare/vitest-plugin`). 버전은 `workers/api/package.json`·`package-lock.json`에 고정 |
 
 ## 카카오 지도 설정
 
 카카오맵 Android SDK v2를 씁니다([공식 문서](https://apis.map.kakao.com/android_v2/docs/getting-started/quickstart/)).
 
-1. 카카오 개발자 콘솔에서 앱을 만들고 카카오맵 사용 설정을 켭니다. REST API 키와 네이티브 앱 키를 `local.properties`에 넣습니다.
+1. 카카오 개발자 콘솔에서 앱을 만들고 카카오맵 사용 설정을 켭니다. 네이티브 앱 키는 `local.properties`에 넣습니다. REST API 키는 `local.properties`에 넣지 않고 앱 API 게이트웨이의 시크릿으로만 넣습니다([workers/api/README.md](workers/api/README.md)).
 2. 앱의 Android 플랫폼에 패키지 `com.sunseat.app`과 디버그 서명 키 해시를 등록합니다. 키 해시는 인증서 바이트에 SHA-1을 적용하고 Base64로 인코딩한 값입니다. Git Bash에서 다음 명령으로 구합니다(JDK의 keytool과 OpenSSL 필요).
 
    ```bash
@@ -118,6 +122,7 @@ RELEASE_KEY_PASSWORD=<키 비밀번호>
 
 - [요구사항](docs/requirements.md): 화면별 동작과 데이터 제약
 - [설계](docs/architecture.md): 패키지 구조, 햇빛·좌석 계산, 카카오 API 연동
+- [앱 API 게이트웨이](workers/api/README.md): 카카오 REST 호출을 중계하는 Cloudflare Workers의 경로·호출 제한·배포 방법
 - [디자인 계약](docs/DESIGN.md): 화면별 과업과 정보 위계, 색·글자·간격 토큰, 지도 경로선, 상태와 제스처, 접근성
 - [디자인 레퍼런스](docs/design-references.md): 카카오맵과 직접 비교한 내용과 정리한 원칙
 - [지하철 지상 구간 데이터](docs/subway-ground-data.md): 지상·지하 판정에 쓴 공공데이터의 출처와 판정 기준
@@ -136,7 +141,7 @@ RELEASE_KEY_PASSWORD=<키 비밀번호>
 | `app/src/main/resources/subway_ground.csv` | 서울교통공사·국가철도공단 공공데이터(이용허락범위 제한 없음)에서 노선·역명·지상 여부만 추출. 출처와 판정 기준은 [지하철 지상 구간 데이터](docs/subway-ground-data.md) |
 | `app/src/test/resources/kakao/*.json` | 직접 만든 예시 응답. 실제 API 응답이 아님 |
 
-경로·장소 정보는 실행 중에 카카오 API에서 받아 오며 저장소에 넣지 않습니다.
+경로·장소 정보는 실행 중에 앱 API 게이트웨이를 거쳐 카카오 API에서 받아 오며 저장소에 넣지 않습니다. 게이트웨이는 응답을 저장하지 않고 그대로 전달합니다.
 
 ## 글꼴
 

@@ -20,3 +20,14 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+
+  # 앱 API 게이트웨이(workers/api, #189). 버전은 package.json에 고정하고 lockfile과 함께 받는다.
+  - package-ecosystem: npm
+    directory: /workers/api
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+    groups:
+      api-worker:
+        patterns: ["*"]

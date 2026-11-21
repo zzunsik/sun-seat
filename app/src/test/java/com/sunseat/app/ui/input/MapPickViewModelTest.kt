@@ -195,6 +195,18 @@ class MapPickViewModelTest {
         assertTrue(vm.state.value.pick!!.canConfirm)
     }
 
+    @Test fun gatewayRefusalIsRetryable() = runTest(dispatcher) {
+        // 앱 API 게이트웨이(#189)의 403·429는 다시 시도할 수 있다.
+        for (error in listOf(com.sunseat.app.data.network.ApiError.UNAUTHORIZED, com.sunseat.app.data.network.ApiError.QUOTA_EXCEEDED)) {
+            val vm = vm(FakeGeocoder().apply { answer = { ApiResult.Failure(error) } })
+            vm.openSearch(EndpointField.DESTINATION)
+            vm.openMapPick()
+            advanceUntilIdle()
+            assertEquals(PickAddressStatus.FAILED, vm.state.value.pick!!.status)
+            assertTrue(error.name, vm.state.value.pick!!.canRetry)
+        }
+    }
+
     @Test fun confirmChangesOnlyThePickedEndpointAndKeepsEveryOtherCondition() = runTest(dispatcher) {
         val vm = vm()
         val request = vm.trip()

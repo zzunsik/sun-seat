@@ -1,0 +1,23 @@
+// sun-seat 앱 API 게이트웨이(#189). 배포·시크릿 입력 방법과 호출 제한 근거는 README.md.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // 배포 주소는 https://api.<계정 workers.dev 하위 도메인>.workers.dev 가 된다.
+  "name": "api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": true,
+  // 버전별 미리보기 주소는 쓰지 않는다(외부 API를 부를 수 있는 주소가 늘지 않게).
+  "preview_urls": false,
+  // 외부 API 키는 시크릿으로만 넣는다(wrangler secret put KAKAO_REST_API_KEY). 여기나 vars에 값을 적지 않는다.
+  "secrets": { "required": ["KAKAO_REST_API_KEY"] },
+  // 경로 묶음별 IP 호출 제한. 값의 근거는 README.md "호출 제한". 바꾸면 README와 테스트도 함께 고친다.
+  // period는 10 또는 60(초)만 된다. 카운터는 Cloudflare 위치(데이터센터)마다 따로이고 근사값이다.
+  "ratelimits": [
+    {
+      "name": "KAKAO_RATE_LIMITER",
+      // 계정 안에서 고유한 양의 정수(문자열). 다른 Worker·묶음과 겹치면 카운터를 같이 쓴다.
+      "namespace_id": "18901",
+      "simple": { "limit": 60, "period": 60 }
+    }
+  ]
+}
