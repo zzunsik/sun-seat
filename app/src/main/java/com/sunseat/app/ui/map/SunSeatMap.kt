@@ -83,7 +83,9 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
     // 차량을 따라갈 때(#146)는 이름표 여백을 두지 않는다(MapFitPolicy.labelMargins, 네이티브와 같음).
     val labelSides = state.routes.getOrNull(state.selectedRoute)?.takeIf { fitPolicy.labelMargins }?.let { route ->
         with(density) {
-            labelExtents(RouteLinePolicy.stops(route), Sizes.mapStopMarker.toPx() / 2) { stop ->
+            // #153: 첫 승차 정류장 이름표는 출발 표식 밖으로 밀린다.
+            val clearance = state.origin?.let { placeMarkerWidth(textMeasurer.measure(originLabel, labelStyle).size.width.toFloat(), Sizes.mapMarker.toPx(), Sizes.mapMarkerTail.toPx(), Spacing.xs.toPx()) / 2 + Spacing.xs.toPx() } ?: 0f
+            labelExtents(RouteLinePolicy.stops(route), Sizes.mapStopMarker.toPx() / 2, clearance) { stop ->
                 val name = when {
                     stop.lines.isEmpty() -> if (stop.mode == Mode.SUBWAY) subwayLabel else busLabel
                     stop.lines.size == 1 -> stop.lines.first()
@@ -150,6 +152,14 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
         }
         val markerPx = Sizes.mapMarker.toPx()
         fun covered(at: com.sunseat.app.domain.LatLng) = state.coveredByVehicle(at, markerPx) { a, b -> (position(a) - position(b)).getDistance() }
+        val originText = textMeasurer.measure(originLabel, labelStyle.copy(color = MapRouteColors.transit))
+        val destinationText = textMeasurer.measure(destinationLabel, labelStyle.copy(color = MapRouteColors.casing))
+        val marker = Sizes.mapMarker.toPx()
+        val tail = Sizes.mapMarkerTail.toPx()
+        fun pinWidth(text: androidx.compose.ui.text.TextLayoutResult) = placeMarkerWidth(text.size.width.toFloat(), marker, tail, Spacing.xs.toPx())
+        // #153: 보이는 출발·도착 표식(꼬리 끝 위치, 몸통 폭). 정류장 이름표가 이 표식 밑에 들어가지 않게 민다.
+        val pins = listOfNotNull(state.origin?.takeUnless { covered(it.location) }?.let { position(it.location) to pinWidth(originText) },
+            state.destination?.takeUnless { covered(it.location) }?.let { position(it.location) to pinWidth(destinationText) })
         selected?.let { route -> RouteLinePolicy.stops(route).forEach { stop ->
             val p = position(stop.location)
             val radius = Sizes.mapStopMarker.toPx() / 2 - Sizes.mapStopBorder.toPx() / 2
@@ -164,15 +174,17 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
                 val text = textMeasurer.measure(name, labelStyle.copy(color = scheme.onSurface))
                 val pad = Spacing.xs.toPx()
                 val box = androidx.compose.ui.geometry.Size(text.size.width + pad * 2, maxOf(Sizes.mapLabelHeight.toPx(), text.size.height.toFloat()))
-                val left = if (stop.labelOnLeft) p.x - Sizes.mapStopMarker.toPx() / 2 - box.width else p.x + Sizes.mapStopMarker.toPx() / 2
+                val boxes = pins.map { (tip, width) -> placeMarkerBox(tip.x - p.x, tip.y - p.y, width, marker, tail) }
+                val offset = stopLabelOffset(stop.labelOnLeft, box.width, box.height, Sizes.mapStopMarker.toPx() / 2, boxes, Spacing.xs.toPx(), (pins.maxOfOrNull { it.second } ?: 0f) + Spacing.xs.toPx())
+                val left = if (stop.labelOnLeft) p.x - offset - box.width else p.x + offset
                 val corner = androidx.compose.ui.geometry.CornerRadius(box.height / 2)
                 drawRoundRect(MapRouteColors.casing, Offset(left, p.y - box.height / 2), box, corner)
                 drawRoundRect(stop.color, Offset(left, p.y - box.height / 2), box, corner, style = Stroke(Sizes.mapStopBorder.toPx() / 2))
                 drawText(text, topLeft = Offset(left + pad, p.y - text.size.height / 2f))
             }
         } }
-        state.origin?.takeUnless { covered(it.location) }?.let { drawPlaceMarker(position(it.location), textMeasurer.measure(originLabel, labelStyle.copy(color = MapRouteColors.transit)), filled = false, surface = MapRouteColors.casing) }
-        state.destination?.takeUnless { covered(it.location) }?.let { drawPlaceMarker(position(it.location), textMeasurer.measure(destinationLabel, labelStyle.copy(color = MapRouteColors.casing)), filled = true, surface = MapRouteColors.casing) }
+        state.origin?.takeUnless { covered(it.location) }?.let { drawPlaceMarker(position(it.location), originText, filled = false, surface = MapRouteColors.casing) }
+        state.destination?.takeUnless { covered(it.location) }?.let { drawPlaceMarker(position(it.location), destinationText, filled = true, surface = MapRouteColors.casing) }
         state.focus?.let { val p = position(it.location); val radius = Sizes.mapMarker.toPx() / 3; drawCircle(scheme.surface, radius, p); drawCircle(scheme.onSurface, radius, p, style = Stroke(Sizes.mapRouteWalk.toPx())); drawCircle(scheme.onSurface, radius / 3, p) }
         state.visibleCursor?.let { cursor ->
             val p = position(cursor.position)
@@ -256,7 +268,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRouteLine(path:
 internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPlaceMarker(tip: Offset, text: androidx.compose.ui.text.TextLayoutResult, filled: Boolean, surface: androidx.compose.ui.graphics.Color) {
     val tail = Sizes.mapMarkerTail.toPx()
     val height = Sizes.mapMarker.toPx() - tail
-    val width = maxOf(height, text.size.width + Spacing.xs.toPx() * 4)
+    val width = placeMarkerWidth(text.size.width.toFloat(), Sizes.mapMarker.toPx(), tail, Spacing.xs.toPx())
     val top = tip.y - Sizes.mapMarker.toPx()
     val body = Path().apply {
         addRoundRect(androidx.compose.ui.geometry.RoundRect(tip.x - width / 2, top, tip.x + width / 2, top + height, androidx.compose.ui.geometry.CornerRadius(height / 2)))
