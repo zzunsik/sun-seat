@@ -6,18 +6,41 @@ scans or certified fleet dimensions. Coordinates in metres: +X right, +Y up,
 -Z forward. City buses use left-single/right-pair seats; coaches use 2+2.
 Region-level advice maps to a representative valid seat, never an invented seat.
 
-Compile materials with **Filament 1.80.1**, matching the Maven runtime:
+Compile materials with **Filament 1.81.0**, matching the Maven runtime
+(`filament` in `gradle/libs.versions.toml`):
 
 ```powershell
 matc.exe -a opengl -p mobile -o app/src/main/assets/simulation/cabin_lit.filamat tools/simulation/cabin_lit.mat
 matc.exe -a opengl -p mobile -o app/src/main/assets/simulation/cabin_unlit.filamat tools/simulation/cabin_unlit.mat
 matc.exe -a opengl -p mobile -o app/src/main/assets/simulation/cabin_beam.filamat tools/simulation/cabin_beam.mat
-matc.exe -a opengl -p mobile -o app/src/main/assets/simulation/cabin_beam.filamat tools/simulation/cabin_beam.mat
 ```
 
-Download matching tools from https://github.com/google/filament/releases/tag/v1.80.1.
+Download matching tools (`filament-v<version>-windows.tgz`, `bin/matc.exe`) from
+https://github.com/google/filament/releases/tag/v1.81.0 and compare the archive's
+sha256 with the digest shown on that release page. Keep the toolchain outside the
+repository. `matc.exe --version` prints the material version it writes.
 Committed binaries allow CI builds without the compiler. Android uses the default
 OpenGL backend. Filament is Apache-2.0; see its repository LICENSE.
+
+### Upgrading the Filament runtime
+
+The runtime only loads materials whose material version equals its own; a mismatch
+is a native crash when the 3D view opens (#195), which Robolectric cannot show.
+A runtime bump and the recompiled `*.filamat` therefore go in the same PR:
+
+1. Change `filament` in `gradle/libs.versions.toml`.
+2. Recompile all materials with that release's `matc.exe` (commands above)
+   and update the version and release link above.
+3. Add the release's material version (`MATERIAL_VERSION` in
+   `libs/filabridge/include/filament/MaterialEnums.h` at that tag) to
+   `FilamentMaterialVersionTest`, and cross-check it with that `matc.exe --version`.
+   The test fails until the version table, the `.filamat` headers and this README agree.
+4. Check the 3D overview and close-up on a real device.
+
+Dependabot ignores Filament version updates for this reason (`.github/dependabot.yml`),
+so nothing announces a new Filament release; check releases by hand. The ignore rule
+does not block Dependabot security updates, but Gradle dependencies are not in the
+dependency graph yet, so none arrive (#197). Any Filament bump follows the steps above.
 
 ## Device fixtures
 

@@ -99,6 +99,7 @@
 
 - JDK 25, Android SDK platform 37. Android Studio 없이 명령줄로 빌드한다.
 - 의존성 버전은 `gradle/libs.versions.toml`에서만 관리한다. 의존성 업데이트는 Dependabot PR로 받는다.
+  - 예외: Filament(`com.google.android.filament*`)는 Dependabot이 버전 업데이트를 올리지 않는다. 사람이 올리고, 같은 PR에서 `tools/simulation/*.mat`을 같은 버전의 `matc`로 다시 컴파일한다(`tools/simulation/README.md`). `FilamentMaterialVersionTest`가 런타임 버전과 `.filamat`의 material 버전이 다르면 실패한다. 새 Filament 릴리스는 사람이 확인한다. 무시 규칙은 보안 업데이트를 막지 않지만 지금은 Gradle 의존성이 의존성 그래프에 없어 보안 알림이 오지 않는다(#197). 어떤 경로로 올리든 같은 절차를 따른다.
 
 ## 코드 구조
 
@@ -135,6 +136,7 @@
 
 - 지도에 무엇이 그려지는지 검사할 때는 카메라 범위가 아니라 렌더러에 넘긴 경로 목록 자체를 확인한다. 카메라 범위 테스트가 통과하는 동안 다른 후보 경로가 함께 그려지고 있었다. (#99, #106, 2026-11-19)
 - 3D 좌석 화면의 Robolectric 스크린샷에는 3D 대신 자리표시만 찍힌다. 카메라·배치는 순수 Kotlin 계산(`CabinCamera`, `CabinCameraTest`)으로 검증하고, 실제 렌더는 실기기에서 본다. (#75, #109, 2026-11-19)
+- Filament 런타임만 올리고 미리 컴파일한 재료(`*.filamat`)를 그대로 두면 3D 화면 진입 시 네이티브 크래시가 난다. Dependabot이 Filament 1.80.1 → 1.81.0만 올렸고(#193) CI는 통과했지만 실기기 흐름 6·7에서 종료됐다. Filament 버전 업데이트는 재료 재컴파일과 한 PR로 묶는다. (#195, 2026-11-21)
 - 병렬로 연 PR은 하나가 머지될 때마다 나머지가 대상 브랜치보다 뒤처져 CI를 다시 돌린다. 같은 화면이나 파일을 건드리는 PR은 동시에 열지 말고 순서를 정한다. (#99·#105·#75, 2026-11-19)
 
 아래는 2026-11-19~21 화면·지도 버그 분석(#167, `docs/bug-analysis-2026-11.md`)에서 나온 규칙이다. 본문은 위 "PR"·"테스트"·"화면 작업" 절에 있다.
