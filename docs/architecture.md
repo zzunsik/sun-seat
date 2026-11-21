@@ -58,7 +58,7 @@ com.sunseat.app
 ### 4.1 공통 HTTP(#7)
 - Retrofit 3 + OkHttp 5 + kotlinx.serialization. 코드는 `com.sunseat.app.data`(`network`, `place`)
 - 앱은 카카오를 직접 부르지 않는다. 앱 API 게이트웨이(`workers/api`, Cloudflare Workers, #189)의 `kakao/` 경로 묶음을 부르고, 게이트웨이가 Workers 시크릿의 REST 키로 `Authorization: KakaoAK {키}`를 붙여 카카오에 전달한다. REST 키는 APK에 없다(CI `scripts/check-apk-secrets.sh`가 확인)
-  - 기준 주소: `BuildConfig.SUNSEAT_API_BASE_URL`(`local.properties`의 `SUNSEAT_API_BASE_URL`, 예 `https://api.<하위 도메인>.workers.dev`) + `kakao/`. 주소가 비었거나 http(s) 주소가 아니면 요청을 보내지 않고 바로 실패한다(`ApiConfiguredInterceptor`)
+  - 기준 주소: `BuildConfig.SUNSEAT_API_BASE_URL`(디버그는 `local.properties`의 `SUNSEAT_API_BASE_URL_DEBUG` → 개발 게이트웨이 `https://api-dev.<하위 도메인>.workers.dev`, 릴리스는 `SUNSEAT_API_BASE_URL_RELEASE` → 운영 `https://api.<하위 도메인>.workers.dev`. 없으면 `SUNSEAT_API_BASE_URL`, #191) + `kakao/`. 주소가 비었거나 http(s) 주소가 아니면 요청을 보내지 않고 바로 실패한다(`ApiConfiguredInterceptor`)
   - 경로 대응(게이트웨이 `GROUPS.kakao`, 앱의 Retrofit 경로와 같다. `KakaoApisTest`가 게이트웨이 소스와 대조한다)
 
     | 앱이 부르는 경로 | 카카오 |

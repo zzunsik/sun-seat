@@ -1,0 +1,187 @@
+name: Deploy API gateway
+
+# 앱 API 게이트웨이(workers/api, Cloudflare Workers)를 배포한다(#191). 절차·환경은 workers/api/README.md "배포".
+# - develop push → 개발 Worker `api-dev`(GitHub Environment `api-development`, 디버그 빌드가 부른다)
+# - main push(릴리스 PR 머지) → 운영 Worker `api`(GitHub Environment `api-production`, 릴리스 빌드가 부른다)
+# - 수동 실행(workflow_dispatch): 대상 환경을 고른다. 환경의 배포 브랜치 규칙상 개발은 develop, 운영은 main에서만 돈다.
+# PR·포크 이벤트에서는 돌지 않는다(pull_request·pull_request_target·workflow_run 트리거 없음). Cloudflare 토큰은
+# 환경 시크릿에만 있고, 그 환경은 develop·main에서만 쓸 수 있다.
+on:
+  push:
+    branches: [develop, main]
+    paths:
+      - "workers/api/**"
+      - ".github/workflows/deploy-api.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "배포 대상(development: develop에서, production: main에서만 실행 가능)"
+        type: choice
+        options: [development, production]
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  # 배포 전에 CI의 api-worker job과 같은 타입 검사·테스트를 다시 돌린다. 이 job에는 시크릿이 없다.
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      target: ${{ steps.target.outputs.target }}
+    defaults:
+      run:
+        working-directory: workers/api
+    steps:
+      # push는 브랜치로(main → production, develop → development), 수동 실행은 입력으로 대상을 정한다.
+      - name: 대상 환경
+        id: target
+        working-directory: .
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT: ${{ inputs.environment }}
+          REF: ${{ github.ref }}
+        run: |
+          if [ "$EVENT" = workflow_dispatch ]; then target="$INPUT"
+          elif [ "$REF" = refs/heads/main ]; then target=production
+          else target=development; fi
+          case "$target" in development|production) ;; *) echo "::error::알 수 없는 대상: $target"; exit 1 ;; esac
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: workers/api/package-lock.json
+
+      - name: 의존성 설치(lockfile 고정)
+        run: npm ci --no-audit --no-fund
+
+      - name: 타입 검사
+        run: npm run typecheck
+
+      - name: 테스트(vitest, Workers 런타임)
+        run: npm test
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: api-${{ needs.test.outputs.target }}
+      url: ${{ steps.deploy.outputs.url }}
+    # 같은 환경에는 한 번에 하나만 배포한다. 배포 중인 실행은 취소하지 않는다(뒤 실행은 기다린다).
+    concurrency:
+      group: deploy-api-${{ needs.test.outputs.target }}
+      cancel-in-progress: false
+    env:
+      TARGET: ${{ needs.test.outputs.target }}
+    defaults:
+      run:
+        working-directory: workers/api
+    steps:
+      # 환경의 배포 브랜치 규칙이 먼저 막지만, 규칙이 바뀌어도 잘못된 조합으로 배포하지 않게 한 번 더 본다.
+      - name: 대상 환경과 브랜치 확인
+        working-directory: .
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          case "$TARGET:$REF" in
+            development:refs/heads/develop|production:refs/heads/main) echo "대상: $TARGET ($REF)" ;;
+            *) echo "::error::$TARGET 환경은 이 브랜치($REF)에서 배포하지 않습니다. 개발은 develop, 운영은 main에서만 배포합니다."; exit 1 ;;
+          esac
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: workers/api/package-lock.json
+
+      - name: 의존성 설치(lockfile 고정)
+        run: npm ci --no-audit --no-fund
+
+      # 토큰은 이 단계에만 넘긴다. 값은 출력하지 않는다(있는지만 본다).
+      # 운영은 wrangler.jsonc 최상위(--env=""), 개발은 env.development(--env=development)로 배포한다.
+      - name: 배포(wrangler deploy)
+        id: deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: "false"
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/wrangler-output.ndjson
+        run: |
+          [ -n "$CLOUDFLARE_API_TOKEN" ] || { echo "::error::환경 시크릿 CLOUDFLARE_API_TOKEN이 없습니다. workers/api/README.md \"자동 배포\"대로 이 환경에 넣습니다."; exit 1; }
+          [ -n "$CLOUDFLARE_ACCOUNT_ID" ] || { echo "::error::환경 변수 CLOUDFLARE_ACCOUNT_ID가 없습니다. workers/api/README.md \"자동 배포\"대로 이 환경에 넣습니다."; exit 1; }
+          if [ "$TARGET" = production ]; then wrangler_env=""; else wrangler_env=development; fi
+          npx wrangler deploy --env="$wrangler_env"
+          # wrangler가 남긴 배포 결과(ND-JSON)에서 workers.dev 주소와 버전 ID를 읽는다.
+          node -e '
+            const fs = require("fs");
+            const entries = fs.readFileSync(process.argv[1], "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
+            const d = entries.filter((e) => e.type === "deploy").pop();
+            if (!d) { console.error("배포 결과가 없습니다."); process.exit(1); }
+            const url = (d.targets || []).find((t) => /^https:\/\/[a-z0-9-]+\.[a-z0-9-]+\.workers\.dev$/.test(t));
+            if (!url) { console.error("workers.dev 주소를 찾지 못했습니다(workers_dev 설정을 확인)."); process.exit(1); }
+            if (!/^[0-9a-f-]{36}$/.test(d.version_id || "")) { console.error("버전 ID를 찾지 못했습니다."); process.exit(1); }
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `url=${url}\nversion_id=${d.version_id}\nworker=${d.worker_name}\n`);
+          ' "$WRANGLER_OUTPUT_FILE_PATH"
+
+      # 배포된 주소에 허용 경로 1건(200), 허용 밖 경로 1건(403)을 보낸다. 상태 코드만 보고 본문·헤더는 남기지 않는다.
+      # 공개 POI(서울역) 검색 1건이라 카카오 쿼터를 거의 쓰지 않는다.
+      - name: 스모크 확인
+        id: smoke
+        working-directory: .
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          status() { curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$1" || true; }
+          allowed="$URL/kakao/local/search/keyword?query=%EC%84%9C%EC%9A%B8%EC%97%AD&size=1"
+          denied="$URL/kakao/local/search/address?query=a"
+          # 배포 직후 반영이 늦을 수 있어 200이 아니면 몇 번 다시 본다. 503은 시크릿이 없다는 뜻이라 바로 실패한다.
+          for i in 1 2 3 4 5 6; do
+            code=$(status "$allowed")
+            [ "$code" = 200 ] && break
+            if [ "$code" = 503 ]; then
+              echo "::error::허용 경로가 503(not_configured)입니다. 이 Worker에 시크릿 KAKAO_REST_API_KEY가 없습니다. workers/api/README.md \"카카오 키 넣기\"를 봅니다."
+              exit 1
+            fi
+            echo "허용 경로 응답 $code, 5초 뒤 다시 확인($i/6)"
+            sleep 5
+          done
+          [ "$code" = 200 ] || { echo "::error::허용 경로가 200이 아닙니다($code)."; exit 1; }
+          echo "허용 경로: $code"
+          code=$(status "$denied")
+          [ "$code" = 403 ] || { echo "::error::허용 밖 경로가 403이 아닙니다($code)."; exit 1; }
+          echo "허용 밖 경로: $code"
+          echo "result=허용 경로 200, 허용 밖 경로 403" >> "$GITHUB_OUTPUT"
+
+      - name: 실행 요약
+        if: always()
+        working-directory: .
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+          VERSION_ID: ${{ steps.deploy.outputs.version_id }}
+          WORKER: ${{ steps.deploy.outputs.worker }}
+          SMOKE: ${{ steps.smoke.outputs.result }}
+          SHA: ${{ github.sha }}
+        run: |
+          {
+            echo "### 게이트웨이 배포: $TARGET"
+            echo ""
+            echo "| 항목 | 값 |"
+            echo "|---|---|"
+            echo "| Worker | ${WORKER:-(배포 안 됨)} |"
+            echo "| 주소 | ${URL:-(없음)} |"
+            echo "| 버전 ID | ${VERSION_ID:-(없음)} |"
+            echo "| 커밋 | $SHA |"
+            echo "| 스모크 | ${SMOKE:-실패 또는 실행 안 됨} |"
+          } >> "$GITHUB_STEP_SUMMARY"

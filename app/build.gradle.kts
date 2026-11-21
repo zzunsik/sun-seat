@@ -13,6 +13,19 @@ val localProps = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }
 
+// 빌드 설정값은 local.properties에서 먼저 읽고, 없으면 같은 이름의 환경 변수에서 읽는다(릴리스 워크플로용, #118). 빈 값은 없는 것으로 본다.
+fun buildSetting(name: String): String? =
+    localProps.getProperty(name)?.trim()?.takeIf { it.isNotEmpty() }
+        ?: System.getenv(name)?.trim()?.takeIf { it.isNotEmpty() }
+
+// 앱 API 게이트웨이(workers/api) 주소(#189, #191). 디버그 빌드는 개발 게이트웨이(api-dev), 릴리스 빌드는 운영 게이트웨이(api)를 부른다.
+// SUNSEAT_API_BASE_URL_DEBUG·SUNSEAT_API_BASE_URL_RELEASE를 읽고, 없으면 예전 이름 SUNSEAT_API_BASE_URL을 쓴다. 모두 없으면 빈 문자열(CI 포함).
+fun apiBaseUrl(buildType: String): String {
+    val url = buildSetting("SUNSEAT_API_BASE_URL_$buildType") ?: buildSetting("SUNSEAT_API_BASE_URL") ?: ""
+    require('"' !in url && '\\' !in url) { "SUNSEAT_API_BASE_URL_$buildType must not contain quotes or backslashes." }
+    return url
+}
+
 val releaseSigningKeys = listOf("RELEASE_STORE_FILE", "RELEASE_STORE_PASSWORD", "RELEASE_KEY_ALIAS", "RELEASE_KEY_PASSWORD")
 val releaseSigningConfigured = releaseSigningKeys.all { !localProps.getProperty(it).isNullOrBlank() }
 require(releaseSigningConfigured || releaseSigningKeys.none { !localProps.getProperty(it).isNullOrBlank() }) {
@@ -29,14 +42,12 @@ android {
         targetSdk = 37
         versionCode = 1
         versionName = "0.1.0"
-        // 키·주소는 local.properties에서만 읽는다. 없으면 빈 문자열로 빌드된다(CI 포함).
+        // 키·주소는 local.properties(게이트웨이 주소는 환경 변수도, 위 buildSetting)에서 읽는다. 없으면 빈 문자열로 빌드된다(CI 포함).
         // 지도 SDK의 네이티브 앱 키는 APK에 들어간다(패키지명·서명 키 해시로 제한).
         val mapKey = localProps.getProperty("KAKAO_NATIVE_APP_KEY", "")
         buildConfigField("String", "KAKAO_NATIVE_APP_KEY", "\"$mapKey\"")
         // 카카오 REST 호출은 앱 API 게이트웨이(workers/api)로 간다(#189). REST 키는 게이트웨이의 시크릿에만 두고 APK에 넣지 않는다.
-        val apiUrl = localProps.getProperty("SUNSEAT_API_BASE_URL", "").trim()
-        require('"' !in apiUrl && '\\' !in apiUrl) { "SUNSEAT_API_BASE_URL must not contain quotes or backslashes." }
-        buildConfigField("String", "SUNSEAT_API_BASE_URL", "\"$apiUrl\"")
+        // 게이트웨이 주소 BuildConfig.SUNSEAT_API_BASE_URL은 빌드 종류마다 다르다(아래 buildTypes, #191).
         if (!localProps.getProperty("KAKAO_REST_API_KEY").isNullOrBlank()) {
             logger.warn("local.properties의 KAKAO_REST_API_KEY는 더 이상 쓰지 않습니다(#189). 지우고 SUNSEAT_API_BASE_URL을 설정하세요.")
         }
@@ -54,7 +65,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField("String", "SUNSEAT_API_BASE_URL", "\"${apiBaseUrl("DEBUG")}\"")
+        }
         release {
+            buildConfigField("String", "SUNSEAT_API_BASE_URL", "\"${apiBaseUrl("RELEASE")}\"")
             if (releaseSigningConfigured) signingConfig = signingConfigs.getByName("personalRelease")
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
