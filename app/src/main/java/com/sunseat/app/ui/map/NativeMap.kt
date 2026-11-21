@@ -290,7 +290,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
             state.routeProgress?.let { progress -> progressLines.forEach { it.setProgress(progress.coerceIn(0f, 1f) - 1f) } }
             lastProgress = state.routeProgress
         }
-        val position = state.cursor
+        val position = state.visibleCursor
         if (position == null) { cursor?.hide(); ray?.hide() }
         else {
             val layer = target.labelManager?.layer ?: return

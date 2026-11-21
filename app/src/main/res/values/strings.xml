@@ -383,6 +383,10 @@
     <string name="simulation_arrived_time">%1$s · 도착</string>
     <string name="simulation_progress">이동 %1$d%%</string>
     <string name="simulation_route_overview">출발 %1$s → 도착 %2$s</string>
+    <!-- #152: 차량과 겹친 노선 배지를 숨겨도(#146) 지금·다음에 탈 노선을 정보 카드에 남긴다 -->
+    <string name="simulation_ride_now">%1$s 탑승 중</string>
+    <string name="simulation_ride_next">다음 %1$s 탑승</string>
+    <string name="simulation_ride_overview">%1$s · %2$s</string>
     <string name="candidates_preview_title">선택한 경로</string>
     <string name="candidates_preview_close">경로 목록으로 돌아가기</string>
     <string name="candidates_fit_route">지도 맞춤</string>
