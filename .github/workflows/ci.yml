@@ -120,7 +120,7 @@ jobs:
         run: bash scripts/test-guard.sh "$BASE_SHA" "$HEAD_SHA"
 
   # 앱 API 게이트웨이(workers/api, Cloudflare Workers, #189)의 타입 검사와 테스트(허용 목록·호출 제한·키 비노출).
-  # 배포는 하지 않는다(저장소 소유자가 wrangler deploy로 한다). 시크릿을 쓰지 않는다.
+  # 배포는 하지 않는다(develop·main 머지 뒤 deploy-api.yml이 한다, #191). 시크릿을 쓰지 않는다.
   api-worker:
     runs-on: ubuntu-latest
     timeout-minutes: 10

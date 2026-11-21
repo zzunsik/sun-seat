@@ -16,11 +16,12 @@ JDK 25와 Android SDK(platform 37)가 필요합니다. Android Studio는 없어�
 
    ```properties
    sdk.dir=/path/to/Android/sdk
-   SUNSEAT_API_BASE_URL=https://api.<workers.dev 하위 도메인>.workers.dev
+   SUNSEAT_API_BASE_URL_DEBUG=https://api-dev.<workers.dev 하위 도메인>.workers.dev
+   SUNSEAT_API_BASE_URL_RELEASE=https://api.<workers.dev 하위 도메인>.workers.dev
    KAKAO_NATIVE_APP_KEY=<카카오 네이티브 앱 키>
    ```
 
-   - `SUNSEAT_API_BASE_URL`: 앱 API 게이트웨이(`workers/api`, Cloudflare Workers) 주소입니다. 장소 검색·지도에서 위치 고르기·대중교통·자동차 경로는 모두 이 서버를 거쳐 카카오 REST API를 부릅니다. 카카오 REST API 키는 게이트웨이의 시크릿에만 두고 앱(APK)에는 넣지 않습니다(#189). 배포 방법은 [workers/api/README.md](workers/api/README.md)에 있습니다.
+   - `SUNSEAT_API_BASE_URL_DEBUG`·`SUNSEAT_API_BASE_URL_RELEASE`: 앱 API 게이트웨이(`workers/api`, Cloudflare Workers) 주소입니다. 디버그 빌드는 개발 게이트웨이(`api-dev`), 릴리스 빌드는 운영 게이트웨이(`api`)를 부릅니다(#191). 장소 검색·지도에서 위치 고르기·대중교통·자동차 경로는 모두 이 서버를 거쳐 카카오 REST API를 부릅니다. 카카오 REST API 키는 게이트웨이의 시크릿에만 두고 앱(APK)에는 넣지 않습니다(#189). 예전 이름 `SUNSEAT_API_BASE_URL` 한 줄만 있으면 두 빌드가 그 주소를 씁니다. 게이트웨이는 `develop`·`main`에 머지되면 자동 배포됩니다. 환경·배포 방법은 [workers/api/README.md](workers/api/README.md)에 있습니다.
    - `KAKAO_NATIVE_APP_KEY`: 지도 SDK 키입니다. 받는 방법은 아래 "카카오 지도 설정"에 있습니다.
 
    값이 없어도 빌드는 됩니다. 주소가 없으면 장소 검색·경로 찾기가, 네이티브 앱 키가 없으면 지도가 동작하지 않고 안내가 나옵니다. 예전의 `KAKAO_REST_API_KEY`는 더 이상 읽지 않습니다. 남아 있으면 빌드가 경고하니 지웁니다.
@@ -115,6 +116,8 @@ RELEASE_KEY_PASSWORD=<키 비밀번호>
 3. build-tools의 `apksigner verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk`로 서명과 이전 배포와 같은 인증서 지문인지 확인합니다.
 4. `adb -s <기기ID> install -r app/build/outputs/apk/release/app-release.apk`로 설치합니다. 첫 설치와 업데이트 모두 같은 명령입니다. `INSTALL_FAILED_UPDATE_INCOMPATIBLE`은 보통 서명이 다르다는 뜻입니다. 앱을 자동으로 지우거나 낮은 버전 설치를 강제하지 않습니다.
 5. 버전·설정·저장 장소가 유지되는지 확인합니다.
+
+릴리스 빌드는 운영 게이트웨이(`SUNSEAT_API_BASE_URL_RELEASE`)를 부릅니다. 게이트웨이를 바꾼 릴리스는 `main` 머지 뒤 운영 게이트웨이 자동 배포(`deploy-api.yml`)가 성공했는지 확인한 다음 APK를 배포합니다.
 
 릴리스 APK의 지도는 콘솔의 Android 플랫폼에 **릴리스 키 해시**도 등록해야 인증됩니다. 해시는 위 명령에서 별칭과 키 저장소만 바꿔 구합니다(`-alias sun-seat -keystore "$HOME/.sun-seat/release.jks"`, 비밀번호는 프롬프트로 입력). 릴리스는 지금 minify를 끈 상태입니다. R8을 켜면 지도까지 다시 확인합니다.
 
