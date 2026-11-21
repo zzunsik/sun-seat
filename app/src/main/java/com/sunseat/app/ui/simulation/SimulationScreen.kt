@@ -23,6 +23,16 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import com.sunseat.app.ui.components.ScrollEdgeCue
+import com.sunseat.app.ui.components.measuredOr
+import com.sunseat.app.ui.components.overlay
 import com.sunseat.app.R
 import com.sunseat.app.domain.*
 import com.sunseat.app.ui.components.*
@@ -76,6 +86,9 @@ fun SimulationScreen(
         if (p.position == null || p.heading == null) null
         else MapCursor(p.position, p.heading, p.sun?.azimuth ?: 0.0, if (p.undergroundOrUnknown) -90.0 else p.sun?.altitude ?: -90.0)
     }
+    // #161 #172: 지도 위 정보 카드(오버레이)의 측정 아래끝. 지도 보이는 영역은 그 아래에서 시작하고, 고정값은 측정 전 첫 프레임 어림으로만 쓴다.
+    var infoCardBottom by remember { mutableStateOf(0.dp) }
+    val mapTop = measuredOr(infoCardBottom, Sizes.simulationMapInfo)
     // #180: 지도를 쓸 수 없으면 카메라를 다시 따라가게 하는 따라가기 줄을 두지 않는다(정보 카드는 글자 정보라 남긴다).
     var mapUnavailable by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     @Composable fun JourneyMap(mapModifier: Modifier) {
@@ -84,8 +97,8 @@ fun SimulationScreen(
                 SunSeatMap(MapState(routes = listOf(route), origin = request.origin, destination = request.destination,
                     cursor = cursor, followCursor = state.following, onGesture = actions.unfollow, onUnavailable = { mapUnavailable = true },
                     routeProgress = point?.routeProgress ?: 0f, showDecorations = false,
-                    padding=MapPadding(top=Sizes.simulationMapInfo,bottom=Spacing.s)), Modifier.fillMaxSize())
-                Surface(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(Spacing.s).testTag("simulation_info_card"),color=scheme.surface,shape=MaterialTheme.shapes.medium) {
+                    padding=MapPadding(top=mapTop,bottom=Spacing.s)), Modifier.fillMaxSize())
+                Surface(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(Spacing.s).testTag("simulation_info_card").overlay("simulation_info_card") { _, bottom -> infoCardBottom = bottom + Spacing.s },color=scheme.surface,shape=MaterialTheme.shapes.medium) {
                     Column(Modifier.padding(horizontal=Spacing.m,vertical=Spacing.s),verticalArrangement=Arrangement.spacedBy(Spacing.xs)) {
                         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
                             Text(stringResource(if(state.elapsedMillis>=duration) R.string.simulation_arrived_time else if(state.playing) R.string.simulation_moving_time else R.string.simulation_paused_time,currentTime),style=MaterialTheme.typography.titleSmall)
@@ -119,10 +132,15 @@ fun SimulationScreen(
         }
     }
     @Composable fun CabinDetails(detailModifier: Modifier) {
-            Column(detailModifier.testTag("simulation_details").verticalScroll(rememberScrollState()).padding(horizontal=Spacing.screen,vertical=if(landscape) Spacing.s else Spacing.screen), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+        // #155: 조작 패널 위에서 끝나는 스크롤 본문. 더 내릴 내용이 있으면 경계에 "더 있음" 구분선을 둔다(DESIGN 4.5).
+        val detailScroll = rememberScrollState()
+        Box(detailModifier) {
+            Column(Modifier.fillMaxSize().testTag("simulation_details").verticalScroll(detailScroll).padding(horizontal=Spacing.screen,vertical=if(landscape) Spacing.s else Spacing.screen), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                 if (point != null && point.leg.mode != Mode.WALK) CabinPanel(point, request.mode, state, actions)
                 if (result.arrival != result.modeledArrival) Text(stringResource(R.string.simulation_modeled_note, time(result.arrival)), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             }
+            ScrollEdgeCue(detailScroll, "simulation_details", Modifier.align(Alignment.BottomCenter), trailingPadding = if (landscape) Spacing.s else Spacing.screen)
+        }
     }
     Surface(modifier.fillMaxSize(), color = scheme.background, contentColor = scheme.onSurface) {
         Column(Modifier.fillMaxSize()) {
@@ -150,9 +168,10 @@ fun SimulationScreen(
                             Text(time(result.modeledArrival),style=MaterialTheme.typography.labelSmall)
                         }
                     }
-                    if(!SunSeatTheme.reduceMotion) Row(horizontalArrangement=Arrangement.spacedBy(Spacing.s),verticalAlignment=Alignment.CenterVertically) {
-                        PrimaryButton(onClick=actions.toggle,modifier=Modifier.width(Sizes.simulationCompactPlay),enabled=point!=null) { Text(stringResource(if(state.playing) R.string.simulation_pause else R.string.simulation_play)) }
-                        listOf(1,2,4).forEach { speed -> NeutralFilterChip(state.speed==speed,stringResource(R.string.simulation_speed,speed)) { actions.speed(speed) } }
+                    if(!SunSeatTheme.reduceMotion) FlowRow(Modifier.weight(1f,fill=false),horizontalArrangement=Arrangement.spacedBy(Spacing.s),verticalArrangement=Arrangement.spacedBy(Spacing.xs),itemVerticalAlignment=Alignment.CenterVertically) {
+                        PrimaryButton(onClick=actions.toggle,modifier=Modifier.widthIn(min=Sizes.simulationCompactPlay),enabled=point!=null) { Text(stringResource(if(state.playing) R.string.simulation_pause else R.string.simulation_play),softWrap=false) }
+                        // 배속 선택지는 한 묶음으로 함께 다음 줄로 흐른다.
+                        Row(horizontalArrangement=Arrangement.spacedBy(Spacing.s),verticalAlignment=Alignment.CenterVertically) { listOf(1,2,4).forEach { speed -> NeutralFilterChip(state.speed==speed,stringResource(R.string.simulation_speed,speed)) { actions.speed(speed) } } }
                     }
                 } else Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Spacing.screen, vertical = Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     if(!landscape) MiniTimeline(result, boundaries)
@@ -164,9 +183,11 @@ fun SimulationScreen(
                         Text(stringResource(R.string.simulation_scrub_time, currentTime), style = MaterialTheme.typography.labelSmall)
                         Text(time(result.modeledArrival), style = MaterialTheme.typography.labelSmall)
                     }
-                    if (!SunSeatTheme.reduceMotion) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalAlignment = Alignment.CenterVertically) {
-                        PrimaryButton(onClick = actions.toggle, modifier = Modifier.weight(1f), enabled = point != null) { Text(stringResource(if (state.playing) R.string.simulation_pause else R.string.simulation_play)) }
-                        listOf(1, 2, 4).forEach { speed -> NeutralFilterChip(state.speed == speed, stringResource(R.string.simulation_speed, speed)) { actions.speed(speed) } }
+                    // #161: 버튼 글자는 꺾지 않고, 한 줄에 안 들어가면 배속 선택이 다음 줄로 흐른다(DESIGN 4.4).
+                    if (!SunSeatTheme.reduceMotion) FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.xs), itemVerticalAlignment = Alignment.CenterVertically) {
+                        PrimaryButton(onClick = actions.toggle, modifier = Modifier.weight(1f), enabled = point != null) { Text(stringResource(if (state.playing) R.string.simulation_pause else R.string.simulation_play), softWrap = false) }
+                        // 배속 선택지는 한 묶음으로 함께 다음 줄로 흐른다.
+                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalAlignment = Alignment.CenterVertically) { listOf(1, 2, 4).forEach { speed -> NeutralFilterChip(state.speed == speed, stringResource(R.string.simulation_speed, speed)) { actions.speed(speed) } } }
                     }
                 }
             }
