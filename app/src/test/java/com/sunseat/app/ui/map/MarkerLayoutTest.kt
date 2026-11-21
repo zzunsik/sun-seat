@@ -23,7 +23,7 @@ class MarkerLayoutTest {
         marker = 32f * d, tail = 6f * d, gap = 4f * d,
         originWidth = 40f * d * fontScale, destinationWidth = 40f * d * fontScale,
         stopRadius = 7f * d, labelHeight = maxOf(20f, 16f * fontScale) * d,
-        vehicle = 32f * d, currentLocation = 21f * d,
+        vehicle = 32f * d, currentLocation = 21f * d, sunRay = 56f * d,
         labelWidth = { stop -> ((stop.lines.firstOrNull()?.length ?: 2) * 8f * fontScale + 8f) * d },
     )
 
@@ -86,12 +86,13 @@ class MarkerLayoutTest {
             cursor = MapCursor(seoul, 0.0, 90.0, 30.0), followCursor = true, routeProgress = 0f)
         val marks = playing.marks(sizes(), project(seoul))
         val placements = markerLayout(marks)
-        val vehicle = marks.indexOfFirst { it.kind == MarkKind.VEHICLE }
-        val vehicleBox = box(marks[vehicle], placements[vehicle])
+        // 차량과 해 방향 선(고정 표식) 모두 글자 표식을 덮지 않는다.
+        val fixedBoxes = marks.zip(placements).filter { it.first.fixed }.map { (m, p) -> box(m, p) }
+        assertTrue("vehicle and sun ray are fixed marks", marks.count { it.fixed } == 2)
         marks.zip(placements).forEach { (mark, placement) ->
             if (mark.fixed) return@forEach
             if (placement.hidden) assertEquals("${mark.kind} hidden while playing keeps its text in the info card", Fallback.INFO_CARD, mark.fallback)
-            else assertFalse("${mark.kind} must not sit under the vehicle", overlaps(box(mark, placement), vehicleBox))
+            else assertTrue("${mark.kind} must not sit under the vehicle or its sun ray", fixedBoxes.none { overlaps(box(mark, placement), it) })
         }
     }
 

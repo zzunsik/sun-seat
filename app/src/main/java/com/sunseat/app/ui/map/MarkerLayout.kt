@@ -15,7 +15,7 @@ enum class PinSide { UP, DOWN, RIGHT, LEFT }
 enum class Fallback { NONE, INFO_CARD, TALKBACK_SUMMARY }
 
 /** 표식 종류(우선순위 표의 행, DESIGN 11.1). */
-internal enum class MarkKind { ORIGIN, DESTINATION, VEHICLE, CURRENT_LOCATION, STOP_LABEL }
+internal enum class MarkKind { ORIGIN, DESTINATION, VEHICLE, SUN_RAY, CURRENT_LOCATION, STOP_LABEL }
 
 /**
  * 배치할 표식 하나. [x]·[y]는 좌표의 화면 위치(px, 평행 이동해도 결과가 같다), [variants]는 놓을 수 있는 상자들(좌표 기준, 앞이 먼저)이고
@@ -108,6 +108,8 @@ internal data class MarkSizes(
     val labelHeight: Float,
     val vehicle: Float,
     val currentLocation: Float,
+    /** 재생 차량에서 해 쪽으로 뻗는 해 방향 선 길이(끝의 해 원 포함). 0이면 넣지 않는다. */
+    val sunRay: Float = 0f,
     val labelWidth: (StopMarker) -> Float,
 )
 
@@ -127,6 +129,7 @@ internal sealed interface MarkKey {
     data object Origin : MarkKey
     data object Destination : MarkKey
     data object Vehicle : MarkKey
+    data object SunRay : MarkKey
     data object CurrentLocation : MarkKey
     /** 선택 경로 [RouteLinePolicy.stops]의 [index]번째 정류장 이름표. */
     data class StopLabel(val index: Int) : MarkKey
@@ -156,6 +159,13 @@ internal fun MapState.marks(sizes: MarkSizes, project: (LatLng) -> Pair<Float, F
         val (x, y) = project(cursor.position)
         val half = sizes.vehicle / 2
         out += Mark(MarkKey.Vehicle, MarkKind.VEHICLE, cursor.position, x, y, listOf(ScreenBox(-half, -half, half, half)), MarkPriority.VEHICLE, fixed = true)
+        // 해 방향 선도 차량의 일부다(움직이지 않는다). 북이 위인 지도에서 방위각 쪽으로 뻗는다.
+        if (cursor.sunAltitude > 0 && sizes.sunRay > 0f) {
+            val angle = Math.toRadians(cursor.sunAzimuth)
+            val ex = (kotlin.math.sin(angle) * sizes.sunRay).toFloat(); val ey = (-kotlin.math.cos(angle) * sizes.sunRay).toFloat()
+            val pad = sizes.vehicle / 6
+            out += Mark(MarkKey.SunRay, MarkKind.SUN_RAY, cursor.position, x, y, listOf(ScreenBox(minOf(0f, ex) - pad, minOf(0f, ey) - pad, maxOf(0f, ex) + pad, maxOf(0f, ey) + pad)), MarkPriority.VEHICLE, fixed = true)
+        }
     }
     focus?.let {
         val (x, y) = project(it.location)

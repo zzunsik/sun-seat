@@ -340,7 +340,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
             marker = metrics.marker, tail = metrics.tail, gap = metrics.textPadding,
             originWidth = startIcon.width.toFloat(), destinationWidth = endIcon.width.toFloat(),
             stopRadius = metrics.stop / 2, labelHeight = nameHeight(paint),
-            vehicle = metrics.marker, currentLocation = metrics.marker * 2 / 3,
+            vehicle = metrics.marker, currentLocation = metrics.marker * 2 / 3, sunRay = metrics.ray,
             labelWidth = { stop -> paint.measureText(metrics.stopLabel(stop)) + metrics.textPadding * 2 },
         )
     }

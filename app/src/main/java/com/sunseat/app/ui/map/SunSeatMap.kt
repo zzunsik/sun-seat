@@ -106,6 +106,7 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
             stopRadius = Sizes.mapStopMarker.toPx() / 2,
             labelHeight = maxOf(Sizes.mapLabelHeight.toPx(), textMeasurer.measure("0", labelStyle).size.height.toFloat()),
             vehicle = Sizes.mapMarker.toPx(), currentLocation = Sizes.mapMarker.toPx() * 2 / 3,
+            sunRay = (if (state.routeProgress != null) Sizes.simulationSunRay else Sizes.mapSunRay).toPx(),
             labelWidth = { stop -> textMeasurer.measure(stopName(stop), labelStyle).size.width + Spacing.xs.toPx() * 2 },
         )
     }
