@@ -39,8 +39,10 @@ A runtime bump and the recompiled `*.filamat` therefore go in the same PR:
 
 Dependabot ignores Filament version updates for this reason (`.github/dependabot.yml`),
 so nothing announces a new Filament release; check releases by hand. The ignore rule
-does not block Dependabot security updates, but Gradle dependencies are not in the
-dependency graph yet, so none arrive (#197). Any Filament bump follows the steps above.
+does not block Dependabot security alerts or security update PRs: Gradle dependencies
+reach the dependency graph through `.github/workflows/dependency-submission.yml` (#197).
+A security update PR that bumps only Filament fails `FilamentMaterialVersionTest` until
+the materials are recompiled. Any Filament bump follows the steps above.
 
 ## Device fixtures
 

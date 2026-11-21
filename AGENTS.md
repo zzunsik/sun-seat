@@ -99,7 +99,7 @@
 
 - JDK 25, Android SDK platform 37. Android Studio 없이 명령줄로 빌드한다.
 - 의존성 버전은 `gradle/libs.versions.toml`에서만 관리한다. 의존성 업데이트는 Dependabot PR로 받는다.
-  - 예외: Filament(`com.google.android.filament*`)는 Dependabot이 버전 업데이트를 올리지 않는다. 사람이 올리고, 같은 PR에서 `tools/simulation/*.mat`을 같은 버전의 `matc`로 다시 컴파일한다(`tools/simulation/README.md`). `FilamentMaterialVersionTest`가 런타임 버전과 `.filamat`의 material 버전이 다르면 실패한다. 새 Filament 릴리스는 사람이 확인한다. 무시 규칙은 보안 업데이트를 막지 않지만 지금은 Gradle 의존성이 의존성 그래프에 없어 보안 알림이 오지 않는다(#197). 어떤 경로로 올리든 같은 절차를 따른다.
+  - 예외: Filament(`com.google.android.filament*`)는 Dependabot이 버전 업데이트를 올리지 않는다. 사람이 올리고, 같은 PR에서 `tools/simulation/*.mat`을 같은 버전의 `matc`로 다시 컴파일한다(`tools/simulation/README.md`). `FilamentMaterialVersionTest`가 런타임 버전과 `.filamat`의 material 버전이 다르면 실패한다. 새 Filament 릴리스는 사람이 확인한다. 무시 규칙은 보안 알림과 보안 업데이트 PR을 막지 않는다(Gradle 의존성은 아래 "저장소 설정"의 의존성 제출로 의존성 그래프에 오른다, #197). Dependabot 보안 업데이트 PR이 Filament만 올리면 재료를 다시 컴파일하기 전까지 `FilamentMaterialVersionTest`가 실패한다. 어떤 경로로 올리든 같은 절차를 따른다.
 
 ## 코드 구조
 
@@ -218,6 +218,7 @@ GitHub 설정으로 강제하는 것들이다. 설정을 바꾸면 이 절도 �
 - 비공개 취약점 제보가 켜져 있다.
 - CodeQL 기본 설정이 코드와 워크플로를 검사한다. 경고는 다른 결함처럼 이슈로 다룬다.
 - Dependabot이 보안 알림과 보안 업데이트 PR을 보내고, 주 1회 의존성 업데이트를 종류별로 PR 하나에 모아 보낸다(`.github/dependabot.yml`). Dependabot PR은 이슈 없이 받고 다른 PR과 같은 검사를 거친다.
+  - 보안 알림은 기본 브랜치(`develop`)의 의존성 그래프를 따른다. GitHub은 Gradle 빌드 파일을 정적으로 읽지 못하므로 `.github/workflows/dependency-submission.yml`이 `develop`·`main` push마다 Gradle 의존성(앱 런타임, 테스트, 빌드 도구 classpath 전부)을 의존성 제출 API로 올린다(#197). 이 job만 `contents: write`를 받는다. push에서만 돌아 PR에는 결과가 없으므로 `ci-passed`에 넣지 않는다. 실패하면 그래프가 이전 커밋 상태로 남으니 Actions에서 실패를 보면 고친다.
 - Actions:
   - 워크플로의 기본 토큰 권한은 읽기 전용이다.
   - GitHub 소유 액션, 인증된 제작자의 액션, 허용 목록(`android-actions/setup-android`, `gradle/actions`)만 실행된다. 외부 액션은 SHA로 고정해야 실행된다.
