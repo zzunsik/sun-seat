@@ -124,7 +124,7 @@ fun SimulationScreen(
             // #155: while more text continues under the playback controls, fade the last visible line into the background
             // and mark the edge (DESIGN 4: scrolling surface with more below gets a bottom divider) instead of a bare half-cut line.
             if (scroll.canScrollForward) {
-                Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(Spacing.l).testTag(DETAILS_MORE_TAG)
+                Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(Spacing.xl).testTag(DETAILS_MORE_TAG)
                     .background(Brush.verticalGradient(listOf(scheme.background.copy(alpha = 0f), scheme.background))))
                 HorizontalDivider(Modifier.align(Alignment.BottomCenter), color = scheme.outlineVariant)
             }
