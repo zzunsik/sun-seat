@@ -172,7 +172,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
     private var lastCenter: MapFocus? = null
     private var cameraIdle: ((LatLng) -> Unit)? = null
     private var lastCursor: MapCursor? = null
-    private var lastFollow: MapCursor? = null
+    private var lastFollow: LatLng? = null
     private var following = false
     private var playbackMode = false
     private val progressLines = mutableListOf<com.kakao.vectormap.route.RouteLine>()
@@ -314,9 +314,9 @@ private class MapSession(context: Context, private val ink: Int, private val sur
             if(lightSide!=lastVehicleLight) { cursor?.setStyles(playbackLabelStyle(marker(2,ink,lightSide)));cursor?.invalidate(false);cursor?.rotateTo(Math.toRadians(position.heading).toFloat());lastVehicleLight=lightSide }
             if (position.sunAltitude > 0) ray?.show() else ray?.hide()
         }
-        // The camera follows the playback position even when the vehicle is not drawn (arrival, #152).
-        val follow = state.cursor
-        if (follow != null && state.followCursor && (follow != lastFollow || !following)) target.moveCamera(CameraUpdateFactory.newCenterPosition(follow.position.sdk()))
+        // The camera follows playback even when the vehicle is not drawn; on arrival it centres the destination marker (#152).
+        val follow = state.followTarget
+        if (follow != null && (follow != lastFollow || !following)) target.moveCamera(CameraUpdateFactory.newCenterPosition(follow.sdk()))
         lastFollow = follow
         following = state.followCursor
         lastCursor = position

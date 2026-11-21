@@ -107,4 +107,12 @@ class RideCueTest {
         assertFalse("line name must not be ellipsized", (0 until l.lineCount).any { l.isLineEllipsized(it) })
         assertEquals("the whole cue is laid out", l.layoutInput.text.length, l.getLineEnd(l.lineCount - 1))
     }
+    /** Device check: the alighting stop can be a block away from the destination, so on arrival the camera centres the destination marker. */
+    @Test fun arrivalCentresTheDestinationMarker() {
+        val stop = LatLng(37.597, 127.001)
+        val arrived = MapState(routes = listOf(route), destination = request.destination, cursor = MapCursor(stop, 0.0, 90.0, 15.0), followCursor = true, routeProgress = 1f)
+        assertEquals(d, arrived.followTarget)
+        assertEquals(stop, arrived.copy(routeProgress = .99f).followTarget)
+        assertNull(arrived.copy(followCursor = false).followTarget)
+    }
 }
