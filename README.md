@@ -84,13 +84,42 @@ JDK 25와 Android SDK(platform 37)가 필요합니다. Android Studio는 없어�
 
 지도는 일반 스타일 하나만 쓰므로 밝은 바탕으로 고정하고, 지도 주변 UI만 앱의 화면 모드를 따릅니다. 스크린샷 테스트는 `LocalMapRenderer provides MapRenderer.PREVIEW`로 네이티브 SDK 대신 경로 좌표를 단순 투영해 그립니다. 실제 지도 표시와 생명주기 복귀는 기기에서 따로 확인합니다.
 
-## 개인용 릴리스 APK
+## 릴리스 APK 설치
 
-업데이트 설치에는 **같은 패키지·서명 키**와 **더 큰 versionCode**가 필요합니다. 디버그 APK에서 릴리스 APK로 바꾸면 서명이 달라 덮어 설치할 수 없고, 지우고 설치하면 저장한 설정과 장소가 사라집니다.
+릴리스 APK는 [GitHub Releases](https://github.com/zzunsik/sun-seat/releases)에서 받습니다. `v*` 태그를 달면 CI가 릴리스 키로 서명하고 빌드 출처 증명을 붙여 자동으로 올립니다(절차와 버전 규칙은 [AGENTS.md](AGENTS.md) "릴리스"). 각 릴리스에는 `sun-seat-vX.Y.Z.apk`와 체크섬 `sun-seat-vX.Y.Z.apk.sha256`이 있고, 공개된 뒤에는 바뀌지 않습니다.
+
+### 받아서 확인하기
+
+```bash
+gh release download vX.Y.Z -R zzunsik/sun-seat
+sha256sum -c sun-seat-vX.Y.Z.apk.sha256                          # 체크섬
+# 이 저장소의 릴리스 워크플로가 만들었는지
+gh attestation verify sun-seat-vX.Y.Z.apk -R zzunsik/sun-seat --signer-workflow zzunsik/sun-seat/.github/workflows/release.yml
+apksigner verify --print-certs sun-seat-vX.Y.Z.apk               # 서명 인증서 SHA-256이 릴리스 노트·이전 릴리스와 같은지
+```
+
+`apksigner`는 Android SDK build-tools에 있습니다.
+
+### 설치·업데이트
+
+업데이트 설치에는 **같은 패키지·서명 키**와 **같거나 더 큰 versionCode**가 필요합니다.
+
+- **처음 한 번**: 기기에 디버그 빌드(`assembleDebug`)나 다른 키로 서명한 APK가 깔려 있으면 서명이 달라 덮어 설치할 수 없습니다(`INSTALL_FAILED_UPDATE_INCOMPATIBLE`). 기존 앱을 한 번 지우고 설치합니다. 이때 저장한 설정과 장소가 지워집니다.
+- 그다음부터는 새 릴리스를 덮어 설치하면 설정과 저장 장소가 유지됩니다.
+
+```bash
+adb -s <기기ID> install -r sun-seat-vX.Y.Z.apk
+```
+
+앱을 자동으로 지우거나 낮은 버전 설치를 강제하지 않습니다. 기기에서 직접 APK를 열어 설치해도 됩니다(출처를 알 수 없는 앱 허용 필요).
+
+## 로컬에서 서명한 릴리스 APK (보조)
+
+릴리스 워크플로를 쓸 수 없을 때만 씁니다. **Releases와 같은 릴리스 키로 서명해야** Releases에서 설치한 앱을 업데이트할 수 있습니다. 다른 키로 서명한 APK는 서로 덮어 설치할 수 없습니다.
 
 ### 서명 키 준비
 
-처음 한 번만 JDK의 `keytool`로 만듭니다. 비밀번호는 프롬프트에 입력하고 명령 인수나 Git에 넣지 않습니다. 키를 잃으면 같은 앱의 업데이트를 만들 수 없으므로 저장소 밖의 안전한 곳에 백업합니다.
+릴리스 키는 저장소 소유자가 저장소 밖에 보관합니다. 새 키가 필요하면(개인 포크 등) JDK의 `keytool`로 만듭니다. 비밀번호는 프롬프트에 입력하고 명령 인수나 Git에 넣지 않습니다. 키를 잃으면 같은 앱의 업데이트를 만들 수 없으므로 저장소 밖의 안전한 곳에 백업합니다.
 
 ```bash
 mkdir -p "$HOME/.sun-seat"
@@ -98,7 +127,7 @@ keytool -genkeypair -keystore "$HOME/.sun-seat/release.jks" -alias sun-seat \
   -keyalg RSA -keysize 3072 -validity 10000
 ```
 
-`local.properties`에 다음을 더합니다. 경로는 절대 경로나 저장소 기준 상대 경로입니다. Windows 경로는 `/`를 쓰거나 `\`를 이스케이프합니다.
+`local.properties`에 다음을 더합니다. 경로는 절대 경로나 저장소 기준 상대 경로입니다. Windows 경로는 `/`를 쓰거나 `\`를 이스케이프합니다. 같은 이름의 환경 변수로 넘겨도 됩니다(`local.properties`가 먼저입니다. 릴리스 워크플로가 이 방법을 씁니다). 셸에 `RELEASE_*` 환경 변수가 남아 있으면 로컬 빌드에도 쓰이고, 값의 앞뒤 공백은 지워집니다.
 
 ```properties
 RELEASE_STORE_FILE=/path/to/.sun-seat/release.jks
@@ -111,15 +140,14 @@ RELEASE_KEY_PASSWORD=<키 비밀번호>
 
 ### 버전·빌드·설치
 
-1. 배포할 때마다 `app/build.gradle.kts`의 `versionCode`를 1 이상 올립니다(재사용하지 않음). `versionName`은 `주.부.수정` 형태로 변경 내용을 따라 올립니다.
-2. `./gradlew assembleDebug lint verifyRoborazziDebug assembleRelease`를 실행합니다. 배포할 파일은 `app/build/outputs/apk/release/app-release.apk`입니다. `app-release-unsigned.apk`는 배포하지 않습니다.
+1. `versionName`·`versionCode`는 [AGENTS.md](AGENTS.md) "릴리스"의 규칙(`versionCode = 주 × 10000 + 중간 × 100 + 끝`)을 따릅니다. `node scripts/release-version.mjs gradle app/build.gradle.kts`로 확인합니다.
+2. `./gradlew assembleDebug lint verifyRoborazziDebug assembleRelease`를 실행합니다. 배포할 파일은 `app/build/outputs/apk/release/app-release.apk`입니다. `app-release-unsigned.apk`는 배포하지 않습니다. `bash scripts/check-release-apk.sh app/build/outputs/apk/release/app-release.apk`로 버전·매니페스트를 확인합니다.
 3. build-tools의 `apksigner verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk`로 서명과 이전 배포와 같은 인증서 지문인지 확인합니다.
-4. `adb -s <기기ID> install -r app/build/outputs/apk/release/app-release.apk`로 설치합니다. 첫 설치와 업데이트 모두 같은 명령입니다. `INSTALL_FAILED_UPDATE_INCOMPATIBLE`은 보통 서명이 다르다는 뜻입니다. 앱을 자동으로 지우거나 낮은 버전 설치를 강제하지 않습니다.
-5. 버전·설정·저장 장소가 유지되는지 확인합니다.
+4. `adb -s <기기ID> install -r app/build/outputs/apk/release/app-release.apk`로 설치하고, 버전·설정·저장 장소가 유지되는지 확인합니다.
 
 릴리스 빌드는 운영 게이트웨이(`SUNSEAT_API_BASE_URL_RELEASE`)를 부릅니다. 게이트웨이를 바꾼 릴리스는 `main` 머지 뒤 운영 게이트웨이 자동 배포(`deploy-api.yml`)가 성공했는지 확인한 다음 APK를 배포합니다.
 
-릴리스 APK의 지도는 콘솔의 Android 플랫폼에 **릴리스 키 해시**도 등록해야 인증됩니다. 해시는 위 명령에서 별칭과 키 저장소만 바꿔 구합니다(`-alias sun-seat -keystore "$HOME/.sun-seat/release.jks"`, 비밀번호는 프롬프트로 입력). 릴리스는 지금 minify를 끈 상태입니다. R8을 켜면 지도까지 다시 확인합니다.
+릴리스 APK의 지도는 콘솔의 Android 플랫폼에 **릴리스 키 해시**도 등록해야 인증됩니다(Releases의 키는 등록되어 있습니다). 직접 만든 키의 해시는 위 명령에서 별칭과 키 저장소만 바꿔 구합니다(`-alias sun-seat -keystore "$HOME/.sun-seat/release.jks"`, 비밀번호는 프롬프트로 입력). 릴리스는 지금 R8(minify)을 끈 상태입니다(AGENTS.md "릴리스" > "코드 축소"). R8을 켜면 지도까지 다시 확인합니다.
 
 ## 문서
 

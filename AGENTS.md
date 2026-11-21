@@ -16,7 +16,7 @@
 ## 브랜치
 
 - `develop`: 평소 작업이 모이는 기본 브랜치다.
-- `main`: 릴리스한 상태만 담는다. 릴리스할 때 `develop`에서 `main`으로 PR을 보내 머지 커밋으로 합친다. 태그·서명·배포는 #118에서 정한다.
+- `main`: 릴리스한 상태만 담는다. 릴리스할 때 `develop`에서 `main`으로 PR을 보내 머지 커밋으로 합치고, 그 머지 커밋에 버전 태그를 단다(아래 "릴리스").
 - 작업 브랜치는 `git fetch`로 받은 최신 `develop`에서 갈라지고 `develop`으로 PR을 보낸다.
   - `feat/<이슈번호>-<요약>`: 기능
   - `fix/<이슈번호>-<요약>`: 버그
@@ -95,6 +95,91 @@
 - 사용자가 지우거나 보류한 코드와 문장을 되살리지 않는다. 필요해 보이면 먼저 묻는다.
 - 같은 값이 두 곳에 있으면 한쪽만 바꾸지 않는다. 함께 바꾸고, 둘이 어긋나면 실패하는 테스트나 검사를 둔다.
 
+## 릴리스
+
+규칙은 저장소 소유자가 정했고(#118, 2026-11-21) 릴리스 워크플로(`.github/workflows/release.yml`)가 검사한다. 태그를 push하면 서명한 APK가 빌드 출처 증명과 함께 GitHub Releases에 바로 공개된다(초안 단계 없음).
+
+### 브랜치와 태그
+
+- 작업은 `develop`에 모으고, 릴리스할 때만 `develop` → `main` PR을 머지 커밋으로 합친다(#120).
+- 릴리스 전용 브랜치(`release/*`)는 만들지 않는다. **`main`의 머지 커밋에 단 태그**로 버전을 관리한다.
+- 태그 `v*`는 ruleset `protect-release-tags`로 이동·삭제를 막는다(우회 없음). 시험용 태그는 `v*`가 아닌 이름을 쓴다. `v*`가 아닌 태그에서는 릴리스 워크플로가 돌지 않는다.
+- 핫픽스: 기본은 `develop`에서 고쳐 다음 끝번호로 릴리스한다. `develop`에 내보내면 안 되는 변경이 쌓여 있을 때만 `main`에서 `hotfix/<이슈번호>-<요약>`을 만들어 `main`으로 PR(머지 커밋) → 태그 → 같은 수정을 `develop`에도 PR로 반영한다.
+
+### 버전 번호 (SemVer `v주.중간.끝`)
+
+- 끝번호: 버그 수정만 있는 릴리스(`0.1.0` → `0.1.1`).
+- 중간번호: 기능·화면 변경이 하나라도 있는 릴리스(`0.1.1` → `0.2.0`, 끝번호는 0으로).
+- 앞번호: 완성판 선언이나 저장 데이터·설정 비호환 변경(`1.0.0`). 당분간은 `0.x`로 운영한다.
+- 각 자리는 독립된 정수다. `0.9.0` 다음은 `0.10.0`이고 `0.10.0` > `0.1.0`이다.
+- 시험판이 필요하면 `v0.2.0-rc.1` 형식을 쓴다. 워크플로가 Releases에서 Pre-release로 표시한다.
+
+### versionCode
+
+- `versionName` = 태그에서 `v`를 뺀 값.
+- `versionCode = 주 × 10000 + 중간 × 100 + 끝` (예: `v0.1.0` → 100, `v0.2.1` → 201, `v1.0.0` → 10000). 중간·끝은 각각 99까지. 시험판은 `-rc.N`을 뗀 정식판과 같은 값을 쓴다(정식판을 같은 versionCode로 덮어 설치할 수 있다).
+- 두 값은 `app/build.gradle.kts`에 직접 적고 버전 올림 PR에서 함께 바꾼다. 계산은 `scripts/release-version.mjs` 한 곳에 있다.
+  - CI `release-version` job: PR마다 빌드 파일의 두 값이 규칙에 맞는지 보고, 버전·태그 확인 스크립트의 자체 테스트를 돌린다.
+  - CI `build` job: 서명 없는 릴리스 APK를 만들어 버전·매니페스트를 본다(`scripts/check-release-apk.sh`). 릴리스 빌드가 깨지면 태그 전에 PR에서 안다.
+  - 릴리스 워크플로: 태그와 빌드 파일, 만든 APK의 `versionName`·`versionCode`가 이 규칙과 다르면 실패한다.
+
+### 릴리스 순서
+
+1. 릴리스 이슈(라벨 `세팅`, 마일스톤 `vX.Y.Z`)를 만들고, 그 이슈로 버전 올림 PR(`versionName`·`versionCode`)을 `develop`에 머지한다. 마일스톤의 이슈가 모두 닫혔는지 본다.
+2. 릴리스 PR: `develop` → `main` PR을 열고 `ci-passed`가 통과하면 머지 커밋으로 합친다(`gh pr merge <PR> --merge`). 작업 PR과 달리 squash하지 않는다.
+3. `main` push로 CI와, 게이트웨이(`workers/api`·`deploy-api.yml`)가 바뀌었으면 `Deploy API gateway`(운영 Worker `api`)가 돈다. `main`의 CI는 뒤 push가 와도 취소되지 않는다. 둘 다 성공했는지 본다(`gh run list --branch main --limit 5`). 배포가 실패하면 태그를 달지 않는다.
+4. 태그: `main`의 릴리스 머지 커밋에 단다.
+
+   ```bash
+   git fetch origin
+   git log -1 --format='%H %s' origin/main   # 릴리스 PR 머지 커밋인지 확인
+   git tag -a vX.Y.Z -m "vX.Y.Z" origin/main
+   git push origin vX.Y.Z
+   ```
+
+5. 릴리스 워크플로가 자동으로 돈다(Actions > Release).
+   - `verify`(읽기 권한): 태그 형식, 커밋이 `main`에 있는지, 빌드 파일 버전이 태그와 같은지(`scripts/release-gate.sh tag`), 태그 커밋의 `ci-passed`가 성공했는지(최대 40분 기다림), `main`의 최근 `Deploy API gateway` 실행이 성공했고 이 커밋과 같은 게이트웨이 코드를 배포했는지(최대 20분 기다림, 게이트웨이를 바꾸지 않은 릴리스는 앞 배포로 바로 통과)
+   - `build`(읽기 권한, 환경 `release`): 서명한 `assembleRelease`, APK 확인(버전·매니페스트·권한 허용 목록, REST 키 경로, 게이트웨이 주소·네이티브 키가 비지 않았는지), `apksigner verify`와 서명 인증서 SHA-256 지문, `sun-seat-vX.Y.Z.apk`의 SHA-256
+   - `attest`(`id-token`·`attestations` 쓰기): APK 다이제스트에 빌드 출처 증명(`actions/attest-build-provenance`)
+   - `publish`(`contents: write`): `gh release create --generate-notes`로 공개한다. 첨부는 `sun-seat-vX.Y.Z.apk`와 `.sha256`. 노트 앞에 설치 안내·APK 다이제스트·인증서 지문·확인 명령을 붙이고, 뒤에 앞 릴리스 이후 PR을 `.github/release.yml`의 라벨 묶음(버그 수정, 기능·화면, 빌드·설정, 의존성, 기타)으로 붙인다.
+   - `cleanup`(`actions: write`): build → publish 전달용 APK 아티팩트를 지운다.
+6. 받아서 확인하고(아래 "받은 APK 확인") 기기에 설치한다.
+
+### 변경 불가 릴리스와 실패했을 때
+
+- 변경 불가 릴리스(immutable releases)를 켜 두었다(저장소 설정). 공개된 릴리스의 첨부와 태그는 바꾸거나 지울 수 없다. 문제가 있으면 고쳐서 다음 끝번호로 다시 낸다(fix-forward). 같은 버전을 다시 쓰지 않는다.
+- 공개 전에 실패하면(verify·build·attest) 로그의 `::error::` 안내대로 원인을 고친다.
+  - CI·게이트웨이 배포가 늦었거나 다시 돌려 성공시켰으면 Actions에서 이 실행을 "Re-run all jobs"로 다시 돌린다. 전달용 아티팩트는 실행 끝에 지워지므로 "Re-run failed jobs"는 쓰지 않는다.
+  - 코드나 버전을 고쳐야 하면 태그를 옮길 수 없으므로 고친 뒤 다음 끝번호로 릴리스한다. 실패한 태그는 Release 없이 남는다.
+- 공개 단계에서 실패해 초안(draft) 릴리스가 남았으면 그 초안을 지우고 다시 돌린다.
+- `main`의 최근 `Deploy API gateway` 실행이 실패해 있으면(잘못 고른 수동 실행 포함) 게이트웨이를 바꾸지 않은 릴리스도 verify에서 멈춘다. 운영 게이트웨이 상태를 알 수 없기 때문이다. `main`에서 production 배포를 다시 성공시킨 뒤 릴리스 실행을 다시 돌린다.
+
+### 서명과 시크릿
+
+- 서명 키: 릴리스 키(PKCS12, 별칭 `sun-seat`)는 저장소 밖에 있고 저장소 소유자가 암호화 백업과 비밀번호를 보관한다. **키를 잃으면 같은 앱의 업데이트를 만들 수 없다**(사용자는 앱을 지우고 다시 설치해야 한다). 키를 바꾸면 카카오 콘솔의 키 해시도 바꾼다.
+- 서명·키 값은 GitHub Environment `release`(배포 규칙: 태그 `v*`)에만 둔다. 이 환경은 `build` job만 쓴다.
+  - 시크릿: `RELEASE_KEYSTORE_BASE64`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD`, `KAKAO_NATIVE_APP_KEY`
+  - 변수: `SUNSEAT_API_BASE_URL_RELEASE`(운영 게이트웨이 주소. 비밀은 아니지만 저장소에 고정하지 않는다). 비어 있으면 검색·경로가 동작하지 않으므로 워크플로가 실패한다.
+  - 카카오 REST 키는 넣지 않는다. 게이트웨이 시크릿에만 있다(#189).
+- 워크플로는 키스토어를 `$RUNNER_TEMP`에 풀어 job 끝에 지우고, 서명 값·키·주소는 환경 변수로만 Gradle에 넘긴다(`app/build.gradle.kts`의 `buildSetting`은 `local.properties`에 없으면 같은 이름의 환경 변수를 읽는다). `local.properties`는 만들지 않고, 값을 출력하지 않는다.
+- 카카오 개발자 콘솔의 Android 플랫폼에 릴리스 키 해시를 등록해 두었다. 네이티브 앱 키는 APK에서 꺼낼 수 있으므로 패키지명·키 해시로 제한한다.
+
+### 받은 APK 확인
+
+```bash
+gh release download vX.Y.Z -R zzunsik/sun-seat
+sha256sum -c sun-seat-vX.Y.Z.apk.sha256
+gh attestation verify sun-seat-vX.Y.Z.apk -R zzunsik/sun-seat --signer-workflow zzunsik/sun-seat/.github/workflows/release.yml
+apksigner verify --print-certs sun-seat-vX.Y.Z.apk   # 인증서 SHA-256이 릴리스 노트·이전 릴리스와 같다
+```
+
+- 처음 설치: 기기에 디버그 빌드나 로컬 서명 APK가 있으면 서명이 달라 업데이트가 안 된다(`INSTALL_FAILED_UPDATE_INCOMPATIBLE`). 한 번 지우고 설치한다(저장한 설정·장소가 지워진다). 첫 릴리스(`v0.1.0`)의 이 삭제는 저장소 소유자가 확인한 뒤 한다.
+- 그다음부터는 덮어 설치(`adb install -r`)로 업데이트되고 설정·저장 장소가 유지된다.
+
+### 코드 축소(R8)
+
+- `v0.1.0`은 R8(`isMinifyEnabled`)을 끈다. 켜려면 카카오맵 SDK·Filament·kotlinx.serialization 보존 규칙을 확인하고, 릴리스 APK로 주요 흐름(장소 검색, 경로 후보, 미리보기 지도, 자리 결과, 3D 시뮬레이션, 설정)을 실기기에서 다시 봐야 한다. 개인 배포라 APK 크기 이득보다 런타임에서만 드러나는 누락 위험이 커서 미뤘다. 켤 때는 별도 이슈로 한다.
+
 ## 빌드 환경
 
 - JDK 25, Android SDK platform 37. Android Studio 없이 명령줄로 빌드한다.
@@ -161,7 +246,7 @@
 
 ### 비밀 정보
 
-- `KAKAO_NATIVE_APP_KEY`, 게이트웨이 주소(`SUNSEAT_API_BASE_URL_DEBUG`·`_RELEASE`, 릴리스 워크플로는 같은 이름의 환경 변수로도 넘길 수 있다), `sdk.dir`, 서명 키 정보는 `local.properties`에만 둔다. 이 파일과 키 파일(`*.jks`, `*.keystore`)은 커밋하지 않는다. CI는 빈 키·주소로 빌드하고 저장소 Secrets를 쓰지 않는다. 게이트웨이 배포(`deploy-api.yml`)만 GitHub Environment 시크릿을 쓴다(아래 "저장소 설정").
+- `KAKAO_NATIVE_APP_KEY`, 게이트웨이 주소(`SUNSEAT_API_BASE_URL_DEBUG`·`_RELEASE`, 릴리스 워크플로는 같은 이름의 환경 변수로도 넘길 수 있다), `sdk.dir`, 서명 키 정보는 `local.properties`에만 둔다. 이 파일과 키 파일(`*.jks`, `*.keystore`)은 커밋하지 않는다. CI는 빈 키·주소로 빌드하고 저장소 Secrets를 쓰지 않는다. 게이트웨이 배포(`deploy-api.yml`)와 릴리스(`release.yml`)만 GitHub Environment 시크릿을 쓴다(아래 "저장소 설정", 위 "릴리스"). 릴리스 워크플로는 네이티브 앱 키·게이트웨이 주소·서명 값(`RELEASE_*`)을 같은 이름의 환경 변수로 넘긴다.
 - 카카오 REST API 키는 APK에 넣지 않는다. 앱 API 게이트웨이(`workers/api`, Cloudflare Workers)의 시크릿(`wrangler secret put KAKAO_REST_API_KEY`)에만 두고, 앱은 게이트웨이를 부른다(#189). 로컬 `wrangler dev`용 `workers/api/.dev.vars`도 커밋하지 않는다. CI의 `check-apk-secrets.sh`가 빌드 산출물에 키 경로가 없는지 확인한다.
 - 게이트웨이 주소(운영 `https://api.<하위 도메인>.workers.dev`, 개발 `https://api-dev.<하위 도메인>.workers.dev`)는 비밀이 아니지만 저장소에 고정하지 않고 빌드 설정으로 넣는다. 새 외부 API 키도 같은 방식(게이트웨이 경로 묶음 + 시크릿)으로 붙인다.
 - 워크플로에서 비밀 값이나 환경 전체를 출력하지 않는다(`echo $SECRET`, `env`, 실패 시 설정 덤프).
@@ -188,13 +273,14 @@
 
 ### 워크플로
 
-- 워크플로 최상위에 `permissions: contents: read`를 두고, 더 필요한 권한은 그 job에만 준다.
+- 워크플로 최상위에 `permissions: contents: read`(릴리스 워크플로는 `{}`)를 두고, 더 필요한 권한은 그 job에만 준다.
 - 외부 액션은 커밋 SHA로 고정하고 주석에 버전을 적는다(`uses: owner/action@<sha> # v1.2.3`). 업데이트는 Dependabot PR로 받는다. 저장소 설정이 SHA 고정을 강제하고, 허용 목록 밖의 액션은 실행되지 않는다.
 - `actions/checkout`에는 `persist-credentials: false`를 준다.
 - 포크에서 온 코드를 시크릿이나 쓰기 권한과 함께 실행하는 `pull_request_target`, `workflow_run`을 쓰지 않는다.
-- 배포 시크릿은 저장소 Secrets가 아니라 배포 브랜치를 제한한 GitHub Environment에 두고, 시크릿이 필요한 단계에만 `env:`로 넘긴다. 배포 워크플로는 `develop`·`main` push와 수동 실행에서만 돈다(#191).
+- 배포 시크릿은 저장소 Secrets가 아니라 배포 브랜치를 제한한 GitHub Environment에 두고, 시크릿이 필요한 단계에만 `env:`로 넘긴다. 배포 워크플로는 `develop`·`main` push와 수동 실행에서만, 릴리스 워크플로는 `v*` 태그 push에서만 돈다(#191, #118).
 - `${{ github.event.* }}`(PR 제목, 브랜치 이름 등)를 `run:` 스크립트에 직접 넣지 않는다. `env:`로 받아 변수로 쓴다.
 - 아티팩트에는 테스트 리포트, 스크린샷 비교 결과, 기준 이미지 기록만 올리고 `retention-days`를 준다. APK, `local.properties`, 빌드 설정 파일은 올리지 않는다.
+  - 예외 하나: 릴리스 워크플로가 서명 키를 다루는 `build` job(쓰기 권한 없음)에서 `publish` job으로 서명한 APK를 넘기는 아티팩트. 보관 1일이고 실행 끝에 `cleanup` job이 지운다. 같은 파일이 곧 Release에 공개된다(#118).
 
 ### 외부 기여와 보안 제보
 
@@ -225,9 +311,13 @@ GitHub 설정으로 강제하는 것들이다. 설정을 바꾸면 이 절도 �
   - 처음 기여하는 사람의 PR은 승인해야 워크플로가 돈다.
   - 아티팩트와 로그는 14일 보관한다.
 - `CODEOWNERS`가 워크플로·작업 규칙·빌드 설정의 소유자를 정한다.
+- 릴리스(#118, 위 "릴리스"):
+  - 태그 ruleset `protect-release-tags`가 `v*` 태그의 이동·삭제를 막는다(우회 없음).
+  - 변경 불가 릴리스(immutable releases)가 켜져 있다. 공개된 릴리스의 첨부·태그는 바꿀 수 없다.
+  - GitHub Environment `release`(배포 규칙: 태그 `v*`)에 서명·카카오 네이티브 키 시크릿과 변수 `SUNSEAT_API_BASE_URL_RELEASE`를 둔다.
 - 앱 API 게이트웨이(`workers/api`) 자동 배포(#191, `.github/workflows/deploy-api.yml`, 절차는 `workers/api/README.md` "배포"):
   - GitHub Environment `api-development`(배포 브랜치 `develop`만) → Worker `api-dev`(디버그 빌드), `api-production`(배포 브랜치 `main`만) → Worker `api`(릴리스 빌드).
   - 각 환경에 시크릿 `CLOUDFLARE_API_TOKEN`(이 계정의 Workers Scripts 편집만), 변수 `CLOUDFLARE_ACCOUNT_ID`를 둔다. 토큰 교체는 저장소 소유자가 한다.
   - 카카오 REST 키는 Worker마다 `wrangler secret put`으로 따로 넣는다. 워크플로는 키를 다루지 않는다.
   - 릴리스 순서: 릴리스 PR `main` 머지 → 운영 게이트웨이 배포·스모크 통과 확인 → 태그 → APK 릴리스(#118). 배포가 실패하면 태그를 달지 않는다.
-  - 운영 배포 경로는 이 워크플로가 `main`에 처음 들어가는 첫 릴리스 PR 머지 때 처음 검증된다(`api-production`은 `main`에서만 실행되고, 수동 실행도 `main`에 있는 워크플로 파일로 돈다). 그 릴리스에서는 `main`의 `Deploy API gateway` 실행이 성공했는지 Actions에서 보고 나서 태그를 단다.
+  - 운영 배포 경로는 이 워크플로가 `main`에 처음 들어가는 첫 릴리스 PR 머지 때 처음 검증된다(`api-production`은 `main`에서만 실행되고, 수동 실행도 `main`에 있는 워크플로 파일로 돈다). 그 릴리스에서는 `main`의 `Deploy API gateway` 실행이 성공했는지 Actions에서 보고 나서 태그를 단다. 릴리스 워크플로의 `verify` job도 이 실행이 성공했고 태그 커밋과 같은 게이트웨이 코드를 배포했는지 확인한다.

@@ -1,0 +1,16 @@
+# GitHub Release 노트 자동 생성(--generate-notes) 묶음(#118, AGENTS.md "릴리스").
+# 앞 릴리스 뒤 머지된 PR을 라벨로 나눈다. PR은 위에서부터 처음 맞는 묶음 하나에만 들어간다
+# (버그 수정 PR은 bug와 구현을 함께 달므로 bug를 먼저 둔다). 라벨이 없는 PR은 "기타"에 들어간다.
+changelog:
+  categories:
+    - title: 버그 수정
+      labels: [bug]
+    - title: 기능·화면
+      labels: [구현]
+    - title: 빌드·설정
+      labels: [세팅]
+    # Dependabot PR(dependencies 라벨)
+    - title: 의존성
+      labels: [dependencies]
+    - title: 기타
+      labels: ["*"]
