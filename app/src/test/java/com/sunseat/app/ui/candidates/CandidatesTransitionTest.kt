@@ -320,4 +320,22 @@ class CandidatesTransitionTest {
         assertSheet(SheetValue.PartiallyExpanded)
         compose.onNodeWithContentDescription("출발지와 도착지 바꾸기").assertExists()
     }
+
+    /** #148: 손잡이를 누른 채 조금 올렸다 제자리로 내리면 시트 자리도 카메라도 그대로다(맞춤 요청·카메라 이동 없음). */
+    @Test fun smallSheetDragUpAndBackKeepsCamera() {
+        render()
+        val before = revision()
+        val map = compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapVisibleHeightKey]
+        val step = with(compose.density) { 60.dp.toPx() } / 20
+        compose.onNodeWithTag("candidates_sheet_handle", useUnmergedTree = true).performTouchInput {
+            down(center)
+            repeat(20) { moveBy(Offset(0f, -step), delayMillis = 25) }
+            repeat(20) { moveBy(Offset(0f, step), delayMillis = 25) }
+            up()
+        }
+        settle()
+        assertSheet(SheetValue.PartiallyExpanded)
+        assertEquals(map, compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapVisibleHeightKey], 0.5f)
+        assertEquals("a drag back to the same anchor must not refit", before, revision())
+    }
 }
