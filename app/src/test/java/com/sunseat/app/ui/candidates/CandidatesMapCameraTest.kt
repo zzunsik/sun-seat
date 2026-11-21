@@ -39,7 +39,7 @@ import org.robolectric.annotation.Config
 @Config(application = Application::class, sdk = [36], qualifiers = "w390dp-h844dp-xxhdpi")
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 class CandidatesMapCameraTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = createComposeRule(effectContext = object : androidx.compose.ui.MotionDurationScale { override val scaleFactor = 0f })
 
     private fun settle() { compose.mainClock.advanceTimeBy(5000); compose.waitForIdle() }
     private fun camera() = compose.onNode(SemanticsMatcher.keyIsDefined(MapFootprintBoxesKey)).fetchSemanticsNode().config
@@ -71,9 +71,20 @@ class CandidatesMapCameraTest {
         render(fontScale)
         // 작은 화면·큰 글자에서는 기본 시트가 지도를 모두 덮어 보이는 띠가 없다(맞춤은 띠가 보일 때까지 미룬다).
         if (visible().let { it.bottom - it.top } > 0f) assertInside(boxes(), visible(), "list strip x$fontScale")
+        val listFits = revision()
         compose.onNodeWithTag("candidate_1").performTouchInput { click() }
+        compose.waitUntil(10_000) { revision() > listFits }
         settle()
         assertInside(boxes(), visible(), "preview x$fontScale")
+        assertLargestZoom(boxes(), visible(), "preview x$fontScale")
+    }
+
+    /** 가장 큰 정수 줌: 한 단계 가까우면(두 배) 발자국 묶음이 보이는 영역(네 변 맞춤 틈 최대 40dp)을 넘는다. */
+    private fun assertLargestZoom(boxes: List<ScreenBox>, area: ScreenBox, what: String) {
+        val inset = 40f * compose.density.density
+        val width = boxes.maxOf { it.right } - boxes.minOf { it.left }
+        val height = boxes.maxOf { it.bottom } - boxes.minOf { it.top }
+        assertTrue("$what: span ${width}x${height} could zoom in once more within $area", 2 * width > area.right - area.left - 2 * inset || 2 * height > area.bottom - area.top - 2 * inset)
     }
 
     @Test fun listStripAndPreviewKeepEveryMarkerInsideTheVisibleMap() = listAndPreviewInside(1f)

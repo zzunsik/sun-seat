@@ -152,7 +152,8 @@ internal class MapFitPolicy {
         }
         wasFollowing = follow != null
         lastFollow = follow
-        state.center?.let { if (it.sequence != lastCenter?.sequence) { out += CameraRequest.CenterOn(it.location); lastCenter = it } }
+        // 지도 선택(#85)은 처음 열 때 거리 단위 줌(17)으로 열고, 이후 요청(현재 위치로 이동)은 지금 줌을 유지한다.
+        state.center?.let { if (it.sequence != lastCenter?.sequence) { out += CameraRequest.CenterOn(it.location, if (lastCenter == null) FIT_MAX_ZOOM else null); lastCenter = it } }
         state.focus?.let { if (it != lastFocus) { out += CameraRequest.CenterOn(it.location); lastFocus = it } }
         if (lastPadding != null && lastPadding != state.padding) out += CameraRequest.ViewportChanged
         lastPadding = state.padding

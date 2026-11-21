@@ -76,9 +76,11 @@ class CandidatesScreenshotTest {
     private fun preview(dark: Boolean, name: String, fontScale: Float = 1f, state: CandidatesState.Options = list) {
         compose.enableAccessibilityChecks()
         render(state, dark, fontScale = fontScale)
+        // #168: 목록 지도 맞춤 뒤 미리보기 맞춤까지 기다린다(카메라 revision = 정책이 실제로 맞춘 횟수).
+        val listFits = compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey]
         compose.onNodeWithTag("candidate_${state.items.first().id}").performSemanticsAction(SemanticsActions.OnClick)
         compose.mainClock.advanceTimeBy(5000)
-        compose.waitUntil(10_000) { compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey] > 0 }
+        compose.waitUntil(10_000) { compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey] > listFits }
         compose.onRoot().tryPerformAccessibilityChecks()
         compose.onNodeWithText("자리 보기").assertIsDisplayed()
         shot(name)
@@ -330,9 +332,11 @@ class CandidatesScreenshotTest {
                                request: com.sunseat.app.domain.TripRequest = transitRequest, expand: Boolean = false) {
         compose.enableAccessibilityChecks()
         val (sheet, scope) = render(state, dark, request, fontScale)
+        // #168: 목록 지도 맞춤 뒤 미리보기 맞춤까지 기다린다(카메라 revision = 정책이 실제로 맞춘 횟수).
+        val listFits = compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey]
         compose.onNodeWithTag("candidate_${state.items.first().id}").performSemanticsAction(SemanticsActions.OnClick)
         compose.mainClock.advanceTimeBy(5000)
-        compose.waitUntil(10_000) { compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey] > 0 }
+        compose.waitUntil(10_000) { compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey] > listFits }
         if (expand) {
             compose.runOnIdle { scope.launch { sheet.bottomSheetState.expand() } }
             compose.mainClock.advanceTimeBy(5000)
