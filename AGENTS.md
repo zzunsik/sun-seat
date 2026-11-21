@@ -183,7 +183,8 @@ apksigner verify --print-certs sun-seat-vX.Y.Z.apk   # 인증서 SHA-256이 릴�
 ## 빌드 환경
 
 - JDK 25, Android SDK platform 37. Android Studio 없이 명령줄로 빌드한다.
-- 의존성 버전은 `gradle/libs.versions.toml`에서만 관리한다. 의존성 업데이트는 Dependabot PR로 받는다.
+- 의존성 버전은 `gradle/libs.versions.toml`에서만 관리한다.
+- Gradle 래퍼(`gradle/wrapper/gradle-wrapper.properties`)는 `distributionSha256Sum`으로 내려받은 배포판을 검증한다. Gradle 버전을 올릴 때는 `https://services.gradle.org/distributions/gradle-<버전>-bin.zip.sha256`의 공식 값으로 함께 바꾼다(#200). 의존성 업데이트는 Dependabot PR로 받는다.
   - 예외: Filament(`com.google.android.filament*`)는 Dependabot이 버전 업데이트를 올리지 않는다. 사람이 올리고, 같은 PR에서 `tools/simulation/*.mat`을 같은 버전의 `matc`로 다시 컴파일한다(`tools/simulation/README.md`). `FilamentMaterialVersionTest`가 런타임 버전과 `.filamat`의 material 버전이 다르면 실패한다. 새 Filament 릴리스는 사람이 확인한다. 무시 규칙은 보안 알림과 보안 업데이트 PR을 막지 않는다(Gradle 의존성은 아래 "저장소 설정"의 의존성 제출로 의존성 그래프에 오른다, #197). Dependabot 보안 업데이트 PR이 Filament만 올리면 재료를 다시 컴파일하기 전까지 `FilamentMaterialVersionTest`가 실패한다. 어떤 경로로 올리든 같은 절차를 따른다.
 
 ## 코드 구조
@@ -274,7 +275,7 @@ apksigner verify --print-certs sun-seat-vX.Y.Z.apk   # 인증서 SHA-256이 릴�
 ### 워크플로
 
 - 워크플로 최상위에 `permissions: contents: read`(릴리스 워크플로는 `{}`)를 두고, 더 필요한 권한은 그 job에만 준다.
-- 외부 액션은 커밋 SHA로 고정하고 주석에 버전을 적는다(`uses: owner/action@<sha> # v1.2.3`). 업데이트는 Dependabot PR로 받는다. 저장소 설정이 SHA 고정을 강제하고, 허용 목록 밖의 액션은 실행되지 않는다.
+- 외부 액션은 커밋 SHA로 고정하고 주석에 버전을 적는다(`uses: owner/action@<sha> # v1.2.3`). 업데이트는 Dependabot PR로 받는다. 저장소 설정(`sha_pinning_required`)이 SHA 고정을 강제해 태그·브랜치로 부른 액션은 실행되지 않고, 허용 목록 밖의 액션도 실행되지 않는다(#200).
 - `actions/checkout`에는 `persist-credentials: false`를 준다.
 - 포크에서 온 코드를 시크릿이나 쓰기 권한과 함께 실행하는 `pull_request_target`, `workflow_run`을 쓰지 않는다.
 - 배포 시크릿은 저장소 Secrets가 아니라 배포 브랜치를 제한한 GitHub Environment에 두고, 시크릿이 필요한 단계에만 `env:`로 넘긴다. 배포 워크플로는 `develop`·`main` push와 수동 실행에서만, 릴리스 워크플로는 `v*` 태그 push에서만 돈다(#191, #118).
