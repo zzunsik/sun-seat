@@ -89,7 +89,8 @@ internal fun MapPickScreen(
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 // The edited endpoint's marker is replaced by the pin; the other endpoint stays for context.
                 val description = stringResource(R.string.map_pick_description, title, headline)
-                Box(Modifier.fillMaxSize().clearAndSetSemantics { if (!pick.mapUnavailable) contentDescription = description }) {
+                // #147: 지도를 쓸 수 없으면 지도 노드의 안내(지도 위 글자)를 그대로 읽는다. 쓸 수 있을 때만 핀 위치 설명 하나로 바꾼다.
+                Box(Modifier.fillMaxSize().then(if (pick.mapUnavailable) Modifier else Modifier.clearAndSetSemantics { contentDescription = description })) {
                     SunSeatMap(
                         MapState(
                             origin = origin.takeUnless { isOrigin },
@@ -102,6 +103,7 @@ internal fun MapPickScreen(
                             onGesture = actions.onPickCameraMoving,
                             onCameraIdle = actions.onPickCameraIdle,
                             onUnavailable = actions.onPickMapUnavailable,
+                            unavailableMessage = R.string.map_unavailable_short,
                         ),
                         Modifier.fillMaxSize(),
                     )
@@ -124,7 +126,8 @@ internal fun MapPickScreen(
                 verticalArrangement = Arrangement.spacedBy(Spacing.s),
             ) {
                 if (pick.mapUnavailable) {
-                    Text(stringResource(R.string.map_pick_unavailable), Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurface)
+                    // #173: 이유는 지도 노드(라이브 영역)가 말하고 이 줄은 다음 행동만 말한다(같은 안내를 두 번 알리지 않는다).
+                    Text(stringResource(R.string.map_pick_unavailable), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurface)
                 } else {
                     Column(Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
                         Text(headline, style = MaterialTheme.typography.titleMedium, color = scheme.onSurface)
