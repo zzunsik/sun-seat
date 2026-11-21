@@ -15,9 +15,9 @@ internal data class EdgeCue(val x: Float, val y: Float, val angleDegrees: Float,
 
 /**
  * 화면 위치 ([px], [py])의 좌표가 보이는 영역 [visible] 밖이면, 보이는 영역 가운데에서 그 좌표로 가는 선이 [inset]만큼 안쪽 테두리와 만나는 점에
- * 표시를 둔다. 좌표가 보이는 영역 안이거나(그 자리에 표식이 보인다) 영역이 표시보다 작으면 null.
+ * 표시를 둔다. [keepClear]가 있으면 가운데에서 그만큼은 떨어뜨린다(낮은 띠에서 차량과 겹치지 않게). 좌표가 보이는 영역 안이거나(그 자리에 표식이 보인다) 영역이 표시보다 작으면 null.
  */
-internal fun offscreenCue(px: Float, py: Float, visible: ScreenBox, inset: Float): EdgeCue? {
+internal fun offscreenCue(px: Float, py: Float, visible: ScreenBox, inset: Float, keepClear: Float = 0f): EdgeCue? {
     if (!px.isFinite() || !py.isFinite()) return null
     if (px >= visible.left && px <= visible.right && py >= visible.top && py <= visible.bottom) return null
     val left = visible.left + inset; val right = visible.right - inset
@@ -29,7 +29,14 @@ internal fun offscreenCue(px: Float, py: Float, visible: ScreenBox, inset: Float
     val sy = if (dy > 0f) (bottom - cy) / dy else if (dy < 0f) (top - cy) / dy else Float.POSITIVE_INFINITY
     val s = minOf(sx, sy).coerceAtMost(1f)
     val angle = Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())).toFloat()
-    return EdgeCue(cx + dx * s, cy + dy * s, angle, direction(angle))
+    var x = cx + dx * s
+    var y = cy + dy * s
+    // 낮은 지도 띠에서는 위·아래 가장자리 표시가 가운데(차량을 두는 자리)에 붙는다. 가운데에서 [keepClear] 안이면 가장자리를 따라 비킨다.
+    if (keepClear > 0f && kotlin.math.abs(x - cx) < keepClear && kotlin.math.abs(y - cy) < keepClear) {
+        if (sy <= sx) x = (cx + (if (dx < 0f) -keepClear else keepClear)).coerceIn(left, right)
+        else y = (cy + (if (dy < 0f) -keepClear else keepClear)).coerceIn(top, bottom)
+    }
+    return EdgeCue(x, y, angle, direction(angle))
 }
 
 /** 각도(화면 기준) → 8방향. 각 방향이 45°씩 맡는다. */

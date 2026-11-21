@@ -418,7 +418,9 @@ private fun OffscreenDestinationCue(x: Float, y: Float, overlays: MapPadding, mo
         }, modifier = Modifier.fillMaxSize()) { measurables, constraints ->
             val body = measurables.first().measure(androidx.compose.ui.unit.Constraints())
             val gap = with(density) { Spacing.s.toPx() }
-            val cue = offscreenCue(x, y, visible, maxOf(body.width, body.height) / 2f + gap)
+            // 차량(보이는 영역 가운데, 표식 크기)과 표시가 겹치지 않을 만큼 가운데에서 떨어뜨린다.
+            val vehicle = with(density) { Sizes.mapMarker.toPx() }
+            val cue = offscreenCue(x, y, visible, maxOf(body.width, body.height) / 2f + gap, keepClear = vehicle / 2 + gap + maxOf(body.width, body.height) / 2f)
             layout(constraints.maxWidth, constraints.maxHeight) {
                 if (cue != null) body.place((cue.x - body.width / 2).toInt(), (cue.y - body.height / 2).toInt())
             }

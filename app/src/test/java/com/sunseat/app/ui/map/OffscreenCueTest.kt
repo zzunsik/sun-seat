@@ -47,6 +47,16 @@ class OffscreenCueTest {
         }
     }
 
+    @Test fun lowStripMovesTheCueAwayFromTheCentre() {
+        // 보이는 높이가 낮으면 위 가장자리 표시가 가운데(차량) 가까이에 온다. keepClear만큼 가장자리를 따라 비킨다.
+        val strip = ScreenBox(0f, 252f, 1170f, 603f)
+        val cue = offscreenCue(585f, -5000f, strip, 60f, keepClear = 150f)!!
+        val cx = 585f; val cy = (252f + 603f) / 2
+        assertTrue(kotlin.math.abs(cue.x - cx) >= 150f - 0.5f || kotlin.math.abs(cue.y - cy) >= 150f - 0.5f)
+        assertEquals(CueDirection.UP, cue.direction)
+        assertEquals(252f + 60f, cue.y, 0.5f)
+    }
+
     @Test fun tooSmallVisibleAreaShowsNothing() {
         assertNull(offscreenCue(0f, -5000f, ScreenBox(0f, 0f, 100f, 100f), 60f))
     }
