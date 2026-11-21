@@ -93,5 +93,10 @@ class MapAvailabilityTest {
         val items = CandidatesFixtures.options.toUi(java.time.LocalDateTime.of(2026, 11, 15, 9, 0))
         render { CandidatesScreen(CandidatesFixtures.transitRequest, CandidatesState.Options(items), CandidatesActions()) }
         assertSingleNotice()
+        // 안내는 시트 밑이 아니라 보이는 지도 띠 안에 있다(실기기 확인에서 시트에 가려 접근성 트리에서 빠졌다).
+        compose.mainClock.advanceTimeBy(5000); compose.waitForIdle()
+        val notice = compose.onNode(hasText(text(R.string.map_missing_key), substring = true)).fetchSemanticsNode().boundsInRoot
+        val sheet = compose.onNode(androidx.compose.ui.test.hasTestTag("candidates_sheet_handle"), useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        org.junit.Assert.assertTrue("notice $notice must sit above the sheet $sheet", notice.bottom <= sheet.top + 0.5f)
     }
 }

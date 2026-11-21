@@ -60,7 +60,7 @@ internal fun NativeMap(state: MapState, modifier: Modifier = Modifier, keyAvaila
     if (!keyAvailable) {
         val unavailable by rememberUpdatedState(state.onUnavailable)
         androidx.compose.runtime.LaunchedEffect(Unit) { report(MapAvailability.MISSING_KEY); unavailable() }
-        MapNotice(state.unavailableMessage ?: R.string.map_missing_key, modifier, announce = true)
+        MapNotice(state.unavailableMessage ?: R.string.map_missing_key, modifier, announce = true, visible = state.padding)
         return
     }
     val context = LocalContext.current
@@ -117,16 +117,17 @@ internal fun NativeMap(state: MapState, modifier: Modifier = Modifier, keyAvaila
         }
         if (failed) {
             androidx.compose.runtime.LaunchedEffect(Unit) { report(MapAvailability.ERROR); latest.onUnavailable() }
-            MapNotice(state.unavailableMessage ?: R.string.map_error, Modifier.fillMaxSize(), announce = true)
+            MapNotice(state.unavailableMessage ?: R.string.map_error, Modifier.fillMaxSize(), announce = true, visible = state.padding)
         }
         else if (!ready) MapNotice(R.string.map_loading, Modifier.fillMaxSize())
     }
 }
 
 @Composable
-internal fun MapNotice(message: Int, modifier: Modifier = Modifier, announce: Boolean = false) {
+internal fun MapNotice(message: Int, modifier: Modifier = Modifier, announce: Boolean = false, visible: MapPadding = MapPadding()) {
     androidx.compose.material3.Surface(modifier, color = SunSeatTheme.scheme.surfaceContainer) {
-        Box(Modifier.padding(Spacing.l), contentAlignment = Alignment.Center) {
+        // 지도를 덮는 부품(시트·헤더) 밖, 보이는 지도 영역 가운데에 둔다(#173: 후보 목록에서는 시트 밑에 숨었다).
+        Box(Modifier.padding(top = visible.top, bottom = visible.bottom).padding(Spacing.l), contentAlignment = Alignment.Center) {
             // #173: 사용 불가 안내는 지도 노드가 낭독 출처다. 화면이 열린 뒤 지도가 실패해도 이유가 들리게 polite 라이브 영역으로 둔다.
             Text(stringResource(message), Modifier.then(if (announce) Modifier.semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite } else Modifier),
                 color = SunSeatTheme.scheme.onSurfaceVariant, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
