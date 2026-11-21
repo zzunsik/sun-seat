@@ -93,6 +93,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import com.sunseat.app.R
+import com.sunseat.app.ui.components.overlay
 import com.sunseat.app.domain.Mode
 import com.sunseat.app.domain.TravelMode
 import com.sunseat.app.domain.TripRequest
@@ -451,7 +452,7 @@ fun CandidatesScreen(
             // 목록에서 고른 후보가 없으면 모든 후보 개요에 맞춘다(#141).
             val fitLabel = stringResource(if (mapRoutes.selectedRoute < 0) R.string.candidates_fit_all_action else R.string.candidates_fit_route_action)
             FloatingCapsule(Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)).padding(Spacing.s)
-                .onGloballyPositioned { fitActionBottom = with(density) { (it.positionInRoot().y + it.size.height).toDp() } - mapTop }) {
+                .onGloballyPositioned { fitActionBottom = with(density) { (it.positionInRoot().y + it.size.height).toDp() } - mapTop }.overlay("map_fit_action")) {
                 QuietButton(onClick = { dispatch(CandidatesEvent.FitAction) }, modifier = Modifier.semantics { onClick(label = fitLabel) { dispatch(CandidatesEvent.FitAction); true } }) {
                     Icon(painterResource(R.drawable.ic_ms_fit_screen), null, Modifier.size(Sizes.iconSmall))
                     Spacer(Modifier.width(Spacing.xs))
