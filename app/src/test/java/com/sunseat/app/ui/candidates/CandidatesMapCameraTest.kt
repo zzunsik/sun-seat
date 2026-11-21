@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
 import com.sunseat.app.ui.map.LocalMapRenderer
@@ -113,6 +114,28 @@ class CandidatesMapCameraTest {
         settle()
         assertEquals(before, boxes())
         assertEquals(fits, revision())
+    }
+
+    /**
+     * #148 재현 절차(손잡이를 약 60dp 0.8초 동안 올린 뒤 같은 자리에서 다시 내림)를 실제 터치로 따라 한다. 짧은 끌기는 시트가 제자리로 돌아가므로
+     * 두 번째 끌기는 손잡이가 아니라 지도 띠 위에서 시작해 지도를 끈다(사용자 이동). 시트 이동 자체는 화면 내용을 옮기지 않는다.
+     */
+    @Test fun issue148ProcedureDragsTheMapStripNotTheSheet() {
+        render()
+        val before = boxes()
+        val handle = compose.onNodeWithTag("candidates_sheet_handle", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val up = 60f * compose.density.density
+        compose.onNodeWithTag("candidates_sheet_handle", useUnmergedTree = true).performTouchInput { swipe(center, center - Offset(0f, up), 800) }
+        settle()
+        assertEquals("a short handle drag snaps back", handle, compose.onNodeWithTag("candidates_sheet_handle", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot)
+        assertEquals("the sheet drag alone leaves the map content in place", before, boxes())
+        assertEquals(0, compose.onAllNodesWithText("지도 맞춤").fetchSemanticsNodes().size)
+        // 두 번째 끌기: 첫 끌기가 끝난 화면 위치(지금은 지도 띠)에서 아래로.
+        val start = handle.center - Offset(0f, up)
+        compose.onRoot().performTouchInput { swipe(start, start + Offset(0f, up), 800) }
+        settle()
+        assertTrue("the second drag moves the map content down", boxes().zip(before).all { (after, old) -> after.top > old.top })
+        assertEquals("a moved strip offers the fit action (#141)", 1, compose.onAllNodesWithText("지도 맞춤").fetchSemanticsNodes().size)
     }
 
     /** #141: 미리보기에서 지도를 끌고(실제 터치) 닫으면 목록 지도 띠에 "지도 맞춤"이 보이고, 누르면 선택 경로가 보이는 띠 안에 다시 맞는다. */
