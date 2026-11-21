@@ -9,6 +9,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -112,10 +115,20 @@ fun SimulationScreen(
         }
     }
     @Composable fun CabinDetails(detailModifier: Modifier) {
-            Column(detailModifier.verticalScroll(rememberScrollState()).padding(horizontal=Spacing.screen,vertical=if(landscape) Spacing.s else Spacing.screen), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+        val scroll = rememberScrollState()
+        Box(detailModifier.testTag(DETAILS_TAG)) {
+            Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal=Spacing.screen,vertical=if(landscape) Spacing.s else Spacing.screen), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                 if (point != null && point.leg.mode != Mode.WALK) CabinPanel(point, request.mode, state, actions)
                 if (result.arrival != result.modeledArrival) Text(stringResource(R.string.simulation_modeled_note, time(result.arrival)), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             }
+            // #155: while more text continues under the playback controls, fade the last visible line into the background
+            // and mark the edge (DESIGN 4: scrolling surface with more below gets a bottom divider) instead of a bare half-cut line.
+            if (scroll.canScrollForward) {
+                Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(Spacing.l).testTag(DETAILS_MORE_TAG)
+                    .background(Brush.verticalGradient(listOf(scheme.background.copy(alpha = 0f), scheme.background))))
+                HorizontalDivider(Modifier.align(Alignment.BottomCenter), color = scheme.outlineVariant)
+            }
+        }
     }
     Surface(modifier.fillMaxSize(), color = scheme.background, contentColor = scheme.onSurface) {
         Column(Modifier.fillMaxSize()) {
@@ -191,3 +204,7 @@ private fun MiniTimeline(result: TripResult, boundaries: List<Float>, modifier: 
         }
     }
 }
+
+/** 본문 스크롤 영역과, 아래에 더 내릴 내용이 있을 때의 경계 표시(#155). 테스트가 찾는다. */
+internal const val DETAILS_TAG = "simulation_details"
+internal const val DETAILS_MORE_TAG = "simulation_details_more"
