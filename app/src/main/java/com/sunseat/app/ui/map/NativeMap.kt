@@ -50,6 +50,7 @@ import com.sunseat.app.domain.Route
 import com.sunseat.app.ui.theme.Sizes
 import com.sunseat.app.ui.theme.Spacing
 import com.sunseat.app.ui.theme.SunSeatTheme
+import kotlin.math.pow
 
 @Composable
 internal fun NativeMap(state: MapState, modifier: Modifier = Modifier, keyAvailable: Boolean = BuildConfig.KAKAO_NATIVE_APP_KEY.isNotBlank()) {
@@ -137,6 +138,9 @@ private const val ARROW_RANK = 1L
 private const val MAX_WALK_DOTS = 150
 /** SDK lines have round caps of half the width on each end, so a short stub renders as a round dot of the line width. */
 private const val DOT_STUB = 0.2
+private const val LOG_TAG = "SunSeatMapCamera"
+private const val LOG_DELAY_MS = 400L
+private const val SCALE_PROBE_PX = 100
 
 private data class MapMetrics(
     val marker: Float, val walk: Float, val inset: Float, val edge: Float, val ray: Float,
@@ -163,20 +167,21 @@ private class MapSession(context: Context, private val ink: Int, private val sur
     var closed = false
         private set
     private var geometry: Triple<List<Route>, Int, Pair<com.sunseat.app.domain.NamedPlace?, com.sunseat.app.domain.NamedPlace?>>? = null
-    private var padding: List<Int>? = null
-    private var labelSides = 0f to 0f
-    /** #151: 정류장 이름표 높이 + 위아래 틈(이름표가 없으면 0). 경로가 바뀔 때만 잰다. */
-    private var labelHeight = 0f
+    /** 맞춤 대상 발자국(#168). 경로가 바뀔 때만 잰다. */
+    private var footprints: List<Footprint> = emptyList()
+    /** 지금 줌에서 잰 배율. 카메라 이동이 끝날 때마다 다시 잰다. */
+    private var scale: MapScale? = null
+    private var lastState: MapState? = null
+    private var lastDensity = 1f
+    private var lastViewport: Viewport? = null
+    private var reported: CameraStatus? = null
+    private var logoBottom: Int? = null
     private val fitPolicy = MapFitPolicy()
     private var cursor: Label? = null
     private var ray: Label? = null
     private var myLocation: Label? = null
-    private var lastFocus: MapFocus? = null
-    private var lastCenter: MapFocus? = null
     private var cameraIdle: ((LatLng) -> Unit)? = null
     private var lastCursor: MapCursor? = null
-    private var lastFollow: LatLng? = null
-    private var following = false
     private var playbackMode = false
     private val progressLines = mutableListOf<com.kakao.vectormap.route.RouteLine>()
     private var lastProgress: Float? = null
@@ -204,6 +209,13 @@ private class MapSession(context: Context, private val ink: Int, private val sur
     private val rayIcon = marker(3, sun)
     private val myLocationIcon = marker(4, ink)
 
+    init {
+        // 뷰 크기를 알기 전의 맞춤 요청은 정책에 넘기지 않고 남겨 두었다가, 크기가 정해지거나 바뀌면 마지막 상태로 다시 적용한다(#168).
+        view.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+            if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop) view.post { lastState?.let { update(it, lastDensity) } }
+        }
+    }
+
     fun close() { if (!closed) { closed = true; map = null; view.pause(); view.finish() } }
 
     fun update(state: MapState, density: Float) {
@@ -212,8 +224,9 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         gesture = state.onGesture
         cameraIdle = state.onCameraIdle
         if (geometry == null) {
-            target.setOnCameraMoveStartListener { _, type -> if (type != GestureType.Unknown) gesture() }
+            target.setOnCameraMoveStartListener { _, type -> if (type != GestureType.Unknown) view.post { if (!closed) { fitPolicy.gesture(); reportStatus(); gesture() } } }
             target.setOnCameraMoveEndListener { moved, position, _ ->
+                view.post { if (map === moved) { measureScale(moved)?.let { scale = it }; scheduleLog() } }
                 if (position.zoomLevel != decorZoom) view.post { if (map === moved) decorate(moved) }
                 else view.post { if (map === moved) placeNames(moved) } // 회전 등 줌 밖의 카메라 변화(#153)
                 // Map picker (#85): the pin sits at the view centre with no padding, so the camera target is the pin.
@@ -248,7 +261,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
                 }
             }
             target.labelManager?.layer?.let { layer ->
-                layer.removeAll(); cursor = null; ray = null; myLocation = null; lastCursor = null; lastFollow = null; lastRayAltitude = null; lastVehicleLight=null; textLabels.clear(); hiddenLabels.clear(); stopNames.clear(); pinLabels.clear()
+                layer.removeAll(); cursor = null; ray = null; myLocation = null; lastCursor = null; lastRayAltitude = null; lastVehicleLight=null; textLabels.clear(); hiddenLabels.clear(); stopNames.clear(); pinLabels.clear()
                 state.routes.getOrNull(state.selectedRoute)?.let { route ->
                     RouteLinePolicy.stops(route).forEach { stop ->
                         layer.addLabel(LabelOptions.from(stop.location.sdk()).setRank(STOP_RANK).setStyles(LabelStyle.from(stopIcon(stop.color.toArgb())).setApplyDpScale(false).setAnchorPoint(.5f, .5f)))
@@ -265,45 +278,24 @@ private class MapSession(context: Context, private val ink: Int, private val sur
             }
             decorRoute = state.routes.getOrNull(state.selectedRoute); decorZoom = null; lineDensity = density; walkLines.clear(); decorations.clear()
         }
-        // #138: 낮은 지도 띠에서는 맞춤 inset을 줄이고, 표식이 솟는 위쪽에 지도 여백을 더하고 좌우는 기본 폭을 유지한다(fitFrame, 테스트 지도와 같은 값).
-        // #143: 정류장 노선 이름표가 기본 inset보다 넓으면 그쪽 여백을 이름표 폭만큼 둔다. 폭은 nameIcon과 같은 측정이다.
-        // 차량을 따라갈 때(#146)는 이름표 여백을 두지 않아 차량이 화면 가운데에 온다(MapFitPolicy.labelMargins).
-        val move = fitPolicy.camera(state)
-        if (geometryChanged) labelSides = state.routes.getOrNull(state.selectedRoute)?.let { route ->
-            val paint = textPaint(ink)
-            labelExtents(RouteLinePolicy.stops(route), metrics.stop / 2, if (state.origin != null) startIcon.width / 2f + metrics.textPadding else 0f) { stop -> paint.measureText(metrics.stopLabel(stop)) + metrics.textPadding * 3 } // 상자 폭 + 가장자리 틈(Spacing.xs)
-        } ?: (0f to 0f)
-        if (geometryChanged) labelHeight = if (labelSides.first > 0f || labelSides.second > 0f) nameHeight(textPaint(ink)) + metrics.textPadding * 2 else 0f
-        val labels = if (fitPolicy.labelMargins) labelSides else 0f to 0f
-        val top = state.padding.top.value * density
-        val bottom = state.padding.bottom.value * density
-        val frame = if (view.width > 0 && view.height > 0) fitFrame(top, bottom, view.width.toFloat(), view.height.toFloat(), metrics.inset, metrics.edge, metrics.marker + metrics.textPadding, labels.first, labels.second,
-            if (fitPolicy.labelMargins) labelHeight else 0f) // #151
-            else FitFrame(top, bottom, 0f, metrics.inset)
-        val applied = listOf(frame.left.toInt(), frame.top.toInt(), frame.right.toInt(), frame.bottom.toInt())
-        if (geometryChanged || padding != applied) {
-            padding = applied
-            target.setPadding(applied[0], applied[1], applied[2], applied[3])
+        // #168: 카메라는 정책(cameraPolicy)이 정한 가운데·정수 줌을 그대로 적용한다. 덮는 부품은 보이는 영역으로만 넘기고 SDK 지도 여백(setPadding)은 쓰지 않는다:
+        // 시트를 끌어 보이는 영역만 바뀌면 카메라도 화면 내용도 그대로다(#148). 발자국(핀·이름표 상자)은 그리기와 같은 측정이다(#138 #143 #151 #153).
+        lastState = state; lastDensity = density
+        val viewport = Viewport(view.width.toFloat(), view.height.toFloat(), top = state.padding.top.value * density, bottom = state.padding.bottom.value * density)
+        if (geometryChanged || footprints.isEmpty()) footprints = state.footprints(markerSizes(state))
+        if (scale == null && viewport.ready) scale = measureScale(target)
+        scale?.let { scale ->
+            val input = CameraInput(viewport, scale, footprints, state.fitTarget, fitGap(viewport, metrics.inset, metrics.edge), currentCamera(target))
+            fitPolicy.update(state, input)?.let { move -> target.moveCamera(CameraUpdateFactory.newCenterPosition(move.center.sdk(), move.zoom)) }
         }
-        when (move) {
-            MapCamera.FIT_ROUTE -> target.moveCamera(CameraUpdateFactory.fitMapPoints(state.points().map { it.sdk() }.toTypedArray(), frame.inset.toInt(), 17))
-            // Street-level frame around the vehicle (#146); later cursor moves only re-centre and keep this zoom.
-            MapCamera.FRAME_FOLLOW -> state.followTarget?.let { at -> target.moveCamera(CameraUpdateFactory.fitMapPoints(followBounds(at).map { it.sdk() }.toTypedArray(), 0, 17)) }
-            MapCamera.NONE -> Unit
-        }
+        reportStatus()
+        placeLogo(target, viewport)
+        if (viewport != lastViewport) { lastViewport = viewport; scheduleLog() }
         if (decorZoom == null) view.post { map?.let(::decorate) }
-        state.center?.let { center ->
-            // Only a new request (sequence) moves the camera; the reported pin position itself never pulls the map back mid-gesture.
-            if (center.sequence != lastCenter?.sequence) { target.moveCamera(CameraUpdateFactory.newCenterPosition(center.location.sdk())); lastCenter = center }
-        }
         state.focus?.let { focus ->
             val layer = target.labelManager?.layer
             if (myLocation == null) myLocation = layer?.addLabel(LabelOptions.from(focus.location.sdk()).setStyles(LabelStyle.from(myLocationIcon).setApplyDpScale(false)))
             else myLocation?.moveTo(focus.location.sdk())
-            if (focus != lastFocus) {
-                target.moveCamera(CameraUpdateFactory.newCenterPosition(focus.location.sdk()))
-                lastFocus = focus
-            }
         }
         if (state.routeProgress != lastProgress) {
             state.routeProgress?.let { progress -> progressLines.forEach { it.setProgress(progress.coerceIn(0f, 1f) - 1f) } }
@@ -332,11 +324,6 @@ private class MapSession(context: Context, private val ink: Int, private val sur
             if(lightSide!=lastVehicleLight) { cursor?.setStyles(playbackLabelStyle(marker(2,ink,lightSide)));cursor?.invalidate(false);cursor?.rotateTo(Math.toRadians(position.heading).toFloat());lastVehicleLight=lightSide }
             if (position.sunAltitude > 0) ray?.show() else ray?.hide()
         }
-        // The camera follows playback even when the vehicle is not drawn; on arrival it centres the destination marker (#152).
-        val follow = state.followTarget
-        if (follow != null && (follow != lastFollow || !following)) target.moveCamera(CameraUpdateFactory.newCenterPosition(follow.sdk()))
-        lastFollow = follow
-        following = state.followCursor
         lastCursor = position
         coverState = state
         uncover()
@@ -363,6 +350,81 @@ private class MapSession(context: Context, private val ink: Int, private val sur
                 name.label.changeStyles(com.kakao.vectormap.label.LabelStyles.from(LabelStyle.from(nameIcon(name.name, name.stop.color.toArgb(), name.stop.labelOnLeft, offset)).setApplyDpScale(false).setAnchorPoint(if (name.stop.labelOnLeft) 1f else 0f, .5f)))
             }
         }
+    }
+
+    /** 발자국 크기(px): 그리기와 같은 측정. 이름표 폭 = 상자 폭 + 가장자리 틈(Spacing.xs), 높이 = 상자 높이 + 위아래 틈. */
+    private fun markerSizes(state: MapState): MarkerSizes {
+        val paint = textPaint(ink)
+        return MarkerSizes(
+            markerHeight = metrics.marker + metrics.textPadding,
+            originWidth = startIcon.width.toFloat(), destinationWidth = endIcon.width.toFloat(),
+            stopRadius = metrics.stop / 2,
+            labelHeight = nameHeight(paint) + metrics.textPadding * 2,
+            boardClearance = if (state.origin != null) startIcon.width / 2f + metrics.textPadding else 0f,
+            labelWidth = { stop -> paint.measureText(metrics.stopLabel(stop)) + metrics.textPadding * 3 },
+        )
+    }
+
+    private fun currentCamera(target: KakaoMap): CameraPosition? =
+        target.cameraPosition?.let { CameraPosition(LatLng(it.position.latitude, it.position.longitude), it.zoomLevel) }
+
+    /**
+     * 지금 줌에서 잰 배율(#168). 카카오 줌은 한 단계마다 두 배다(실기기 z10~z14 m/px 측정). 화면 가운데 가로 200px 사이의 경도 차로
+     * 세계 폭(px)을 구한다. 지도 여백을 쓰지 않으므로 잰 값은 여백과 무관하다.
+     */
+    private fun measureScale(target: KakaoMap): MapScale? {
+        val zoom = target.cameraPosition?.zoomLevel ?: return null
+        val w = view.width
+        val h = view.height
+        if (w <= SCALE_PROBE_PX * 2 || h <= 0) return null
+        val a = target.fromScreenPoint(w / 2 - SCALE_PROBE_PX, h / 2) ?: return null
+        val b = target.fromScreenPoint(w / 2 + SCALE_PROBE_PX, h / 2) ?: return null
+        val span = Mercator.x(b.longitude) - Mercator.x(a.longitude)
+        if (!(span > 0)) return null
+        return MapScale(SCALE_PROBE_PX * 2 / span / 2.0.pow(zoom))
+    }
+
+    private fun reportStatus() {
+        val status = CameraStatus(fitPolicy.mode, fitPolicy.fits)
+        if (status == reported) return
+        reported = status
+        val report = lastState?.onCameraStatus ?: return
+        view.post { if (!closed) report(status) }
+    }
+
+    /** 지도 여백이 없으면 SDK는 로고를 지도 전체 기준으로 둔다. 보이는 영역 왼쪽 아래에 둔다(DESIGN 11: 로고를 가리지 않는다). */
+    private fun placeLogo(target: KakaoMap, viewport: Viewport) {
+        val bottom = (viewport.height - viewport.visibleBottom + metrics.edge).toInt()
+        if (bottom == logoBottom) return
+        logoBottom = bottom
+        target.logo?.setPosition(com.kakao.vectormap.MapGravity.LEFT or com.kakao.vectormap.MapGravity.BOTTOM, metrics.edge, bottom.toFloat())
+    }
+
+    private val logRunnable = Runnable { logFootprints() }
+    private fun scheduleLog() {
+        if (!BuildConfig.DEBUG) return
+        view.removeCallbacks(logRunnable)
+        view.postDelayed(logRunnable, LOG_DELAY_MS)
+    }
+
+    /**
+     * debug 빌드 점검용(실기기 점검 스크립트, #169): 정책의 보이는 영역과 SDK 투영으로 잰 발자국 상자(px, 지도 뷰 기준)를 logcat 한 줄로 남긴다. 좌표는 남기지 않는다.
+     * `route`는 경로 좌표의 외곽 상자, `marks`는 출발·도착 표식과 정류장(이름표 포함) 상자다.
+     */
+    private fun logFootprints() {
+        if (closed) return
+        val target = map ?: return
+        val viewport = lastViewport ?: return
+        fun screen(footprint: Footprint): ScreenBox? = target.toScreenPoint(footprint.at.sdk())?.let { p ->
+            ScreenBox(p.x + footprint.box.left, p.y + footprint.box.top, p.x + footprint.box.right, p.y + footprint.box.bottom)
+        }
+        fun ScreenBox.text() = "${left.toInt()},${top.toInt()},${right.toInt()},${bottom.toInt()}"
+        val points = footprints.filter { it.box == ScreenBox.Point }.mapNotNull(::screen)
+        val route = if (points.isEmpty()) "-" else ScreenBox(points.minOf { it.left }, points.minOf { it.top }, points.maxOf { it.right }, points.maxOf { it.bottom }).text()
+        val marks = footprints.filter { it.box != ScreenBox.Point }.mapNotNull(::screen).joinToString(";") { it.text() }
+        val mode = fitPolicy.mode.let { if (it is CameraMode.Fitted) "Fitted(${it.target})" else it.toString() }
+        val visible = ScreenBox(viewport.visibleLeft, viewport.visibleTop, viewport.visibleRight, viewport.visibleBottom).text()
+        android.util.Log.d(LOG_TAG, "mode=$mode zoom=${target.cameraPosition?.zoomLevel} view=${viewport.width.toInt()}x${viewport.height.toInt()} visible=$visible route=$route marks=$marks")
     }
 
     /** 차량과 겹치는 글자 표식을 숨기고 나머지는 보인다. 줌이 바뀌면 [decorate]가 다시 부른다. */

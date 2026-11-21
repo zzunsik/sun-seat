@@ -158,10 +158,19 @@ fun CandidatesScreen(
     var fitTrigger by remember { mutableLongStateOf(0L) }
     var fitRevision by remember { mutableLongStateOf(0L) }
     var fittedTrigger by remember { mutableLongStateOf(-1L) }
-    var userMoved by remember { mutableStateOf(false) }
+    // #168: 맞춤 요청 이유. 사용자가 지도를 옮긴 뒤 맞출지는 카메라 정책이 이유와 모드로 정한다. 기다리는 동안 여러 요청이 겹치면 사용자 이동을 넘는 이유를 남긴다.
+    var fitReason by remember { mutableStateOf(com.sunseat.app.ui.map.FitReason.INITIAL) }
+    var pendingReason by remember { mutableStateOf<com.sunseat.app.ui.map.FitReason?>(null) }
+    fun requestFit(reason: com.sunseat.app.ui.map.FitReason) {
+        val pending = pendingReason
+        pendingReason = if (pending != null && pending.overridesUserMove && !reason.overridesUserMove) pending else reason
+        fitTrigger++
+    }
+    // 정책이 알린 카메라 모드와 실제로 맞춘 횟수(#141: 사용자가 옮긴 뒤 목록 지도 띠에 "지도 맞춤").
+    var camera by remember { mutableStateOf(com.sunseat.app.ui.map.CameraStatus(com.sunseat.app.ui.map.CameraMode.Unset, 0L)) }
     // 카메라 맞춤 트리거: 목록 개요의 후보 집합·선택 변경, 미리보기 진입(#102), 미리보기 닫기(#135), 명시적 "지도 맞춤".
     // 미리보기와 목록은 시트 높이(보이는 지도 영역)가 달라, 한쪽에서 맞춘 카메라는 다른 쪽에서 경로를 시트 뒤에 둔다.
-    // 사용자가 지도를 직접 움직였으면(userMoved) 맞춤 요청이 와도 카메라를 옮기지 않는다(#71, DESIGN 12.3).
+    // 사용자가 지도를 직접 움직였으면(카메라 모드 UserMoved) 미리보기 닫기만으로는 다시 맞추지 않는다(#71, DESIGN 12.3, 카메라 정책).
     val routes = options?.visible?.sortedBy { it.id }.orEmpty().map { it.chosen.route }
     val mapRoutes = candidateMapRoutes(options?.visible.orEmpty(), options?.selectedId, preview)
     // #144: 가로 화면은 높이가 낮아 아래 시트로는 펼친 헤더·범주·정렬 아래에 후보 카드가 들어가지 않고 지도도 시트에 덮인다.
@@ -180,11 +189,11 @@ fun CandidatesScreen(
     // 목록이 처음 그려지는 프레임부터 축약 여정 바를 유지하도록 닫기와 함께 표시한다.
     fun closePreview() { restoringExpanded = !landscape && sheetBeforePreview == SheetValue.Expanded; showPreview = false }
     BackHandler(enabled = preview) { closePreview() }
-    LaunchedEffect(routes, options?.selectedId) { userMoved = false; fitTrigger++ }
+    LaunchedEffect(routes, options?.selectedId) { requestFit(com.sunseat.app.ui.map.FitReason.SELECTION) }
     // 이 화면 안에서 미리보기를 연 적이 있을 때만 닫힘을 맞춤 시점으로 본다(첫 구성·결과에서 복귀는 위 후보 집합 맞춤이 맡는다).
     var previewShown by remember { mutableStateOf(false) }
     LaunchedEffect(preview, landscape) {
-        if (preview) { previewShown = true; restorePending = true; androidx.compose.runtime.withFrameNanos { }; if (!landscape) scaffoldState.bottomSheetState.partialExpand(); fitTrigger++ }
+        if (preview) { previewShown = true; restorePending = true; androidx.compose.runtime.withFrameNanos { }; if (!landscape) scaffoldState.bottomSheetState.partialExpand(); requestFit(com.sunseat.app.ui.map.FitReason.PREVIEW_OPEN) }
         // #135: 목록으로 돌아오면 시트가 목록 높이에 자리 잡은 뒤(아래 맞춤 효과가 기다린다) 보이는 지도 띠에 선택 경로를 다시 맞춘다.
         // 완전 확장으로 돌아오면 보이는 지도 띠가 없어 맞춤은 사용자가 시트를 내려 지도가 처음 보일 때까지 기다린다.
         // #145: 목록 내용이 그려진 뒤(목록 기준 앵커) 들어가기 전 시트 높이로 되돌리고, 선택 카드가 화면 밖이면 보이게 옮긴다(회전 등).
@@ -199,7 +208,7 @@ fun CandidatesScreen(
                     revealSelected++
                 }
             } finally { restoringExpanded = false }
-            if (previewShown) fitTrigger++
+            if (previewShown) requestFit(com.sunseat.app.ui.map.FitReason.PREVIEW_CLOSE)
         }
     }
     val density = LocalDensity.current
@@ -264,7 +273,9 @@ fun CandidatesScreen(
             .debounce(com.sunseat.app.ui.theme.Motion.CAMERA_SETTLE_MS)
             .first { value -> value.isFinite() && !scaffoldState.bottomSheetState.isAnimationRunning &&
                 mapHeight - com.sunseat.app.ui.map.sheetMapPadding(mapTop, mapHeight, scaffoldTop + with(density) { value.toDp() }).bottom > Sizes.mapInset * 2 }
-        if (!userMoved) fitRevision++
+        fitReason = pendingReason ?: com.sunseat.app.ui.map.FitReason.SELECTION
+        pendingReason = null
+        fitRevision++
         fittedTrigger = fitTrigger
     }
     val header: @Composable () -> Unit = {
@@ -336,7 +347,6 @@ fun CandidatesScreen(
                     is CandidatesState.Loading -> Loading(content, state.mode, animateLoader)
                     is CandidatesState.Options -> if (state.visible.isEmpty()) Message(content, R.drawable.ic_ms_search, stringResource(R.string.candidates_filtered_empty), null, stringResource(R.string.candidates_clear_filters) to { actions.onCategory(RouteCategory.ALL); scope.launch { listScroll.scrollToItem(0) } }, stringResource(R.string.candidates_edit_input) to actions.onBack)
                         else OptionList(state.visible, state.selectedId, request, content, if (request.mode == TravelMode.TRANSIT) stringResource(if (state.sort == CandidateSort.WALK) R.string.candidates_walk_scope_sort else R.string.candidates_walk_scope) else null, actions.copy(onHighlight = {
-                            userMoved = false
                             sheetBeforePreview = if (!landscape && scaffoldState.bottomSheetState.targetValue == SheetValue.Expanded) SheetValue.Expanded else SheetValue.PartiallyExpanded
                             showPreview = true
                             actions.onHighlight(it)
@@ -354,11 +364,11 @@ fun CandidatesScreen(
             selectedRoute = mapRoutes.selectedRoute,
             origin = request.origin, destination = request.destination,
             padding = mapPadding, showDecorations = false,
-            automaticFit = false, cameraRevision = fitRevision,
+            automaticFit = false, cameraRevision = fitRevision, fitReason = fitReason,
             fitEnabled = mapHeight - mapPadding.bottom > Sizes.mapInset * 2,
-            onGesture = { userMoved = true },
+            onCameraStatus = { camera = it },
         ), Modifier.fillMaxSize().testTag("candidate_map").semantics {
-            this[com.sunseat.app.ui.map.MapCameraRevisionKey] = fitRevision
+            this[com.sunseat.app.ui.map.MapCameraRevisionKey] = camera.fits
             this[CandidateMapRouteIdsKey] = mapRoutes.ids
             this[CandidateMapSelectedRouteKey] = mapRoutes.selectedRoute
             this[com.sunseat.app.ui.map.MapVisibleHeightKey] = (mapHeight - mapPadding.bottom).value
@@ -366,13 +376,15 @@ fun CandidatesScreen(
             with(density) { mapTop = it.positionInRoot().y.toDp(); mapHeight = it.size.height.toDp(); mapWidth = it.size.width.toDp() }
         })
         // #102: 선택 경로 맞춤은 카메라만 옮기는 조용한 행동이다(DESIGN 13). 다른 후보를 다시 그리지 않는다(#99).
-        // #141: 목록에서는 사용자가 지도를 직접 움직였을 때만(미리보기에서 움직이고 닫은 경우 포함) 보인다. 맞춰져 있는 동안에는 낮은 지도 띠를 가리지 않는다.
-        val listFit = !preview && userMoved && mapRoutes.routes.isNotEmpty() && mapHeight - mapPadding.bottom > Sizes.mapInset * 2
+        // #141: 목록에서는 카메라 모드가 사용자 이동(UserMoved)일 때만(미리보기에서 움직이고 닫은 경우 포함) 보인다. 맞춰져 있는 동안에는 낮은 지도 띠를 가리지 않는다.
+        // 캡슐(위 틈 + 터치 높이) 아래로 맞춤 여백만큼은 띠가 남을 때만 둔다. 더 낮으면 캡슐이 띠 대부분을 가린다.
+        val listFit = !preview && camera.mode == com.sunseat.app.ui.map.CameraMode.UserMoved && mapRoutes.routes.isNotEmpty() && mapHeight - mapPadding.bottom >= Spacing.s + Spacing.touch + Sizes.mapInset
         if (preview || listFit) {
-            val fitLabel = stringResource(R.string.candidates_fit_route_action)
+            // 목록에서 고른 후보가 없으면 모든 후보 개요에 맞춘다(#141).
+            val fitLabel = stringResource(if (mapRoutes.selectedRoute < 0) R.string.candidates_fit_all_action else R.string.candidates_fit_route_action)
             FloatingCapsule(Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)).padding(Spacing.s)
                 .onGloballyPositioned { fitActionBottom = with(density) { (it.positionInRoot().y + it.size.height).toDp() } - mapTop }) {
-                QuietButton(onClick = { userMoved = false; fitTrigger++ }, modifier = Modifier.semantics { onClick(label = fitLabel) { userMoved = false; fitTrigger++; true } }) {
+                QuietButton(onClick = { requestFit(com.sunseat.app.ui.map.FitReason.EXPLICIT) }, modifier = Modifier.semantics { onClick(label = fitLabel) { requestFit(com.sunseat.app.ui.map.FitReason.EXPLICIT); true } }) {
                     Icon(painterResource(R.drawable.ic_ms_fit_screen), null, Modifier.size(Sizes.iconSmall))
                     Spacer(Modifier.width(Spacing.xs))
                     Text(stringResource(R.string.candidates_fit_route), style = MaterialTheme.typography.labelLarge)

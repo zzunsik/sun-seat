@@ -84,8 +84,12 @@ class ListMapFitActionTest {
         compose.waitForIdle()
         assertEquals("a manual move in the list strip must offer the fit action", 1, fitActions())
         val moved = revision()
+        // 고른 후보가 없으면 모든 후보 개요에 맞춘다는 이름으로 읽는다.
+        compose.onNodeWithText("지도 맞춤").fetchSemanticsNode().config[SemanticsActions.OnClick].label.let { assertEquals("후보 경로가 모두 보이게 지도 맞추기", it) }
         compose.onNodeWithText("지도 맞춤").performSemanticsAction(SemanticsActions.OnClick)
         compose.waitUntil(10_000) { revision() > moved }
+        settle()
+        assertEquals(0, fitActions())
     }
 
     /** 지도를 끈 뒤 목록 지도 띠의 "지도 맞춤"(밝은·어두운 화면, 접근성 검사). */
