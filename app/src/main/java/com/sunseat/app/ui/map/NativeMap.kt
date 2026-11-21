@@ -53,10 +53,11 @@ import com.sunseat.app.ui.theme.SunSeatTheme
 import kotlin.math.pow
 
 @Composable
-internal fun NativeMap(state: MapState, modifier: Modifier = Modifier, keyAvailable: Boolean = BuildConfig.KAKAO_NATIVE_APP_KEY.isNotBlank()) {
+internal fun NativeMap(state: MapState, modifier: Modifier = Modifier, keyAvailable: Boolean = LocalMapKeyAvailable.current, onAvailability: (MapAvailability) -> Unit = {}) {
+    val report by rememberUpdatedState(onAvailability)
     if (!keyAvailable) {
         val unavailable by rememberUpdatedState(state.onUnavailable)
-        androidx.compose.runtime.LaunchedEffect(Unit) { unavailable() }
+        androidx.compose.runtime.LaunchedEffect(Unit) { report(MapAvailability.MISSING_KEY); unavailable() }
         MapNotice(R.string.map_missing_key, modifier)
         return
     }
@@ -92,7 +93,7 @@ internal fun NativeMap(state: MapState, modifier: Modifier = Modifier, keyAvaila
             override fun getZoomLevel(): Int = if (latest.center != null) PICK_ZOOM else super.getZoomLevel()
             override fun onMapReady(map: KakaoMap) {
                 session.view.post {
-                    if (!session.closed) { session.map = map; ready = true; session.update(latest, density.density) }
+                    if (!session.closed) { session.map = map; ready = true; report(MapAvailability.AVAILABLE); session.update(latest, density.density) }
                 }
             }
         })
@@ -113,7 +114,7 @@ internal fun NativeMap(state: MapState, modifier: Modifier = Modifier, keyAvaila
             AndroidView(factory = { session.view }, modifier = Modifier.fillMaxSize(), update = { if (ready && !failed) session.update(state, density.density) })
         }
         if (failed) {
-            androidx.compose.runtime.LaunchedEffect(Unit) { latest.onUnavailable() }
+            androidx.compose.runtime.LaunchedEffect(Unit) { report(MapAvailability.ERROR); latest.onUnavailable() }
             MapNotice(R.string.map_error, Modifier.fillMaxSize())
         }
         else if (!ready) MapNotice(R.string.map_loading, Modifier.fillMaxSize())

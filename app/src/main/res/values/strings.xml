@@ -42,7 +42,7 @@
     <string name="map_pick_address_error">주소를 불러오지 못했어요. 이 위치를 그대로 쓸 수 있어요.</string>
     <string name="map_pick_confirm_origin">출발지로 선택</string>
     <string name="map_pick_confirm_destination">도착지로 선택</string>
-    <string name="map_pick_unavailable">지도를 불러오지 못했어요.\n뒤로 가서 장소를 검색해 주세요.</string>
+    <string name="map_pick_unavailable">뒤로 가서 장소를 검색해 주세요.</string>
     <string name="map_pick_recenter">현재 위치로 지도 이동</string>
     <string name="map_pick_description">%1$s 지도. 가운데 핀 위치: %2$s</string>
     <string name="input_dismiss">닫기</string>

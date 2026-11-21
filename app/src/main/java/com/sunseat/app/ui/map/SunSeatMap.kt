@@ -44,15 +44,42 @@ enum class MapRenderer { SDK, PREVIEW }
 @Suppress("ComposeCompositionLocalUsage") // 네이티브 SDK를 테스트 렌더러로 교체하는 경계
 val LocalMapRenderer = staticCompositionLocalOf { MapRenderer.SDK }
 
+/**
+ * 지도 키가 있는지(#173). 렌더러 경계에서 바꿀 수 있어 테스트가 "사용 불가"를 만든다. 없으면 두 렌더러 모두 지도 대신 같은 안내를 그린다.
+ */
+@Suppress("ComposeCompositionLocalUsage") // 빌드 설정(지도 키)을 테스트에서 바꾸는 경계
+val LocalMapKeyAvailable = staticCompositionLocalOf { com.sunseat.app.BuildConfig.KAKAO_NATIVE_APP_KEY.isNotBlank() }
+
+/**
+ * 지도 사용 가능 상태(#173): 준비 중 → 사용 가능, 또는 사용 불가(키 없음·인증/불러오기 실패).
+ * 사용 불가이면 지도 노드는 지도 위 안내만 한 번 읽고 경로 지도 설명·경로 요약은 읽지 않는다(낭독 출처는 지도 노드 하나, DESIGN 11).
+ */
+enum class MapAvailability {
+    LOADING, AVAILABLE, MISSING_KEY, ERROR;
+    val unavailable: Boolean get() = this == MISSING_KEY || this == ERROR
+}
+
 @Composable
 fun SunSeatMap(state: MapState, modifier: Modifier = Modifier) {
     val description = stringResource(R.string.map_description, state.origin?.name.orEmpty(), state.destination?.name.orEmpty()) +
         if (state.focus != null) " · " + stringResource(R.string.location_use_current) else ""
-    Box(modifier.semantics { contentDescription = description }) {
-        if (LocalMapRenderer.current == MapRenderer.PREVIEW) MapPlaceholder(state, Modifier.fillMaxSize())
-        else NativeMap(state, Modifier.fillMaxSize())
-        // Separate node so the existing map description stays stable; colour/line shape is never the only cue.
-        routeSummary(state.routes.getOrNull(state.selectedRoute))?.let { summary -> Box(Modifier.matchParentSize().semantics { contentDescription = summary }) }
+    val keyAvailable = LocalMapKeyAvailable.current
+    var availability by remember(keyAvailable) { mutableStateOf(if (keyAvailable) MapAvailability.LOADING else MapAvailability.MISSING_KEY) }
+    Box(modifier.semantics {
+        if (!availability.unavailable) contentDescription = description
+        this[MapAvailabilityKey] = availability
+    }) {
+        when {
+            // 키가 없으면 렌더러와 관계없이 같은 안내를 그린다(테스트 지도도 실제 안내 노드를 의미 트리에 둔다).
+            !keyAvailable -> NativeMap(state, Modifier.fillMaxSize(), keyAvailable = false)
+            LocalMapRenderer.current == MapRenderer.PREVIEW -> {
+                androidx.compose.runtime.LaunchedEffect(Unit) { availability = MapAvailability.AVAILABLE }
+                MapPlaceholder(state, Modifier.fillMaxSize())
+            }
+            else -> NativeMap(state, Modifier.fillMaxSize(), onAvailability = { availability = it })
+        }
+        // Separate node so the existing map description stays stable; colour/line shape is never the only cue. 사용 불가면 읽지 않는다(#173).
+        if (!availability.unavailable) routeSummary(state.routes.getOrNull(state.selectedRoute))?.let { summary -> Box(Modifier.matchParentSize().semantics { contentDescription = summary }) }
         // No separate legend: the 출발/도착 markers carry their own text (DESIGN 11.1) and a legend box covered them.
     }
 }

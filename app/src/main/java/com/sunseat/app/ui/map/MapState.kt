@@ -239,6 +239,8 @@ internal val MapFootprintBoxesKey = androidx.compose.ui.semantics.SemanticsPrope
 internal val MapMarkBoxesKey = androidx.compose.ui.semantics.SemanticsPropertyKey<List<Pair<String, ScreenBox>>>("MapMarkBoxes")
 /** 테스트 지도가 숨긴 표식(종류 이름, 정보가 남는 곳, 테스트 관측용, #170). */
 internal val MapHiddenMarksKey = androidx.compose.ui.semantics.SemanticsPropertyKey<List<Pair<String, Fallback>>>("MapHiddenMarks")
+/** 지도 사용 가능 상태(#173, 테스트 관측용). */
+internal val MapAvailabilityKey = androidx.compose.ui.semantics.SemanticsPropertyKey<MapAvailability>("MapAvailability")
 /** 카메라 정책의 보이는 영역(px, 지도 뷰 기준, 테스트 관측용, #168). */
 internal val MapVisibleAreaKey = androidx.compose.ui.semantics.SemanticsPropertyKey<ScreenBox>("MapVisibleArea")
 

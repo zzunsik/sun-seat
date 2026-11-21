@@ -46,11 +46,11 @@ class MapPickScreenshotTest {
     private fun pick(field: EndpointField = EndpointField.DESTINATION, status: PickAddressStatus = PickAddressStatus.FOUND, address: String? = "서울 가상구 예시로 200") =
         MapPickState(field, pin, MapFocus(pin, 1), status = status, address = address.takeIf { status == PickAddressStatus.FOUND })
 
-    private fun render(state: MapPickState, dark: Boolean, fontScale: Float = 1f, actions: InputActions = InputActions()) {
+    private fun render(state: MapPickState, dark: Boolean, fontScale: Float = 1f, actions: InputActions = InputActions(), keyAvailable: Boolean = true) {
         compose.enableAccessibilityChecks()
         compose.setContent {
             val density = LocalDensity.current
-            CompositionLocalProvider(LocalMapRenderer provides MapRenderer.PREVIEW, LocalDensity provides Density(density.density, fontScale)) {
+            CompositionLocalProvider(LocalMapRenderer provides MapRenderer.PREVIEW, LocalDensity provides Density(density.density, fontScale), com.sunseat.app.ui.map.LocalMapKeyAvailable provides keyAvailable) {
                 SunSeatTheme(darkTheme = dark) { MapPickScreen(state, actions, origin, null) }
             }
         }
@@ -76,7 +76,8 @@ class MapPickScreenshotTest {
     @Test fun sameEndpointLight() { render(pick().copy(messageRes = R.string.input_same_endpoints), false); shot("map_pick_same_light") }
 
     @Test fun mapUnavailableLight() {
-        render(pick().copy(mapUnavailable = true), false)
+        // #173: 지도 키가 없는 상태를 렌더러 경계에서 주입해 실제 지도 위 안내를 그린다.
+        render(pick().copy(mapUnavailable = true), false, keyAvailable = false)
         compose.onNode(hasClickAction() and hasText(text(R.string.map_pick_confirm_destination))).assertIsNotEnabled()
         shot("map_pick_unavailable_light")
     }

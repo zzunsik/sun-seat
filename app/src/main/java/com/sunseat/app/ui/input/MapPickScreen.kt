@@ -89,7 +89,8 @@ internal fun MapPickScreen(
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 // The edited endpoint's marker is replaced by the pin; the other endpoint stays for context.
                 val description = stringResource(R.string.map_pick_description, title, headline)
-                Box(Modifier.fillMaxSize().clearAndSetSemantics { if (!pick.mapUnavailable) contentDescription = description }) {
+                // #147: 지도를 쓸 수 없으면 지도 노드의 안내(지도 위 글자)를 그대로 읽는다. 쓸 수 있을 때만 핀 위치 설명 하나로 바꾼다.
+                Box(Modifier.fillMaxSize().then(if (pick.mapUnavailable) Modifier else Modifier.clearAndSetSemantics { contentDescription = description })) {
                     SunSeatMap(
                         MapState(
                             origin = origin.takeUnless { isOrigin },
