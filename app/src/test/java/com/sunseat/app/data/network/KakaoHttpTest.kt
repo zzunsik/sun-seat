@@ -5,10 +5,11 @@ import kotlinx.coroutines.runBlocking
 import mockwebserver3.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 
-/** 공통 헤더와 오류 구분. 장소 검색 호출로 확인한다. */
+/** 앱 API 게이트웨이 호출의 헤더와 오류 구분. 장소 검색 호출로 확인한다. */
 class KakaoHttpTest {
     private lateinit var server: MockWebServer
 
@@ -23,19 +24,20 @@ class KakaoHttpTest {
         server.close()
     }
 
-    private suspend fun searchWith(apiKey: String = TEST_KEY) =
-        KakaoPlaceSearchApi(server.kakaoRetrofit(apiKey)).search("예시")
+    private suspend fun searchWith(apiConfigured: Boolean = true) =
+        KakaoPlaceSearchApi(server.kakaoRetrofit(apiConfigured)).search("예시")
 
     @Test
-    fun addsAuthorizationHeader() = runBlocking {
+    fun sendsNoAuthorizationHeader() = runBlocking {
         server.enqueueJson("""{"documents":[]}""")
         searchWith()
-        assertEquals("KakaoAK $TEST_KEY", server.takeRequest().headers["Authorization"])
+        // REST 키는 앱 API 게이트웨이에만 있다(#189). 앱은 인증 헤더를 보내지 않는다.
+        assertNull(server.takeRequest().headers["Authorization"])
     }
 
     @Test
     fun missingKeyFailsWithoutNetwork() = runBlocking {
-        assertEquals(ApiResult.Failure(ApiError.MISSING_KEY), searchWith(apiKey = ""))
+        assertEquals(ApiResult.Failure(ApiError.MISSING_KEY), searchWith(apiConfigured = false))
         assertEquals(0, server.requestCount)
     }
 
@@ -77,7 +79,7 @@ class KakaoHttpTest {
 
     @Test
     fun connectionFailureIsNetwork() = runBlocking {
-        val retrofit = KakaoHttp.retrofit(closedServerUrl(), KakaoHttp.okHttpClient(TEST_KEY))
+        val retrofit = KakaoHttp.retrofit(closedServerUrl(), KakaoHttp.okHttpClient())
         assertEquals(
             ApiResult.Failure(ApiError.NETWORK),
             KakaoPlaceSearchApi(retrofit).search("예시"),

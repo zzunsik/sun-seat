@@ -17,7 +17,7 @@ interface ReverseGeocodeApi {
     suspend fun address(location: LatLng): ApiResult<String?>
 }
 
-/** 카카오 로컬 좌표→주소 변환(`GET /v2/local/geo/coord2address.json`). 장소 검색과 같은 REST 키·호스트를 쓴다. */
+/** 카카오 로컬 좌표→주소 변환(앱 API `GET kakao/local/geo/coord2address` → 카카오 `/v2/local/geo/coord2address.json`). */
 class KakaoReverseGeocodeApi internal constructor(
     private val service: KakaoCoordService,
 ) : ReverseGeocodeApi {
@@ -31,7 +31,7 @@ class KakaoReverseGeocodeApi internal constructor(
 }
 
 internal interface KakaoCoordService {
-    @GET("v2/local/geo/coord2address.json")
+    @GET("local/geo/coord2address")
     suspend fun coord2address(
         @Query("x") x: Double,
         @Query("y") y: Double,

@@ -51,7 +51,7 @@ class KakaoPlaceSearchApiTest {
         assertEquals("", places[1].roadAddress)
 
         val request = server.takeRequest()
-        assertEquals("/v2/local/search/keyword.json", request.url.encodedPath)
+        assertEquals("/kakao/local/search/keyword", request.url.encodedPath)
         assertEquals("예시역", request.url.queryParameter("query"))
         assertEquals("127.0", request.url.queryParameter("x"))
         assertEquals("37.5", request.url.queryParameter("y"))

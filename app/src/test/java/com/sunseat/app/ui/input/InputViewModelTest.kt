@@ -23,6 +23,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -255,7 +256,7 @@ class InputViewModelTest {
     fun apiErrorsMapToMessages() = runTest(dispatcher) {
         val cases = mapOf(
             ApiError.MISSING_KEY to R.string.search_error_unavailable,
-            ApiError.UNAUTHORIZED to R.string.search_error_unavailable,
+            ApiError.UNAUTHORIZED to R.string.search_error_quota,
             ApiError.QUOTA_EXCEEDED to R.string.search_error_quota,
             ApiError.NETWORK to R.string.search_error_network,
             ApiError.UNKNOWN to R.string.search_error_unknown,
@@ -472,5 +473,18 @@ class InputViewModelTest {
         vm.onQueryChange("부산역")
         advanceUntilIdle()
         assertFalse(vm.state.value.search!!.canRetry)
+    }
+
+    @Test
+    fun gatewayRefusalAndRateLimitOfferRetryLater() = runTest(dispatcher) {
+        // 앱 API 게이트웨이(#189)의 403·429·5xx는 서버 쪽 문제라 "잠시 뒤 다시"로 안내하고 다시 시도할 수 있다.
+        for (error in listOf(ApiError.UNAUTHORIZED, ApiError.QUOTA_EXCEEDED, ApiError.UNKNOWN)) {
+            val vm = vm(FakePlaces(ApiResult.Failure(error)))
+            vm.openSearch(EndpointField.DESTINATION)
+            vm.onQueryChange("부산역")
+            advanceUntilIdle()
+            assertTrue(error.name, vm.state.value.search!!.canRetry)
+            assertNotEquals(error.name, R.string.search_error_unavailable, vm.state.value.search!!.messageRes)
+        }
     }
 }

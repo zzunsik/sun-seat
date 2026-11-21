@@ -29,11 +29,17 @@ android {
         targetSdk = 37
         versionCode = 1
         versionName = "0.1.0"
-        // API 키는 local.properties에서만 읽는다. 없으면 빈 문자열로 빌드된다(CI 포함).
+        // 키·주소는 local.properties에서만 읽는다. 없으면 빈 문자열로 빌드된다(CI 포함).
+        // 지도 SDK의 네이티브 앱 키는 APK에 들어간다(패키지명·서명 키 해시로 제한).
         val mapKey = localProps.getProperty("KAKAO_NATIVE_APP_KEY", "")
         buildConfigField("String", "KAKAO_NATIVE_APP_KEY", "\"$mapKey\"")
-        val kakaoKey = localProps.getProperty("KAKAO_REST_API_KEY", "")
-        buildConfigField("String", "KAKAO_REST_API_KEY", "\"$kakaoKey\"")
+        // 카카오 REST 호출은 앱 API 게이트웨이(workers/api)로 간다(#189). REST 키는 게이트웨이의 시크릿에만 두고 APK에 넣지 않는다.
+        val apiUrl = localProps.getProperty("SUNSEAT_API_BASE_URL", "").trim()
+        require('"' !in apiUrl && '\\' !in apiUrl) { "SUNSEAT_API_BASE_URL must not contain quotes or backslashes." }
+        buildConfigField("String", "SUNSEAT_API_BASE_URL", "\"$apiUrl\"")
+        if (!localProps.getProperty("KAKAO_REST_API_KEY").isNullOrBlank()) {
+            logger.warn("local.properties의 KAKAO_REST_API_KEY는 더 이상 쓰지 않습니다(#189). 지우고 SUNSEAT_API_BASE_URL을 설정하세요.")
+        }
     }
 
     signingConfigs {

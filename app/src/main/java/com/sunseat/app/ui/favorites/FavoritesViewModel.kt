@@ -7,6 +7,7 @@ import com.sunseat.app.data.favorites.*
 import com.sunseat.app.data.place.Place
 import com.sunseat.app.data.place.PlaceSearchApi
 import com.sunseat.app.data.network.ApiResult
+import com.sunseat.app.data.network.retryable
 import com.sunseat.app.ui.input.EndpointField
 import com.sunseat.app.ui.input.SearchState
 import com.sunseat.app.ui.input.messageRes
@@ -69,7 +70,7 @@ class FavoritesViewModel(private val repository: FavoritesRepository, private va
                 if (generation != searchGeneration) return@update state
                 state.copy(search = when (response) {
                     is ApiResult.Success -> active.copy(results = response.value, loading = false, messageRes = if (response.value.isEmpty()) R.string.search_no_results else null, canRetry = false)
-                    is ApiResult.Failure -> active.copy(results = emptyList(), loading = false, messageRes = response.error.messageRes(), canRetry = response.error != com.sunseat.app.data.network.ApiError.MISSING_KEY && response.error != com.sunseat.app.data.network.ApiError.UNAUTHORIZED)
+                    is ApiResult.Failure -> active.copy(results = emptyList(), loading = false, messageRes = response.error.messageRes(), canRetry = response.error.retryable)
                 })
             }
         }

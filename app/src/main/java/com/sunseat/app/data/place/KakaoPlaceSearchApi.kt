@@ -11,7 +11,7 @@ import retrofit2.create
 import retrofit2.http.GET
 import retrofit2.http.Query
 
-/** 카카오 로컬 키워드 검색(`GET /v2/local/search/keyword.json`). */
+/** 카카오 로컬 키워드 검색(앱 API `GET kakao/local/search/keyword` → 카카오 `/v2/local/search/keyword.json`). */
 class KakaoPlaceSearchApi internal constructor(
     private val service: KakaoLocalService,
 ) : PlaceSearchApi {
@@ -19,7 +19,8 @@ class KakaoPlaceSearchApi internal constructor(
     constructor(retrofit: Retrofit) : this(retrofit.create<KakaoLocalService>())
 
     override suspend fun search(query: String, near: LatLng?, size: Int): ApiResult<List<Place>> {
-        val trimmed = query.trim()
+        // 앱 API 게이트웨이는 파라미터 값이 200자를 넘으면 거부한다(#189). 그보다 짧게 잘라 보낸다.
+        val trimmed = query.trim().take(MAX_QUERY_LENGTH).trim()
         if (trimmed.isEmpty()) return ApiResult.Success(emptyList())
         return kakaoCall(
             request = {
@@ -33,10 +34,15 @@ class KakaoPlaceSearchApi internal constructor(
             transform = { ApiResult.Success(it.toPlaces()) },
         )
     }
+
+    internal companion object {
+        /** 검색어 최대 길이. 게이트웨이의 파라미터 길이 상한(workers/api MAX_PARAM_LENGTH = 200)보다 짧다. */
+        const val MAX_QUERY_LENGTH = 100
+    }
 }
 
 internal interface KakaoLocalService {
-    @GET("v2/local/search/keyword.json")
+    @GET("local/search/keyword")
     suspend fun keyword(
         @Query("query") query: String,
         @Query("x") x: Double? = null,
