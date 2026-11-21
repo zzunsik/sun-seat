@@ -6,7 +6,7 @@
 #   - 권한이 아래 허용 목록과 같다. 의존성이 권한을 더하면 여기서 실패하므로, 의도한 것인지 보고 목록을 고친다.
 #   - versionName·versionCode가 버전 규칙(scripts/release-version.mjs)에 맞고, --tag가 있으면 태그와 같다
 #   - --signed: apksigner verify가 통과하고 서명자가 하나다. 서명 인증서 SHA-256을 출력하고
-#     GITHUB_OUTPUT이 있으면 cert-sha256=으로 쓴다(minSdk 26이라 v1 없이 v2/v3로 서명돼 줄 머리가 "V2 Signer:"처럼 바뀐다)
+#     GITHUB_OUTPUT이 있으면 cert-sha256=으로 쓴다(줄 형식이 build-tools 버전마다 달라 release-version.mjs signer가 읽는다)
 #
 # 사용법: scripts/check-release-apk.sh <apk> [--tag <태그>] [--signed]   (저장소 최상위에서)
 # aapt2·apksigner는 ANDROID_HOME(없으면 ANDROID_SDK_ROOT, Windows는 %LOCALAPPDATA%/Android/Sdk)의 가장 새 build-tools에서 찾는다.

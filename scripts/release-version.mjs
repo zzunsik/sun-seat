@@ -120,7 +120,7 @@ export function readSignerCert(text) {
   return [...certs][0];
 }
 
-export const checkGradle =(text, tag) => checkVersion(readGradle(text), 'app/build.gradle.kts', tag);
+export const checkGradle = (text, tag) => checkVersion(readGradle(text), 'app/build.gradle.kts', tag);
 export const checkApk = (badging, tag) => checkVersion(readBadging(badging), 'APK', tag);
 
 function main(argv) {
