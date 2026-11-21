@@ -78,9 +78,11 @@ internal fun CabinPanel(point: TimelinePoint, mode: TravelMode, state: Simulatio
     }
     @Composable fun SeatSummary() {
         // #161: 글이 한 줄에 안 들어가면 "자리 고르기"를 아래로 내려 글이 단어 중간에서 꺾이지 않게 한다(DESIGN 4.4).
-        com.sunseat.app.ui.components.ReflowRow(modifier = Modifier.fillMaxWidth(), text = {
+        val seatTitle=stringResource(R.string.simulation_selected_seat,chosen.label())
+        val seatTitleStyle=MaterialTheme.typography.titleSmall.copy(lineBreak=WordLineBreak)
+        com.sunseat.app.ui.components.ReflowRow(modifier = Modifier.fillMaxWidth(), headline = seatTitle, headlineStyle = seatTitleStyle, text = {
             Column {
-                Text(stringResource(R.string.simulation_selected_seat,chosen.label()),style=MaterialTheme.typography.titleSmall.copy(lineBreak=WordLineBreak))
+                Text(seatTitle,style=seatTitleStyle)
                 Text(profileLabel,style=MaterialTheme.typography.bodySmall.copy(lineBreak=WordLineBreak),color=SunSeatTheme.scheme.onSurfaceVariant)
             }
         }, action = {
@@ -94,7 +96,7 @@ internal fun CabinPanel(point: TimelinePoint, mode: TravelMode, state: Simulatio
                 }
             }
         })
-        Text(summary,style=MaterialTheme.typography.bodySmall)
+        Text(summary,style=MaterialTheme.typography.bodySmall.copy(lineBreak=WordLineBreak))
     }
     // Keep the full viewport first in the short landscape panel; text remains scrollable below it.
     val configuration = LocalConfiguration.current
@@ -112,16 +114,16 @@ internal fun CabinPanel(point: TimelinePoint, mode: TravelMode, state: Simulatio
     if (landscape) SeatSummary()
     if(profile.kind in BusModels.kinds) BusModelRow(point,mode,profile,manual,state,actions)
     recommended?.let { Text(stringResource(R.string.simulation_recommended_seat,
-        if(point.leg.mode==Mode.CAR) it.label() else point.spot!!.label()),style=MaterialTheme.typography.bodySmall) }
+        if(point.leg.mode==Mode.CAR) it.label() else point.spot!!.label()),style=MaterialTheme.typography.bodySmall.copy(lineBreak=WordLineBreak)) }
     light.cells.filter { it.seatId==chosen.id && it.window!=null }.groupBy { it.window }.forEach { (window,cells) ->
         Text(stringResource(R.string.simulation_window_angle,stringResource(when(window!!) {
             CabinWindow.LEFT -> R.string.simulation_window_left
             CabinWindow.RIGHT -> R.string.simulation_window_right
             CabinWindow.FRONT -> R.string.simulation_window_front
             CabinWindow.REAR -> R.string.simulation_window_rear
-        }),cells.first().incidence!!.toInt()),style=MaterialTheme.typography.bodySmall)
+        }),cells.first().incidence!!.toInt()),style=MaterialTheme.typography.bodySmall.copy(lineBreak=WordLineBreak))
     }
-    Text(stringResource(R.string.simulation_cabin_note),style=MaterialTheme.typography.bodySmall,color=SunSeatTheme.scheme.onSurfaceVariant)
+    Text(stringResource(R.string.simulation_cabin_note),style=MaterialTheme.typography.bodySmall.copy(lineBreak=WordLineBreak),color=SunSeatTheme.scheme.onSurfaceVariant)
     }
 }
 
@@ -130,12 +132,13 @@ internal fun CabinPanel(point: TimelinePoint, mode: TravelMode, state: Simulatio
 private fun BusModelRow(point: TimelinePoint, mode: TravelMode, profile: CabinProfile, manual: CabinKind?, state: SimulationUiState, actions: SimulationActions) {
     val estimate=BusModels.estimate(point.leg.busType)
     var open by remember(point.legIndex) { mutableStateOf(false) }
-    @Composable fun Note(text: String) = Text(text,style=MaterialTheme.typography.bodySmall,color=SunSeatTheme.scheme.onSurfaceVariant)
-    com.sunseat.app.ui.components.ReflowRow(modifier = Modifier.fillMaxWidth(), text = {
+    @Composable fun Note(text: String) = Text(text,style=MaterialTheme.typography.bodySmall.copy(lineBreak=WordLineBreak),color=SunSeatTheme.scheme.onSurfaceVariant)
+    val modelTitle=stringResource(if(manual!=null) R.string.simulation_bus_model_manual else R.string.simulation_bus_model_estimated,
+        stringResource(if(profile.kind==CabinKind.COACH) R.string.simulation_coach else R.string.simulation_bus))
+    val modelTitleStyle=MaterialTheme.typography.bodyMedium.copy(lineBreak=WordLineBreak)
+    com.sunseat.app.ui.components.ReflowRow(modifier = Modifier.fillMaxWidth(), headline = modelTitle, headlineStyle = modelTitleStyle, text = {
         Column {
-            Text(stringResource(if(manual!=null) R.string.simulation_bus_model_manual else R.string.simulation_bus_model_estimated,
-                stringResource(if(profile.kind==CabinKind.COACH) R.string.simulation_coach else R.string.simulation_bus)),
-                style=MaterialTheme.typography.bodyMedium)
+            Text(modelTitle,style=modelTitleStyle)
             Note(if(manual!=null) stringResource(R.string.simulation_bus_manual_scope) else when(estimate.basis) {
                 BusModelBasis.NO_TYPE -> stringResource(R.string.simulation_bus_basis_none)
                 BusModelBasis.CITY_TYPE -> stringResource(R.string.simulation_bus_basis_city,estimate.type!!)
@@ -163,7 +166,7 @@ private fun BusModelRow(point: TimelinePoint, mode: TravelMode, profile: CabinPr
     })
     state.notice?.takeIf { it.leg==point.legIndex }?.carry?.let { carry ->
         val from=carry.from!!.label()
-        Text(stringResource(if(carry.carried) R.string.simulation_seat_carried else R.string.simulation_seat_not_carried,from),style=MaterialTheme.typography.bodySmall)
+        Text(stringResource(if(carry.carried) R.string.simulation_seat_carried else R.string.simulation_seat_not_carried,from),style=MaterialTheme.typography.bodySmall.copy(lineBreak=WordLineBreak))
     }
     Note(stringResource(if(profile.kind==CabinKind.COACH) R.string.simulation_coach_note else R.string.simulation_bus_note))
 }
@@ -237,9 +240,13 @@ private fun CabinScene(profile: CabinProfile, light: CabinLight, selected: Strin
     }
 }
 
-/** #161: 좁은 화면·큰 글자에서 라벨이 단어("모형 2번", "시내버스(추정)") 중간에서 꺾이지 않게 어절 단위로 줄을 바꾼다(DESIGN 4.4). */
+/**
+ * #161: 좁은 화면·큰 글자에서 차량 패널 글이 단어("모형 2번", "시내버스(추정)", "등받이") 중간에서 꺾이지 않게 한다(DESIGN 4.4).
+ * 한국어는 어절(Phrase) 단위 줄바꿈이 적용되지 않아(기본 규칙은 음절마다 줄을 바꿀 수 있다) 줄 길이를 고르게 나누는 Balanced로 줄 끝에 걸린 어절을
+ * 다음 줄로 넘긴다. 보장은 아니므로 `SimulationOverlayTest`가 320dp·1.5배에서 이 단어들을 확인한다.
+ */
 private val WordLineBreak = androidx.compose.ui.text.style.LineBreak(
     strategy = androidx.compose.ui.text.style.LineBreak.Strategy.Balanced,
-    strictness = androidx.compose.ui.text.style.LineBreak.Strictness.Strict,
+    strictness = androidx.compose.ui.text.style.LineBreak.Strictness.Normal,
     wordBreak = androidx.compose.ui.text.style.LineBreak.WordBreak.Phrase,
 )

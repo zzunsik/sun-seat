@@ -133,7 +133,7 @@ fun SimulationScreen(
                 if (point != null && point.leg.mode != Mode.WALK) CabinPanel(point, request.mode, state, actions)
                 if (result.arrival != result.modeledArrival) Text(stringResource(R.string.simulation_modeled_note, time(result.arrival)), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             }
-            ScrollEdgeCue(detailScroll, "simulation_details", Modifier.align(Alignment.BottomCenter))
+            ScrollEdgeCue(detailScroll, "simulation_details", Modifier.align(Alignment.BottomCenter), trailingPadding = if (landscape) Spacing.s else Spacing.screen)
         }
     }
     Surface(modifier.fillMaxSize(), color = scheme.background, contentColor = scheme.onSurface) {
@@ -162,9 +162,10 @@ fun SimulationScreen(
                             Text(time(result.modeledArrival),style=MaterialTheme.typography.labelSmall)
                         }
                     }
-                    if(!SunSeatTheme.reduceMotion) Row(horizontalArrangement=Arrangement.spacedBy(Spacing.s),verticalAlignment=Alignment.CenterVertically) {
+                    if(!SunSeatTheme.reduceMotion) FlowRow(Modifier.weight(1f,fill=false),horizontalArrangement=Arrangement.spacedBy(Spacing.s),verticalArrangement=Arrangement.spacedBy(Spacing.xs),itemVerticalAlignment=Alignment.CenterVertically) {
                         PrimaryButton(onClick=actions.toggle,modifier=Modifier.widthIn(min=Sizes.simulationCompactPlay),enabled=point!=null) { Text(stringResource(if(state.playing) R.string.simulation_pause else R.string.simulation_play),softWrap=false) }
-                        listOf(1,2,4).forEach { speed -> NeutralFilterChip(state.speed==speed,stringResource(R.string.simulation_speed,speed)) { actions.speed(speed) } }
+                        // 배속 선택지는 한 묶음으로 함께 다음 줄로 흐른다.
+                        Row(horizontalArrangement=Arrangement.spacedBy(Spacing.s),verticalAlignment=Alignment.CenterVertically) { listOf(1,2,4).forEach { speed -> NeutralFilterChip(state.speed==speed,stringResource(R.string.simulation_speed,speed)) { actions.speed(speed) } } }
                     }
                 } else Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Spacing.screen, vertical = Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     if(!landscape) MiniTimeline(result, boundaries)
@@ -179,7 +180,8 @@ fun SimulationScreen(
                     // #161: 버튼 글자는 꺾지 않고, 한 줄에 안 들어가면 배속 선택이 다음 줄로 흐른다(DESIGN 4.4).
                     if (!SunSeatTheme.reduceMotion) FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.xs), itemVerticalAlignment = Alignment.CenterVertically) {
                         PrimaryButton(onClick = actions.toggle, modifier = Modifier.weight(1f), enabled = point != null) { Text(stringResource(if (state.playing) R.string.simulation_pause else R.string.simulation_play), softWrap = false) }
-                        listOf(1, 2, 4).forEach { speed -> NeutralFilterChip(state.speed == speed, stringResource(R.string.simulation_speed, speed)) { actions.speed(speed) } }
+                        // 배속 선택지는 한 묶음으로 함께 다음 줄로 흐른다.
+                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalAlignment = Alignment.CenterVertically) { listOf(1, 2, 4).forEach { speed -> NeutralFilterChip(state.speed == speed, stringResource(R.string.simulation_speed, speed)) { actions.speed(speed) } } }
                     }
                 }
             }

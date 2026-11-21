@@ -43,6 +43,10 @@ fun ComposeTestRule.assertNoTextUnderOverlays(edgeScrollTags: List<String> = emp
         nodes.filter { it.id !in inside && it.config.getOrNull(SemanticsProperties.Text) != null }.forEach { text ->
             if (text.boundsInRoot.overlapArea(box) > MIN_OVERLAP_PX2) problems += "text '${text.config[SemanticsProperties.Text].joinToString()}' ${text.boundsInRoot} under overlay '$name' $box"
         }
+        // 누를 수 있는 노드(아이콘만 있는 버튼 포함)도 오버레이에 가리지 않는다.
+        nodes.filter { it.id !in inside && it.config.getOrNull(SemanticsProperties.Text) == null && it.config.getOrNull(androidx.compose.ui.semantics.SemanticsActions.OnClick) != null }.forEach { node ->
+            if (node.boundsInRoot.overlapArea(box) > MIN_OVERLAP_PX2) problems += "clickable ${node.config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString() ?: node.config.getOrNull(SemanticsProperties.TestTag) ?: node.id} ${node.boundsInRoot} under overlay '$name' $box"
+        }
         // 테스트 지도의 보이는 표식(지도 뷰 좌표 → 화면 좌표)
         nodes.filter { it.id !in inside && it.config.getOrNull(MapMarkBoxesKey) != null }.forEach { map ->
             val origin = map.boundsInRoot.topLeft
@@ -59,7 +63,8 @@ fun ComposeTestRule.assertNoTextUnderOverlays(edgeScrollTags: List<String> = emp
             node.config.getOrNull(SemanticsProperties.Text) != null &&
                 node.unclippedBoundsInRoot().let { it.top < viewport.bottom - 0.5f && it.bottom > viewport.bottom + 0.5f }
         }
-        val marked = nodes.any { it.config.getOrNull(ScrollEdgeKey) == tag }
+        // 표시는 스크롤 영역 아래끝에 있어야 한다.
+        val marked = nodes.any { it.config.getOrNull(ScrollEdgeKey) == tag && kotlin.math.abs(it.boundsInRoot.bottom - viewport.bottom) <= 2f }
         if (clipped && !marked) problems += "text is cut at the bottom of '$tag' $viewport without a scroll-edge cue"
     }
     if (problems.isNotEmpty()) fail("overlay invariants:\n" + problems.joinToString("\n"))

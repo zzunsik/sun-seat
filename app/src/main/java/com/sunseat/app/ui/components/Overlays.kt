@@ -44,11 +44,12 @@ fun Modifier.overlay(name: String, onPlaced: (top: Dp, bottom: Dp) -> Unit = { _
 /**
  * 고정 패널(조작 막대 등) 위에서 끝나는 스크롤 본문의 아래 경계 "더 있음" 표시(DESIGN 4.5).
  * 아래로 더 내릴 내용이 있을 때만 경계에 `outlineVariant` 구분선을 둔다. 장식 그라데이션·흐림은 쓰지 않는다(DESIGN 8).
- * 끝까지 내리면 사라진다. 구분선은 스크롤 영역 바로 아래(패널 위끝)에 둔다.
+ * 끝까지 내리면 사라진다. 구분선은 스크롤 영역 아래끝(패널 위끝)에 둔다. 스크롤 안쪽 아래 여백[trailingPadding]만 남았으면 더 있는 내용이 아니다.
  */
 @Composable
-fun ScrollEdgeCue(scroll: ScrollState, scrollTag: String, modifier: Modifier = Modifier) {
-    if (scroll.canScrollForward) HorizontalDivider(modifier.fillMaxWidth().testTag("${scrollTag}_more").semantics { this[ScrollEdgeKey] = scrollTag },
+fun ScrollEdgeCue(scroll: ScrollState, scrollTag: String, modifier: Modifier = Modifier, trailingPadding: Dp = 0.dp) {
+    val padding = with(LocalDensity.current) { trailingPadding.roundToPx() }
+    if (scroll.maxValue - scroll.value > padding) HorizontalDivider(modifier.fillMaxWidth().testTag("${scrollTag}_more").semantics { this[ScrollEdgeKey] = scrollTag },
         thickness = Sizes.hairline, color = SunSeatTheme.scheme.outlineVariant)
 }
 
@@ -56,17 +57,19 @@ fun ScrollEdgeCue(scroll: ScrollState, scrollTag: String, modifier: Modifier = M
 fun measuredOr(measured: Dp, estimate: Dp): Dp = if (measured > 0.dp) measured else estimate
 
 /**
- * 글 묶음 + 행동 하나 줄(DESIGN 4.4 재배치 우선). 글의 한 줄 폭(최대 고유 폭)과 행동이 한 줄에 들어가면 나란히 두고,
- * 들어가지 않으면 행동을 글 아래 오른쪽으로 내린다. 좁은 화면·큰 글자에서 글이 단어 중간에서 꺾이지 않게 글에 가로 전체를 준다.
+ * 글 묶음 + 행동 하나 줄(DESIGN 4.4 재배치 우선). 제목 줄 [headline]이 행동 옆에 한 줄로 들어가면 나란히 두고(보조 글은 옆에서 줄바꿈해도 된다),
+ * 들어가지 않으면 행동을 글 아래 오른쪽으로 내려 글에 가로 전체를 준다. [headline]이 없으면 글 묶음의 한 줄 폭(최대 고유 폭)으로 판단한다.
  */
 @Composable
-fun ReflowRow(text: @Composable () -> Unit, action: @Composable () -> Unit, modifier: Modifier = Modifier, gap: Dp = com.sunseat.app.ui.theme.Spacing.s) {
+fun ReflowRow(text: @Composable () -> Unit, action: @Composable () -> Unit, modifier: Modifier = Modifier, gap: Dp = com.sunseat.app.ui.theme.Spacing.s,
+    headline: String? = null, headlineStyle: androidx.compose.ui.text.TextStyle = androidx.compose.ui.text.TextStyle.Default) {
+    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
     androidx.compose.ui.layout.Layout(contents = listOf(text, action), modifier = modifier) { (texts, actions), constraints ->
         val width = constraints.maxWidth
         val gapPx = gap.roundToPx()
         val actionPlaceable = actions.first().measure(constraints.copy(minWidth = 0, minHeight = 0))
         val textMeasurable = texts.first()
-        val oneLine = textMeasurable.maxIntrinsicWidth(androidx.compose.ui.unit.Constraints.Infinity)
+        val oneLine = headline?.let { measurer.measure(it, headlineStyle, softWrap = false).size.width } ?: textMeasurable.maxIntrinsicWidth(androidx.compose.ui.unit.Constraints.Infinity)
         val sideBySide = oneLine + gapPx + actionPlaceable.width <= width
         if (sideBySide) {
             val textPlaceable = textMeasurable.measure(constraints.copy(minWidth = 0, maxWidth = (width - gapPx - actionPlaceable.width).coerceAtLeast(0), minHeight = 0))

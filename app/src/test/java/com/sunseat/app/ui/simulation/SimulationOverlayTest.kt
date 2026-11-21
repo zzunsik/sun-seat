@@ -107,7 +107,19 @@ class SimulationOverlayTest {
     }
 
     @Test fun pausedPortrait() { render(following = false); checkInfoCard() }
-    @Test fun followingPortrait() { render(following = true); checkInfoCard() }
+    @Test fun followingPortrait() {
+        render(following = true)
+        checkInfoCard()
+        // 기본 글자 390dp에서는 행동이 글 옆에 그대로 있다(재배치는 제목 줄이 안 들어갈 때만).
+        assertActionBeside("내 자리:", app.getString(R.string.simulation_choose_seat))
+        assertActionBeside("추정한 모형", app.getString(R.string.simulation_change_model))
+    }
+
+    private fun assertActionBeside(text: String, action: String) {
+        val label = compose.onNodeWithText(text, substring = true, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val button = compose.onNodeWithText(action, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertTrue("'$action' $button must sit beside '$text' $label", button.left >= label.right && button.top < label.bottom)
+    }
 
     @Config(qualifiers = "w320dp-h844dp-xxhdpi")
     @Test fun pausedSmallLargeText() {
@@ -116,6 +128,7 @@ class SimulationOverlayTest {
         assertWordNotBroken(app.getString(R.string.simulation_play), app.getString(R.string.simulation_play))
         assertWordNotBroken("표준 시내버스", "시내버스(추정)")
         assertWordNotBroken("내 자리:", "2번")
+        assertWordNotBroken("직사광 예상", "등받이")
     }
 
     @Config(qualifiers = "w832dp-h384dp-xxhdpi")
