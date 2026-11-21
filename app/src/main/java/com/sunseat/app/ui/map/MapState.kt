@@ -93,6 +93,14 @@ internal fun MapState.coveredByVehicle(at: LatLng, markerPx: Float, distancePx: 
 internal class MapFitPolicy {
     private var previous: MapState? = null
     private var framed = false
+
+    /**
+     * 맞춤 틀 좌우에 정류장 노선 이름표 폭을 둘지(#143). 경로 맞춤에서만 둔다. 따라가기 맞춤(#146)은 차량을 가운데에 두므로
+     * 두지 않고, 따라가기를 멈춰도(드래그) 다음 경로 맞춤 전까지는 그대로 두어 여백이 바뀌며 지도가 밀리지 않게 한다.
+     */
+    var labelMargins = true
+        private set
+
     /** 전체 경로 맞춤. 따라가기 중에는 하지 않는다([camera]). */
     fun shouldFit(state: MapState): Boolean = camera(state) == MapCamera.FIT_ROUTE
 
@@ -105,12 +113,14 @@ internal class MapFitPolicy {
         val following = state.followTarget != null
         val frame = following && (requested || !framed)
         framed = following
-        return when {
+        val move = when {
             frame -> MapCamera.FRAME_FOLLOW
             following -> MapCamera.NONE
             requested -> MapCamera.FIT_ROUTE
             else -> MapCamera.NONE
         }
+        if (move != MapCamera.NONE) labelMargins = move == MapCamera.FIT_ROUTE
+        return move
     }
 
     private fun requested(state: MapState): Boolean {
@@ -137,14 +147,15 @@ internal val MapVisibleHeightKey = androidx.compose.ui.semantics.SemanticsProper
 internal val MapTopPaddingKey = androidx.compose.ui.semantics.SemanticsPropertyKey<Float>("MapTopPadding")
 
 /**
- * 카메라 맞춤 틀(px). 지도 여백 [top]·[bottom]·[side](좌우 같음)과 네 변에 같이 들어가는 맞춤 [inset].
+ * 카메라 맞춤 틀(px). 지도 여백 [top]·[bottom]·[left]·[right]와 네 변에 같이 들어가는 맞춤 [inset]. [side]는 이름표가 없을 때의 좌우 여백이다.
  * 실제 SDK 지도(setPadding + fitMapPoints)와 테스트 지도가 같은 값을 쓴다.
  */
-internal data class FitFrame(val top: Float, val bottom: Float, val side: Float, val inset: Float)
+internal data class FitFrame(val top: Float, val bottom: Float, val side: Float, val inset: Float, val left: Float = side, val right: Float = side)
 
 /**
  * [top]·[bottom]은 지도 위·아래 여백(헤더·시트 겹침), [inset]은 기본 맞춤 inset, [edge]는 가장 작은 맞춤 inset,
- * [markerHeight]는 좌표 위로 솟는 출발·도착 표식 높이(틈 포함)다.
+ * [markerHeight]는 좌표 위로 솟는 출발·도착 표식 높이(틈 포함)다. [labelLeft]·[labelRight]는 정류장 노선 이름표가 좌표에서
+ * 왼쪽·오른쪽으로 뻗는 최대 폭([labelExtents])이다. 어느 정류장이 가장자리에 올지 맞춤 전에는 모르므로 가장 넓은 이름표 기준이다.
  *
  * #138: 맞춤 inset은 네 변에 같이 들어가므로 낮은 지도 띠(후보 목록 기본 상태 약 110dp)에서는 기본 inset 두 배가
  * 높이 대부분을 차지해 지도가 크게 축소됐다. Kakao 줌은 정수 단계라 경로 높이가 두 배 들어갈 자리가 있어야 한 단계 가까워진다.
@@ -153,14 +164,61 @@ internal data class FitFrame(val top: Float, val bottom: Float, val side: Float,
  * 돌려 기본 inset과 같은 폭을 남긴다(높이가 맞춤을 제한하므로 손해가 없고, 가장자리 정류장 노선 이름표가 잘리지 않는다).
  * 보이는 높이가 200dp 이상인 지도(미리보기·결과·세로 입력·지도 선택)는 기본 inset 그대로다.
  */
-internal fun fitFrame(top: Float, bottom: Float, width: Float, height: Float, inset: Float, edge: Float, markerHeight: Float): FitFrame {
+internal fun fitFrame(top: Float, bottom: Float, width: Float, height: Float, inset: Float, edge: Float, markerHeight: Float, labelLeft: Float = 0f, labelRight: Float = 0f): FitFrame {
     val visible = (height - top - bottom).coerceAtLeast(0f)
     val spare = visible * (1 - FIT_SHARE) // 맞춤 inset 두 변 + 위쪽 표식 여백에 쓸 수 있는 높이
     // inset이 표식 높이 이상이면 위 여백을 더하지 않으므로 spare를 위아래 inset이 나눠 쓰고, 아니면 표식 높이를 먼저 뺀다.
     val needed = if (spare / 2 >= markerHeight) spare / 2 else spare - markerHeight
     val fitted = minOf(inset, maxOf(edge, needed))
-    return FitFrame(top + (markerHeight - fitted).coerceAtLeast(0f), bottom, inset - fitted, fitted)
+    // #143: 정류장 옆 노선 이름표가 inset보다 넓으면 그쪽 지도 여백을 이름표 폭만큼 둔다(그 밖의 좌우는 기본 inset 폭).
+    return FitFrame(top + (markerHeight - fitted).coerceAtLeast(0f), bottom, inset - fitted, fitted,
+        left = maxOf(inset, labelLeft) - fitted, right = maxOf(inset, labelRight) - fitted)
 }
 
 /** 경로·표식 좌표가 보이는 지도 높이에서 최소한 차지할 비율. */
 internal const val FIT_SHARE = 0.6f
+
+/**
+ * 정류장 옆 노선 이름표가 정류장 좌표에서 왼쪽·오른쪽으로 뻗는 최대 폭(px). [labelWidth]는 렌더러가 그리는 이름표 상자 폭이다.
+ * [boardClearance]는 첫 승차 정류장 이름표가 출발 표식을 비켜 밀려나는 거리다(#153, [stopLabelOffset]). 축소된 맞춤 화면에서는
+ * 출발지와 첫 승차 정류장이 거의 한 점이라 그만큼 밀린다.
+ */
+internal fun labelExtents(stops: List<StopMarker>, stopRadius: Float, boardClearance: Float = 0f, labelWidth: (StopMarker) -> Float): Pair<Float, Float> {
+    val labeled = stops.filter { it.labeled }
+    fun reach(stop: StopMarker) = (if (stop.kind == StopKind.BOARD) maxOf(stopRadius, boardClearance) else stopRadius) + labelWidth(stop)
+    fun side(onLeft: Boolean) = labeled.filter { it.labelOnLeft == onLeft }.maxOfOrNull { reach(it) } ?: 0f
+    return side(true) to side(false)
+}
+
+/** 출발·도착 표식 몸통의 화면 상자(px). 정류장 좌표 기준이며 아래가 +다. 꼬리는 좁아 넣지 않는다. */
+internal data class PinBox(val left: Float, val top: Float, val right: Float, val bottom: Float)
+
+/** 출발·도착 글자 표식의 몸통 폭(px). 두 렌더러가 그리기와 [PinBox]에 같이 쓴다. */
+internal fun placeMarkerWidth(textWidth: Float, marker: Float, tail: Float, padding: Float): Float = maxOf(marker - tail, textWidth + padding * 4)
+
+/** 꼬리 끝이 정류장 기준 ([dx], [dy])에 있는 폭 [width] 표식의 몸통 상자. */
+internal fun placeMarkerBox(dx: Float, dy: Float, width: Float, marker: Float, tail: Float): PinBox =
+    PinBox(dx - width / 2, dy - marker, dx + width / 2, dy - tail)
+
+/**
+ * #153: 정류장 노선 이름표가 정류장 좌표에서 떨어지는 거리(px). 기본은 정류장 반지름 [stopRadius]다.
+ * 출발·도착 표식([pins])이 이름표 자리를 덮으면(예: 출발지 바로 옆 승차 정류장의 "402"가 출발 표식 밑에 가려 "40"으로 보임)
+ * 이름표를 표식 바깥으로 [gap]만큼 띄워 민다. [maxPush]보다 더 밀어야 하면 그 표식은 무시한다:
+ * 이름표가 정류장에서 너무 떨어지면 어느 정류장 것인지 읽히지 않는다.
+ */
+internal fun stopLabelOffset(onLeft: Boolean, labelWidth: Float, labelHeight: Float, stopRadius: Float, pins: List<PinBox>, gap: Float, maxPush: Float): Float {
+    var offset = stopRadius
+    // 한 표식을 비키면 다른 표식에 걸릴 수 있어 바뀌지 않을 때까지 다시 본다(표식은 둘뿐이다).
+    repeat(pins.size + 1) {
+        var moved = false
+        for (pin in pins) {
+            val left = if (onLeft) -offset - labelWidth else offset
+            val covered = left < pin.right && left + labelWidth > pin.left && -labelHeight / 2 < pin.bottom && labelHeight / 2 > pin.top
+            if (!covered) continue
+            val needed = (if (onLeft) -pin.left else pin.right) + gap
+            if (needed > offset && needed - stopRadius <= maxPush) { offset = needed; moved = true }
+        }
+        if (!moved) return offset
+    }
+    return offset
+}
