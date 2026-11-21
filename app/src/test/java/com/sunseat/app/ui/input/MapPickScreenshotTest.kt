@@ -78,7 +78,8 @@ class MapPickScreenshotTest {
     @Test fun mapUnavailableLight() {
         // #173: 지도 키가 없는 상태를 렌더러 경계에서 주입해 실제 지도 위 안내를 그린다.
         render(pick().copy(mapUnavailable = true), false, keyAvailable = false)
-        compose.onNode(hasClickAction() and hasText(text(R.string.map_pick_confirm_destination))).assertIsNotEnabled()
+        // #180: 꺼진 선택 버튼 대신 안내한 다음 행동(검색으로 돌아가기)이 켜진 버튼이다.
+        compose.onNode(hasClickAction() and hasText(text(R.string.map_pick_close))).assertIsEnabled()
         shot("map_pick_unavailable_light")
     }
 
