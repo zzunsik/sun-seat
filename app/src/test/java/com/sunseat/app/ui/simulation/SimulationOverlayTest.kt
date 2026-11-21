@@ -130,6 +130,10 @@ class SimulationOverlayTest {
         assertWordNotBroken("내 자리:", "모형 2번")
         assertWordNotBroken("직사광 예상", "등받이")
         assertWordNotBroken("직사광 예상", "닿음")
+        // 글 줄이 행동 옆에서 두 줄을 넘으면 행동을 아래로 내려 글에 가로 전체를 준다(보조 글이 세 줄로 눌리지 않음).
+        val label = compose.onNodeWithText("표준 시내버스", substring = true, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val button = compose.onNodeWithText(app.getString(R.string.simulation_choose_seat), useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertTrue("action $button must move below the text $label", button.top >= label.bottom - 0.5f)
     }
 
     @Config(qualifiers = "w832dp-h384dp-xxhdpi")

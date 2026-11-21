@@ -57,12 +57,12 @@ fun ScrollEdgeCue(scroll: ScrollState, scrollTag: String, modifier: Modifier = M
 fun measuredOr(measured: Dp, estimate: Dp): Dp = if (measured > 0.dp) measured else estimate
 
 /**
- * 글 묶음 + 행동 하나 줄(DESIGN 4.4 재배치 우선). 제목 줄 [headline]이 행동 옆 폭에서 두 줄 안에 들어가면 나란히 두고(보조 글은 옆에서 줄바꿈해도 된다),
- * 들어가지 않으면 행동을 글 아래 오른쪽으로 내려 글에 가로 전체를 준다. [headline]이 없으면 글 묶음의 한 줄 폭(최대 고유 폭)으로 판단한다.
+ * 글 묶음 + 행동 하나 줄(DESIGN 4.4 재배치 우선). 글 줄[headlines]이 모두 행동 옆 폭에서 두 줄 안에 들어가면 나란히 두고,
+ * 들어가지 않으면 행동을 글 아래 오른쪽으로 내려 글에 가로 전체를 준다. [headlines]가 없으면 글 묶음의 한 줄 폭(최대 고유 폭)으로 판단한다.
  */
 @Composable
 fun ReflowRow(text: @Composable () -> Unit, action: @Composable () -> Unit, modifier: Modifier = Modifier, gap: Dp = com.sunseat.app.ui.theme.Spacing.s,
-    headline: String? = null, headlineStyle: androidx.compose.ui.text.TextStyle = androidx.compose.ui.text.TextStyle.Default) {
+    headlines: List<Pair<String, androidx.compose.ui.text.TextStyle>> = emptyList()) {
     val measurer = androidx.compose.ui.text.rememberTextMeasurer()
     androidx.compose.ui.layout.Layout(contents = listOf(text, action), modifier = modifier) { (texts, actions), constraints ->
         val width = constraints.maxWidth
@@ -70,9 +70,9 @@ fun ReflowRow(text: @Composable () -> Unit, action: @Composable () -> Unit, modi
         val actionPlaceable = actions.first().measure(constraints.copy(minWidth = 0, minHeight = 0))
         val textMeasurable = texts.first()
         val beside = (width - gapPx - actionPlaceable.width).coerceAtLeast(0)
-        // 제목 줄이 행동 옆 폭에서 두 줄 안에 들어가면 나란히 둔다(어절 단위 줄바꿈이면 옆에서 두 줄로 감겨도 읽힌다).
-        val sideBySide = headline?.let { measurer.measure(it, headlineStyle, constraints = androidx.compose.ui.unit.Constraints(maxWidth = beside)).lineCount <= HEADLINE_MAX_LINES }
-            ?: (textMeasurable.maxIntrinsicWidth(androidx.compose.ui.unit.Constraints.Infinity) <= beside)
+        // 글 줄마다 행동 옆 폭에서 두 줄 안에 들어가면 나란히 둔다(어절 단위 줄바꿈이면 옆에서 두 줄로 감겨도 읽힌다).
+        val sideBySide = if (headlines.isNotEmpty()) headlines.all { (line, style) -> measurer.measure(line, style, constraints = androidx.compose.ui.unit.Constraints(maxWidth = beside)).lineCount <= HEADLINE_MAX_LINES }
+            else (textMeasurable.maxIntrinsicWidth(androidx.compose.ui.unit.Constraints.Infinity) <= beside)
         if (sideBySide) {
             val textPlaceable = textMeasurable.measure(constraints.copy(minWidth = 0, maxWidth = (width - gapPx - actionPlaceable.width).coerceAtLeast(0), minHeight = 0))
             val height = maxOf(textPlaceable.height, actionPlaceable.height)

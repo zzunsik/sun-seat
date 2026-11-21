@@ -81,10 +81,11 @@ internal fun CabinPanel(point: TimelinePoint, mode: TravelMode, state: Simulatio
         // "모형 2번"은 한 덩어리로 둔다(어절 줄바꿈이 "모형"과 "2번" 사이에서 줄을 바꾸지 않게 이음 공백).
         val seatTitle=stringResource(R.string.simulation_selected_seat,chosen.label().replace(Regex(" (?=\\d+번)"),"\u00A0"))
         val seatTitleStyle=MaterialTheme.typography.titleSmall.copy(lineBreak=WordLineBreak,localeList=KoreanLocale)
-        com.sunseat.app.ui.components.ReflowRow(modifier = Modifier.fillMaxWidth(), headline = seatTitle, headlineStyle = seatTitleStyle, text = {
+        val profileStyle=MaterialTheme.typography.bodySmall.copy(lineBreak=WordLineBreak,localeList=KoreanLocale)
+        com.sunseat.app.ui.components.ReflowRow(modifier = Modifier.fillMaxWidth(), headlines = listOf(seatTitle to seatTitleStyle, profileLabel to profileStyle), text = {
             Column {
                 Text(seatTitle,style=seatTitleStyle)
-                Text(profileLabel,style=MaterialTheme.typography.bodySmall.copy(lineBreak=WordLineBreak,localeList=KoreanLocale),color=SunSeatTheme.scheme.onSurfaceVariant)
+                Text(profileLabel,style=profileStyle,color=SunSeatTheme.scheme.onSurfaceVariant)
             }
         }, action = {
             Box {
@@ -137,15 +138,16 @@ private fun BusModelRow(point: TimelinePoint, mode: TravelMode, profile: CabinPr
     val modelTitle=stringResource(if(manual!=null) R.string.simulation_bus_model_manual else R.string.simulation_bus_model_estimated,
         stringResource(if(profile.kind==CabinKind.COACH) R.string.simulation_coach else R.string.simulation_bus))
     val modelTitleStyle=MaterialTheme.typography.bodyMedium.copy(lineBreak=WordLineBreak,localeList=KoreanLocale)
-    com.sunseat.app.ui.components.ReflowRow(modifier = Modifier.fillMaxWidth(), headline = modelTitle, headlineStyle = modelTitleStyle, text = {
-        Column {
-            Text(modelTitle,style=modelTitleStyle)
-            Note(if(manual!=null) stringResource(R.string.simulation_bus_manual_scope) else when(estimate.basis) {
+    val modelNote=if(manual!=null) stringResource(R.string.simulation_bus_manual_scope) else when(estimate.basis) {
                 BusModelBasis.NO_TYPE -> stringResource(R.string.simulation_bus_basis_none)
                 BusModelBasis.CITY_TYPE -> stringResource(R.string.simulation_bus_basis_city,estimate.type!!)
                 BusModelBasis.COACH_TYPE -> stringResource(R.string.simulation_bus_basis_coach,estimate.type!!)
                 BusModelBasis.UNKNOWN_TYPE -> stringResource(R.string.simulation_bus_basis_unknown,estimate.type!!)
-            })
+    }
+    com.sunseat.app.ui.components.ReflowRow(modifier = Modifier.fillMaxWidth(), headlines = listOf(modelTitle to modelTitleStyle, modelNote to MaterialTheme.typography.bodySmall.copy(lineBreak=WordLineBreak,localeList=KoreanLocale)), text = {
+        Column {
+            Text(modelTitle,style=modelTitleStyle)
+            Note(modelNote)
         }
     }, action = {
         Box {
