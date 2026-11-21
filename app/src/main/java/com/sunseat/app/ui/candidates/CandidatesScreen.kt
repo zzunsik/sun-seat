@@ -159,7 +159,10 @@ fun CandidatesScreen(
     // 사용자가 지도를 직접 움직였으면(userMoved) 맞춤 요청이 와도 카메라를 옮기지 않는다(#71, DESIGN 12.3).
     val routes = options?.visible?.sortedBy { it.id }.orEmpty().map { it.chosen.route }
     val mapRoutes = candidateMapRoutes(options?.visible.orEmpty(), options?.selectedId, preview)
-    fun closePreview() { showPreview = false; scope.launch { scaffoldState.bottomSheetState.partialExpand() } }
+    // #145: 미리보기에 들어가기 전 목록 시트 높이(완전 확장/기본). 닫으면 이 높이로 되돌려, 펼쳐 둔 목록에서 고른 카드가 시트 아래로 밀리지 않게 한다.
+    // 목록 스크롤 위치는 그대로 두므로 고를 때 보이던 카드가 같은 자리에 다시 보인다. 회전·재생성 뒤에도 유지한다.
+    var sheetBeforePreview by rememberSaveable { mutableStateOf(SheetValue.PartiallyExpanded) }
+    fun closePreview() { showPreview = false }
     BackHandler(enabled = preview) { closePreview() }
     LaunchedEffect(routes, options?.selectedId) { userMoved = false; fitTrigger++ }
     // 이 화면 안에서 미리보기를 연 적이 있을 때만 닫힘을 맞춤 시점으로 본다(첫 구성·결과에서 복귀는 위 후보 집합 맞춤이 맡는다).
@@ -167,7 +170,13 @@ fun CandidatesScreen(
     LaunchedEffect(preview) {
         if (preview) { previewShown = true; androidx.compose.runtime.withFrameNanos { }; scaffoldState.bottomSheetState.partialExpand(); fitTrigger++ }
         // #135: 목록으로 돌아오면 시트가 목록 높이에 자리 잡은 뒤(아래 맞춤 효과가 기다린다) 보이는 지도 띠에 선택 경로를 다시 맞춘다.
-        else if (previewShown) { androidx.compose.runtime.withFrameNanos { }; fitTrigger++ }
+        // 완전 확장으로 돌아오면 보이는 지도 띠가 없어 맞춤은 사용자가 시트를 내려 지도가 보일 때까지 기다린다.
+        // #145: 목록 내용이 그려진 뒤(목록 기준 앵커) 들어가기 전 시트 높이로 되돌린다.
+        else if (previewShown) {
+            androidx.compose.runtime.withFrameNanos { }
+            if (sheetBeforePreview == SheetValue.Expanded) scaffoldState.bottomSheetState.expand() else scaffoldState.bottomSheetState.partialExpand()
+            fitTrigger++
+        }
     }
     val density = LocalDensity.current
     var headerHeight by remember { mutableStateOf(0.dp) }
@@ -287,6 +296,7 @@ fun CandidatesScreen(
                     is CandidatesState.Options -> if (state.visible.isEmpty()) Message(content, R.drawable.ic_ms_search, stringResource(R.string.candidates_filtered_empty), null, stringResource(R.string.candidates_clear_filters) to { actions.onCategory(RouteCategory.ALL); scope.launch { listScroll.scrollToItem(0) } }, stringResource(R.string.candidates_edit_input) to actions.onBack)
                         else OptionList(state.visible, state.selectedId, request, content, if (request.mode == TravelMode.TRANSIT) stringResource(if (state.sort == CandidateSort.WALK) R.string.candidates_walk_scope_sort else R.string.candidates_walk_scope) else null, actions.copy(onHighlight = {
                             userMoved = false
+                            sheetBeforePreview = if (scaffoldState.bottomSheetState.targetValue == SheetValue.Expanded) SheetValue.Expanded else SheetValue.PartiallyExpanded
                             showPreview = true
                             actions.onHighlight(it)
                         }), listScroll)
