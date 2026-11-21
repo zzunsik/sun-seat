@@ -175,6 +175,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
     private var lastCenter: MapFocus? = null
     private var cameraIdle: ((LatLng) -> Unit)? = null
     private var lastCursor: MapCursor? = null
+    private var lastFollow: LatLng? = null
     private var following = false
     private var playbackMode = false
     private val progressLines = mutableListOf<com.kakao.vectormap.route.RouteLine>()
@@ -247,7 +248,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
                 }
             }
             target.labelManager?.layer?.let { layer ->
-                layer.removeAll(); cursor = null; ray = null; myLocation = null; lastCursor = null; lastRayAltitude = null; lastVehicleLight=null; textLabels.clear(); hiddenLabels.clear(); stopNames.clear(); pinLabels.clear()
+                layer.removeAll(); cursor = null; ray = null; myLocation = null; lastCursor = null; lastFollow = null; lastRayAltitude = null; lastVehicleLight=null; textLabels.clear(); hiddenLabels.clear(); stopNames.clear(); pinLabels.clear()
                 state.routes.getOrNull(state.selectedRoute)?.let { route ->
                     RouteLinePolicy.stops(route).forEach { stop ->
                         layer.addLabel(LabelOptions.from(stop.location.sdk()).setRank(STOP_RANK).setStyles(LabelStyle.from(stopIcon(stop.color.toArgb())).setApplyDpScale(false).setAnchorPoint(.5f, .5f)))
@@ -308,7 +309,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
             state.routeProgress?.let { progress -> progressLines.forEach { it.setProgress(progress.coerceIn(0f, 1f) - 1f) } }
             lastProgress = state.routeProgress
         }
-        val position = state.cursor
+        val position = state.visibleCursor
         if (position == null) { cursor?.hide(); ray?.hide() }
         else {
             val layer = target.labelManager?.layer ?: return
@@ -330,8 +331,11 @@ private class MapSession(context: Context, private val ink: Int, private val sur
             val lightSide=when {position.sunAltitude<=0 -> 0;relative<25 || relative>335 -> 1;relative>155 && relative<205 -> 2;relative<180 -> 3;else -> 4}
             if(lightSide!=lastVehicleLight) { cursor?.setStyles(playbackLabelStyle(marker(2,ink,lightSide)));cursor?.invalidate(false);cursor?.rotateTo(Math.toRadians(position.heading).toFloat());lastVehicleLight=lightSide }
             if (position.sunAltitude > 0) ray?.show() else ray?.hide()
-            if (state.followCursor && (position != lastCursor || !following)) target.moveCamera(CameraUpdateFactory.newCenterPosition(position.position.sdk()))
         }
+        // The camera follows playback even when the vehicle is not drawn; on arrival it centres the destination marker (#152).
+        val follow = state.followTarget
+        if (follow != null && (follow != lastFollow || !following)) target.moveCamera(CameraUpdateFactory.newCenterPosition(follow.sdk()))
+        lastFollow = follow
         following = state.followCursor
         lastCursor = position
         coverState = state

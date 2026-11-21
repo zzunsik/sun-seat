@@ -88,7 +88,18 @@ fun SimulationScreen(
                             Icon(SunSeatIcons.Sun,null,Modifier.size(Sizes.iconMedium),tint=scheme.onSurfaceVariant)
                             Text(sunLabel,style=MaterialTheme.typography.bodySmall)
                         }
-                        Text(stringResource(R.string.simulation_route_overview,request.origin.name,request.destination.name),style=MaterialTheme.typography.labelSmall,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        // #152: the map hides a line badge under the vehicle (#146), so the line being ridden or boarded next stays here.
+                        // Line names are never ellipsized (DESIGN 4.4): the cue takes its full width first (wrapping if it must) and only the trip text is shortened.
+                        val ride=point?.takeIf { state.elapsedMillis<duration }?.let { RouteLinePolicy.rideCue(route,it.legIndex) }
+                        val rideName=ride?.let { cue -> when {
+                            cue.lines.isEmpty() -> stringResource(if(cue.mode==Mode.SUBWAY) R.string.common_subway else R.string.common_bus)
+                            cue.lines.size==1 -> cue.lines.first()
+                            else -> stringResource(R.string.map_line_more,cue.lines.first(),cue.lines.size-1)
+                        } }
+                        Row(horizontalArrangement=Arrangement.spacedBy(Spacing.s)) {
+                            if(ride!=null && rideName!=null) Text(stringResource(if(ride.riding) R.string.simulation_ride_now else R.string.simulation_ride_next,rideName),style=MaterialTheme.typography.labelSmall)
+                            Text(stringResource(R.string.simulation_route_overview,request.origin.name,request.destination.name),Modifier.weight(1f,fill=false),style=MaterialTheme.typography.labelSmall,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        }
                     }
                 }
             }

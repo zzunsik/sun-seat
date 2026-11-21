@@ -59,9 +59,11 @@ internal fun MapState.points(): List<LatLng> =
 
 /** 카메라 이동 종류. [FRAME_FOLLOW]는 차량 둘레 [followBounds]를 맞춘다(#146). */
 internal enum class MapCamera { NONE, FIT_ROUTE, FRAME_FOLLOW }
-
-/** 따라가기 중인 차량 위치. 따라가기가 아니거나 차량이 없으면 null. */
-internal val MapState.followTarget: LatLng? get() = cursor?.position?.takeIf { followCursor }
+/**
+ * 따라가기 중 카메라가 둘 위치. 평소에는 차량 위치이고, 도착하면 차량 대신 남긴 도착 표식이 화면 안에 들도록 도착지다(#152).
+ * 따라가기가 아니거나 차량이 없으면 null.
+ */
+internal val MapState.followTarget: LatLng? get() = cursor?.position?.takeIf { followCursor }?.let { at -> destination?.location?.takeIf { arrived } ?: at }
 
 /**
  * 따라가기 중 차량 둘레로 보여 줄 반경(m). 전체 경로를 맞추면 긴 노선(예: 402번)에서 지도가 구 단위까지 축소되어
@@ -78,13 +80,23 @@ internal fun followBounds(center: LatLng, radius: Double = FOLLOW_RADIUS_METERS)
     return listOf(LatLng(center.latitude - dLat, center.longitude - dLon), LatLng(center.latitude + dLat, center.longitude + dLon))
 }
 
+/** 재생이 끝까지 왔다(이동 100%). */
+internal val MapState.arrived: Boolean get() = (routeProgress ?: 0f) >= 1f
+
+/**
+ * 지도에 그릴 차량(재생 커서). 도착하면 도착 표식이 그 순간의 핵심이라 차량을 거두고 도착 표식을 남긴다(#152).
+ * 카메라는 [followTarget](도착지)을 따른다.
+ */
+internal val MapState.visibleCursor: MapCursor? get() = cursor?.takeUnless { arrived }
+
 /**
  * 재생 중 차량 표식과 화면에서 겹치는 글자 표식(출발·도착·노선 배지)은 숨긴다(#146). 차량이 지금 보여 줄 정보이고,
  * 출발지가 곧 승차 정류장이면 줌과 관계없이 세 표식이 한 점에 겹친다. 정류장 원은 남긴다.
+ * 도착한 뒤에는 차량을 그리지 않으므로([visibleCursor]) 아무것도 숨기지 않는다(#152).
  * [distancePx]는 렌더러의 현재 투영으로 잰 두 좌표의 화면 거리, [markerPx]는 차량 표식 크기다.
  */
 internal fun MapState.coveredByVehicle(at: LatLng, markerPx: Float, distancePx: (LatLng, LatLng) -> Float): Boolean {
-    if (routeProgress == null) return false
+    if (routeProgress == null || arrived) return false
     val vehicle = cursor?.position ?: return false
     return distancePx(vehicle, at) < markerPx
 }

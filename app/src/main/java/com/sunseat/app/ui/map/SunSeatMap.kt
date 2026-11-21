@@ -189,7 +189,7 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
         state.origin?.takeUnless { covered(it.location) }?.let { drawPlaceMarker(position(it.location), originText, filled = false, surface = MapRouteColors.casing) }
         state.destination?.takeUnless { covered(it.location) }?.let { drawPlaceMarker(position(it.location), destinationText, filled = true, surface = MapRouteColors.casing) }
         state.focus?.let { val p = position(it.location); val radius = Sizes.mapMarker.toPx() / 3; drawCircle(scheme.surface, radius, p); drawCircle(scheme.onSurface, radius, p, style = Stroke(Sizes.mapRouteWalk.toPx())); drawCircle(scheme.onSurface, radius / 3, p) }
-        state.cursor?.let { cursor ->
+        state.visibleCursor?.let { cursor ->
             val p = position(cursor.position)
             if (cursor.sunAltitude > 0) {
                 val angle = Math.toRadians(cursor.sunAzimuth)
