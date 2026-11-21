@@ -206,7 +206,7 @@ fun CandidatesScreen(
     LaunchedEffect(routes, options?.selectedId) { dispatch(CandidatesEvent.CandidatesChanged) }
     LaunchedEffect(landscape) { dispatch(CandidatesEvent.Rotate(if (landscape) ScreenOrientation.Landscape else ScreenOrientation.Portrait)) }
     // 미리보기에서 자리 결과로 갔다가 Back으로 돌아오면(새 구성) 들어가기 전 시트 높이·선택 카드·초점으로 돌아간다(#145 #158).
-    // 예측 뒤로 가기 도중(취소될 수 있음)에는 처리하지 않고 화면이 실제로 다시 앞에 온(RESUMED) 뒤에 처리한다.
+    // 수명 주기가 RESUMED일 때 처리한다. 내비게이션이 항목별 수명 주기를 주면 예측 뒤로 가기 도중(취소될 수 있음)에는 처리하지 않는다(지금은 활동 수명 주기라 화면이 앞에 있을 때와 같다).
     val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(lifecycle) { lifecycle.withResumed { }; if (ui.away != null) dispatch(CandidatesEvent.ReturnFromResult) }
     // 목록 시트가 향하는 자리(끌기 중 가장 가까운 앵커). 미리보기·복원 중의 값은 전환 함수가 거른다.
@@ -270,11 +270,12 @@ fun CandidatesScreen(
                     }
                 }
                 is CandidatesEffect.Camera -> requestFit(effect.reason)
+                CandidatesEffect.CancelPending -> Unit
             }
         }
         var running: kotlinx.coroutines.Job? = null
         for (batch in effects) {
-            if (batch.any { it is CandidatesEffect.AnimateSheet || it is CandidatesEffect.Reveal || it is CandidatesEffect.FocusCard }) {
+            if (batch.any { it is CandidatesEffect.AnimateSheet || it is CandidatesEffect.Reveal || it is CandidatesEffect.FocusCard || it is CandidatesEffect.CancelPending }) {
                 running?.cancelAndJoin()
                 running = launch { batch.forEach { run(it) } }
             } else launch { batch.forEach { run(it) } }

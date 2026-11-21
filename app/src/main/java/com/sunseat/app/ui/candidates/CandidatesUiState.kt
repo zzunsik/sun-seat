@@ -102,6 +102,8 @@ internal sealed interface CandidatesEffect {
     data class FocusCard(val id: Int) : CandidatesEffect
     /** 카메라 맞춤 요청. 실행 여부는 카메라 정책이 모드로 정한다(#168, DESIGN 12.3). */
     data class Camera(val reason: FitReason) : CandidatesEffect
+    /** 실행 중인 앞 전환의 남은 효과를 버린다(여정 변경·사라진 미리보기: 옛 목록의 카드 보이기·초점·맞춤을 하지 않음). */
+    data object CancelPending : CandidatesEffect
 }
 
 internal data class CandidatesTransition(val state: CandidatesUiState, val effects: List<CandidatesEffect> = emptyList())
@@ -109,7 +111,7 @@ internal data class CandidatesTransition(val state: CandidatesUiState, val effec
 /** 전환 함수. 순수 함수이며 같은 상태·이벤트에는 같은 결과를 낸다. 시트를 움직이는 전환에는 새 전환 번호를 붙인다. */
 internal fun reduceCandidates(state: CandidatesUiState, event: CandidatesEvent): CandidatesTransition {
     val next = transition(state, event)
-    if (next.effects.none { it is CandidatesEffect.AnimateSheet }) return next
+    if (next.effects.none { it is CandidatesEffect.AnimateSheet || it is CandidatesEffect.CancelPending }) return next
     val number = state.transition + 1
     return CandidatesTransition(next.state.copy(transition = number), next.effects.map { if (it is CandidatesEffect.AnimateSheet) it.copy(transition = number) else it })
 }
@@ -142,7 +144,8 @@ private fun transition(state: CandidatesUiState, event: CandidatesEvent): Candid
         if (event.moving) state.copy(gesture = SheetGesture.Moving) else state.copy(gesture = SheetGesture.Idle).settleMeasurements(),
     )
     is CandidatesEvent.SheetAnimated -> CandidatesTransition(
-        if (event.transition != state.transition) state else state.restoring?.let { state.copy(restoring = null, sheet = if (state.preview == null) it else state.sheet).settleMeasurements() } ?: state,
+        if (event.transition != state.transition) state
+        else state.copy(restoring = null, sheet = if (state.preview == null && !state.landscape) event.anchor else state.sheet).settleMeasurements(),
     )
     // #162: 시트 앵커(완전 확장 높이)는 시트가 움직이는 동안 바뀌지 않는다. 새 측정은 멈춘 뒤 반영한다.
     is CandidatesEvent.JourneyBarMeasured -> CandidatesTransition(
@@ -158,9 +161,10 @@ private fun transition(state: CandidatesUiState, event: CandidatesEvent): Candid
     }
     CandidatesEvent.FitAction -> CandidatesTransition(state, listOf(CandidatesEffect.Camera(FitReason.EXPLICIT)))
     CandidatesEvent.CandidatesChanged -> CandidatesTransition(state, listOf(CandidatesEffect.Camera(FitReason.SELECTION)))
-    CandidatesEvent.JourneyBarTap -> CandidatesTransition(state, listOfNotNull(CandidatesEffect.AnimateSheet(SheetAnchor.Default).takeUnless { state.landscape || state.preview != null }))
-    CandidatesEvent.TripChanged -> CandidatesTransition(state.copy(preview = null, away = null, restoring = null))
-    CandidatesEvent.PreviewLost -> CandidatesTransition(state.copy(preview = null))
+    // 복원 중(축약 여정 바를 붙잡은 동안)에 눌러도 복원을 그만두고 기본 높이로 내린다.
+    CandidatesEvent.JourneyBarTap -> CandidatesTransition(if (state.landscape || state.preview != null) state else state.copy(restoring = null), listOfNotNull(CandidatesEffect.AnimateSheet(SheetAnchor.Default).takeUnless { state.landscape || state.preview != null }))
+    CandidatesEvent.TripChanged -> CandidatesTransition(state.copy(preview = null, away = null, restoring = null), listOf(CandidatesEffect.CancelPending))
+    CandidatesEvent.PreviewLost -> CandidatesTransition(state.copy(preview = null, restoring = null), listOf(CandidatesEffect.CancelPending))
 }
 
 /** 목록으로 돌아올 때 공통 효과: 들어가기 전 시트 높이(세로), 선택 카드 보이기, 선택 카드로 초점. */

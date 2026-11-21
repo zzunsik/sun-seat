@@ -67,6 +67,7 @@ class CandidatesUiStateTest {
             CandidatesEvent.FitAction -> listOf(Camera(FitReason.EXPLICIT))
             CandidatesEvent.CandidatesChanged -> listOf(Camera(FitReason.SELECTION))
             CandidatesEvent.JourneyBarTap -> if (portraitSheet && preview == null) listOf(AnimateSheet(Default)) else emptyList()
+            CandidatesEvent.TripChanged, CandidatesEvent.PreviewLost -> listOf(CandidatesEffect.CancelPending)
             else -> emptyList()
         }
     }
@@ -191,5 +192,24 @@ class CandidatesUiStateTest {
         val lost = reduceCandidates(previewFromDefault, CandidatesEvent.PreviewLost).state
         assertNull(lost.preview)
         assertEquals(PreviewEntry(7, Default), reduceCandidates(lost, CandidatesEvent.CardTap(7)).state.preview)
+    }
+
+    /** 복원 중에 축약 여정 바를 누르면 복원을 그만두고, 애니메이션이 끝난 자리(기본)를 시트 자리로 기록한다. */
+    @Test fun journeyBarTapDuringRestore() {
+        val restoring = reduceCandidates(previewFromExpanded, CandidatesEvent.PreviewClose(CloseSource.Back)).state
+        val tapped = reduceCandidates(restoring, CandidatesEvent.JourneyBarTap)
+        assertNull(tapped.state.restoring)
+        assertFalse(tapped.state.holdCompactHeader)
+        val done = reduceCandidates(tapped.state, CandidatesEvent.SheetAnimated(Default, tapped.state.transition)).state
+        assertEquals(Default, done.sheet)
+    }
+
+    /** 여정 변경·사라진 미리보기는 앞 전환의 남은 효과를 버리도록 새 전환 번호와 취소 효과를 낸다. */
+    @Test fun tripChangeCancelsPendingEffects() {
+        val closing = reduceCandidates(previewFromExpanded, CandidatesEvent.PreviewClose(CloseSource.Back)).state
+        val changed = reduceCandidates(closing, CandidatesEvent.TripChanged)
+        assertEquals(listOf(CandidatesEffect.CancelPending), changed.effects)
+        assertEquals(closing.transition + 1, changed.state.transition)
+        assertEquals(changed.state, reduceCandidates(changed.state, CandidatesEvent.SheetAnimated(Expanded, closing.transition)).state)
     }
 }
