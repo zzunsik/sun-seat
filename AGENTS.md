@@ -227,3 +227,4 @@ GitHub 설정으로 강제하는 것들이다. 설정을 바꾸면 이 절도 �
   - 각 환경에 시크릿 `CLOUDFLARE_API_TOKEN`(이 계정의 Workers Scripts 편집만), 변수 `CLOUDFLARE_ACCOUNT_ID`를 둔다. 토큰 교체는 저장소 소유자가 한다.
   - 카카오 REST 키는 Worker마다 `wrangler secret put`으로 따로 넣는다. 워크플로는 키를 다루지 않는다.
   - 릴리스 순서: 릴리스 PR `main` 머지 → 운영 게이트웨이 배포·스모크 통과 확인 → 태그 → APK 릴리스(#118). 배포가 실패하면 태그를 달지 않는다.
+  - 운영 배포 경로는 이 워크플로가 `main`에 처음 들어가는 첫 릴리스 PR 머지 때 처음 검증된다(`api-production`은 `main`에서만 실행되고, 수동 실행도 `main`에 있는 워크플로 파일로 돈다). 그 릴리스에서는 `main`의 `Deploy API gateway` 실행이 성공했는지 Actions에서 보고 나서 태그를 단다.
