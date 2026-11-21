@@ -129,6 +129,7 @@ class SimulationOverlayTest {
         assertWordNotBroken("표준 시내버스", "시내버스(추정)")
         assertWordNotBroken("내 자리:", "2번")
         assertWordNotBroken("직사광 예상", "등받이")
+        assertWordNotBroken("직사광 예상", "닿음")
     }
 
     @Config(qualifiers = "w832dp-h384dp-xxhdpi")
