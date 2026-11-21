@@ -8,7 +8,7 @@ name: Dependency submission
 # 범위: APK에 들어가는 앱 런타임 classpath(debug·release)만 올린다. 아래 include-configurations 주석 참고.
 on:
   push:
-    branches: [develop, main, chore/197-gradle-dependency-submission] # 임시: 머지 전 검증용
+    branches: [develop, main]
 
 permissions:
   contents: read
@@ -46,4 +46,4 @@ jobs:
           # 전 구성을 올리면 빌드 도구(AGP·lint)와 테스트(Robolectric) classpath까지 439개가 모두 runtime 범위로 잡혀
           # (플러그인이 범위를 구분하지 않는다) APK에 없는 전이 의존성 알림이 섞이고, Dependabot이 고칠 수도 없다.
           # 그쪽은 주간 버전 업데이트(AGP·Robolectric 등)로 따라간다. 앱 모듈 구성 이름이 바뀌면 이 정규식도 고친다.
-          dependency-graph-include-configurations: ^(debug|release)RuntimeClasspath$
+          dependency-graph-include-configurations: '^(debug|release)RuntimeClasspath$'
