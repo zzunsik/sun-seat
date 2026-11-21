@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.first
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.background
@@ -83,6 +84,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import com.sunseat.app.R
@@ -232,7 +234,12 @@ fun CandidatesScreen(
     val peek = (if (preview) previewPeek.coerceAtMost((maxHeight - peekTop).coerceAtLeast(Spacing.touch) / 2) else Sizes.mapHeight + Sizes.mapHeight / 2 + Spacing.touch + Spacing.xxl)
         .coerceAtMost((maxHeight - peekTop).coerceAtLeast(Spacing.touch))
     // 완전 확장한 시트(손잡이 포함)의 위끝은 축약 여정 바 바로 아래다. 바·손잡이를 재기 전에는 최소 높이로 어림한다.
-    val listSheetMax = (maxHeight - (if (journeyBarHeight > 0.dp) journeyBarHeight else journeyBarEstimate) - (if (dragHandleHeight > 0.dp) dragHandleHeight else Spacing.touch)).coerceAtLeast(Spacing.touch)
+    // #162: 끄는 도중 축약 여정 바가 처음 나타나 높이를 재면 시트 최대 높이(앵커)가 드래그 중에 바뀌고, 그러면 시트가 드래그 상태에 멈춰
+    // 이후 카드·탭·정렬·여정 바 누름을 모두 가져간다. 시트가 끌리거나 움직이는 동안에는 직전 값을 쓰고 멈춘 뒤에 새 높이를 반영한다.
+    val sheetMoving = scaffoldState.bottomSheetState.isAnimationRunning
+    var sheetJourneyBar by remember { mutableStateOf(journeyBarHeight) }
+    if (!sheetMoving && sheetJourneyBar != journeyBarHeight) SideEffect { sheetJourneyBar = journeyBarHeight }
+    val listSheetMax = (maxHeight - (if (sheetJourneyBar > 0.dp) sheetJourneyBar else journeyBarEstimate) - (if (dragHandleHeight > 0.dp) dragHandleHeight else Spacing.touch)).coerceAtLeast(Spacing.touch)
     // 시트가 펼친 헤더 아래끝보다 올라오면(완전 확장·중간 드래그) 펼친 헤더를 통째로 접고 축약 여정 바로 바꾼다.
     // 시트 앵커는 헤더 높이와 무관하므로 바뀌어도 시트가 움직이지 않는다.
     val fullHeaderPx = with(density) { listHeader.toPx() }
@@ -282,6 +289,14 @@ fun CandidatesScreen(
                         leading = { IconButton(onClick = actions.onBack) { Icon(painterResource(R.drawable.ic_ms_arrow_back), stringResource(R.string.common_back)) } },
                     )
                 }
+                // #162: 완전 확장 시트의 위끝(listSheetMax)은 축약 여정 바 높이로 정한다. 바를 처음 보이는 순간(손잡이로 끄는 도중)에 재면
+                // 시트 높이·앵커가 드래그 중에 바뀌고, 그러면 시트가 드래그 상태에 멈춰 이후 카드·탭 누름을 모두 가져간다.
+                // 그래서 펼친 헤더가 보이는 동안에도 같은 바를 그리지 않고(배치·접근성 제외) 높이만 미리 잰다.
+                if (!preview && !compactHeader && !landscape) Box(Modifier.clearAndSetSemantics { }.layout { measurable, constraints ->
+                    val bar = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
+                    journeyBarHeight = with(density) { bar.height.toDp() }
+                    layout(0, 0) { }
+                }) { JourneyBar(request, now, {}, Modifier.windowInsetsPadding(cutoutSides), onExpand = {}) }
             }
     }
     // 시트(세로) 또는 오른쪽 패널(가로, #144)의 내용. 가로 패널은 화면 높이 전체를 쓴다.
