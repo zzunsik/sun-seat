@@ -33,6 +33,8 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.draw.rotate
 import androidx.compose.foundation.layout.width
@@ -403,30 +405,28 @@ private fun OffscreenDestinationCue(x: Float, y: Float, overlays: MapPadding, mo
         // 방향(글·화살표)은 보이는 영역 가운데에서 본 도착지 쪽이다. 자리는 표시 크기를 잰 뒤 가장자리 안쪽에 둔다.
         val probe = offscreenCue(x, y, visible, 0f) ?: return@BoxWithConstraints
         val label = String.format(template, labels.getValue(probe.direction))
-        androidx.compose.ui.layout.Layout(content = {
-            // 지도 위 도착 표식(경로 색 채움)과 다르게 보이도록 지도 바탕 위 조작 칩처럼 흰 바탕 + 가는 테두리로 두고, 화살표를 앞세운다(#186 디자인 리뷰).
-            androidx.compose.foundation.layout.Row(
-                Modifier.clearAndSetSemantics { contentDescription = label }
-                    .background(com.sunseat.app.ui.theme.LightScheme.surface, androidx.compose.foundation.shape.CircleShape)
-                    .border(Sizes.hairline, com.sunseat.app.ui.theme.LightScheme.outline, androidx.compose.foundation.shape.CircleShape)
-                    .padding(horizontal = Spacing.s, vertical = Spacing.xs),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // 뒤로 화살표(왼쪽, 180°)를 도착지 쪽으로 돌린다.
-                androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_ms_arrow_back), null,
-                    Modifier.size(Sizes.iconMedium).rotate(probe.angleDegrees - 180f), tint = MapRouteColors.transit)
-                androidx.compose.foundation.layout.Spacer(Modifier.width(Spacing.xs))
-                Text(destination, color = com.sunseat.app.ui.theme.LightScheme.onSurface, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
-            }
-        }, modifier = Modifier.fillMaxSize()) { measurables, constraints ->
-            val body = measurables.first().measure(androidx.compose.ui.unit.Constraints())
-            val gap = with(density) { Spacing.xs.toPx() }
-            // 차량(보이는 영역 가운데, 표식 크기)과 표시가 겹치지 않을 만큼 가운데에서 떨어뜨린다.
-            val vehicle = with(density) { Sizes.mapMarker.toPx() }
-            val cue = offscreenCue(x, y, visible, maxOf(body.width, body.height) / 2f + gap, keepClear = vehicle / 2 + gap + maxOf(body.width, body.height) / 2f)
-            layout(constraints.maxWidth, constraints.maxHeight) {
-                if (cue != null) body.place((cue.x - body.width / 2).toInt(), (cue.y - body.height / 2).toInt())
-            }
+        // 표시 크기를 잰 뒤 가장자리 안쪽 자리를 정한다. 자리가 없으면(보이는 영역이 표시보다 작음) 표시를 만들지 않는다.
+        var bodySize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+        val gap = with(density) { Spacing.xs.toPx() }
+        val half = maxOf(bodySize.width, bodySize.height) / 2f
+        // 차량(보이는 영역 가운데, 표식 크기)과 표시가 겹치지 않을 만큼 가운데에서 떨어지게 한다.
+        val vehicle = with(density) { Sizes.mapMarker.toPx() }
+        val cue = offscreenCue(x, y, visible, half + gap, keepClear = vehicle / 2 + gap + half) ?: return@BoxWithConstraints
+        androidx.compose.foundation.layout.Row(
+            Modifier.onSizeChanged { bodySize = it }
+                .offset { androidx.compose.ui.unit.IntOffset((cue.x - bodySize.width / 2f).toInt(), (cue.y - bodySize.height / 2f).toInt()) }
+                .clearAndSetSemantics { contentDescription = label }
+                // 지도 위 도착 표식(경로 색 채움)과 다르게 보이도록 흰 바탕 + 가는 테두리 칩으로 두고 화살표를 앞세운다(#186 디자인 리뷰).
+                .background(com.sunseat.app.ui.theme.LightScheme.surface, androidx.compose.foundation.shape.CircleShape)
+                .border(Sizes.hairline, com.sunseat.app.ui.theme.LightScheme.outline, androidx.compose.foundation.shape.CircleShape)
+                .padding(horizontal = Spacing.s, vertical = Spacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // 뒤로 화살표(왼쪽, 180°)를 도착지 쪽으로 돌린다.
+            androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_ms_arrow_back), null,
+                Modifier.size(Sizes.iconMedium).rotate(probe.angleDegrees - 180f), tint = MapRouteColors.transit)
+            androidx.compose.foundation.layout.Spacer(Modifier.width(Spacing.xs))
+            Text(destination, color = com.sunseat.app.ui.theme.LightScheme.onSurface, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
         }
     }
 }
