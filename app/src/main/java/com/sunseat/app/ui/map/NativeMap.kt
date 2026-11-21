@@ -273,7 +273,8 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         val labels = if (fitPolicy.labelMargins) labelSides else 0f to 0f
         val top = state.padding.top.value * density
         val bottom = state.padding.bottom.value * density
-        val frame = if (view.width > 0 && view.height > 0) fitFrame(top, bottom, view.width.toFloat(), view.height.toFloat(), metrics.inset, metrics.edge, metrics.marker + metrics.textPadding, labels.first, labels.second)
+        val frame = if (view.width > 0 && view.height > 0) fitFrame(top, bottom, view.width.toFloat(), view.height.toFloat(), metrics.inset, metrics.edge, metrics.marker + metrics.textPadding, labels.first, labels.second,
+            if (labels.first > 0f || labels.second > 0f) nameHeight(textPaint(ink)) else 0f) // #151: 정류장 이름표 높이(이름표가 있을 때)
             else FitFrame(top, bottom, 0f, metrics.inset)
         val applied = listOf(frame.left.toInt(), frame.top.toInt(), frame.right.toInt(), frame.bottom.toInt())
         if (geometryChanged || padding != applied) {
