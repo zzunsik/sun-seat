@@ -45,10 +45,16 @@ enum class MapRenderer { SDK, PREVIEW }
 val LocalMapRenderer = staticCompositionLocalOf { MapRenderer.SDK }
 
 /**
- * 지도 키가 있는지(#173). 렌더러 경계에서 바꿀 수 있어 테스트가 "사용 불가"를 만든다. 없으면 두 렌더러 모두 지도 대신 같은 안내를 그린다.
+ * 지도 키가 있는지(#173). 렌더러 경계에서 바꿀 수 있어 테스트가 "사용 불가"를 만든다. false면 두 렌더러 모두 지도 대신 같은 안내를 그린다.
+ * 정하지 않으면(null) 카카오 지도는 빌드의 키로 정하고, 테스트 지도는 키와 관계없이 쓸 수 있다(CI는 빈 키로 빌드한다).
  */
 @Suppress("ComposeCompositionLocalUsage") // 빌드 설정(지도 키)을 테스트에서 바꾸는 경계
-val LocalMapKeyAvailable = staticCompositionLocalOf { com.sunseat.app.BuildConfig.KAKAO_NATIVE_APP_KEY.isNotBlank() }
+val LocalMapKeyAvailable = staticCompositionLocalOf<Boolean?> { null }
+
+/** 지금 렌더러에서 지도 키를 쓸 수 있는지. */
+@Composable
+internal fun mapKeyAvailable(): Boolean = LocalMapKeyAvailable.current
+    ?: (LocalMapRenderer.current == MapRenderer.PREVIEW || com.sunseat.app.BuildConfig.KAKAO_NATIVE_APP_KEY.isNotBlank())
 
 /**
  * 지도 사용 가능 상태(#173): 준비 중 → 사용 가능, 또는 사용 불가(키 없음·인증/불러오기 실패).
@@ -63,7 +69,7 @@ enum class MapAvailability {
 fun SunSeatMap(state: MapState, modifier: Modifier = Modifier) {
     val description = stringResource(R.string.map_description, state.origin?.name.orEmpty(), state.destination?.name.orEmpty()) +
         if (state.focus != null) " · " + stringResource(R.string.location_use_current) else ""
-    val keyAvailable = LocalMapKeyAvailable.current
+    val keyAvailable = mapKeyAvailable()
     var availability by remember(keyAvailable) { mutableStateOf(if (keyAvailable) MapAvailability.LOADING else MapAvailability.MISSING_KEY) }
     Box(modifier.semantics {
         if (!availability.unavailable) contentDescription = description

@@ -53,7 +53,7 @@ import com.sunseat.app.ui.theme.SunSeatTheme
 import kotlin.math.pow
 
 @Composable
-internal fun NativeMap(state: MapState, modifier: Modifier = Modifier, keyAvailable: Boolean = LocalMapKeyAvailable.current, onAvailability: (MapAvailability) -> Unit = {}) {
+internal fun NativeMap(state: MapState, modifier: Modifier = Modifier, keyAvailable: Boolean = LocalMapKeyAvailable.current ?: com.sunseat.app.BuildConfig.KAKAO_NATIVE_APP_KEY.isNotBlank(), onAvailability: (MapAvailability) -> Unit = {}) {
     val report by rememberUpdatedState(onAvailability)
     if (!keyAvailable) {
         val unavailable by rememberUpdatedState(state.onUnavailable)
