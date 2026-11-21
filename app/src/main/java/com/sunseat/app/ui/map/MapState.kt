@@ -93,6 +93,12 @@ internal fun followBounds(center: LatLng, radius: Double = FOLLOW_RADIUS_METERS)
     return listOf(LatLng(center.latitude - dLat, center.longitude - dLon), LatLng(center.latitude + dLat, center.longitude + dLon))
 }
 
+/**
+ * 재생 중(햇빛 따라가기) 맞춤이 둘러볼 좌표: 차량, 도착 뒤에는 도착지(#152). 재생이 아니거나 차량이 없으면 null(경로 맞춤).
+ * 따라가기를 꺼도 맞춤 요청(첫 화면·재생성)은 경로 전체가 아니라 이 둘레를 맞춘다(#183).
+ */
+internal val MapState.fitAround: LatLng? get() = if (routeProgress == null) null else destination?.location?.takeIf { arrived } ?: cursor?.position
+
 /** 재생이 끝까지 왔다(이동 100%). */
 internal val MapState.arrived: Boolean get() = (routeProgress ?: 0f) >= 1f
 
@@ -184,7 +190,7 @@ internal class MapFitPolicy {
         var moved: CameraPosition? = null
         for (request in requests(state)) {
             val (action, _) = cameraAction(mode, request)
-            val decision = cameraPolicy(mode, request, input.copy(current = current, followTarget = state.followTarget))
+            val decision = cameraPolicy(mode, request, input.copy(current = current, followTarget = state.followTarget, fitAround = state.fitAround))
             mode = decision.mode
             decision.move?.let { move ->
                 current = move; moved = move
@@ -219,6 +225,7 @@ data class CameraStatus(val mode: CameraMode, val fits: Long)
 
 /** 맞춘 대상의 종류. */
 internal val MapState.fitTarget: FitTarget get() = when {
+    fitAround != null -> FitTarget.VEHICLE
     routes.isEmpty() -> FitTarget.ENDPOINTS
     routes.getOrNull(selectedRoute) == null -> FitTarget.ALL_ROUTES
     else -> FitTarget.SELECTED_ROUTE
