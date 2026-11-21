@@ -168,6 +168,15 @@
     <string name="map_missing_key">지도를 사용할 수 없어요.\n앱 업데이트를 확인해 주세요.</string>
     <string name="map_error">지도를 불러오지 못했어요.\n자리 추천은 계속 볼 수 있어요.</string>
     <string name="map_unavailable_short">지도를 사용할 수 없어요.</string>
+    <string name="map_destination_offscreen">도착지는 화면 밖 %1$s</string>
+    <string name="map_direction_right">오른쪽</string>
+    <string name="map_direction_down_right">오른쪽 아래</string>
+    <string name="map_direction_down">아래쪽</string>
+    <string name="map_direction_down_left">왼쪽 아래</string>
+    <string name="map_direction_left">왼쪽</string>
+    <string name="map_direction_up_left">왼쪽 위</string>
+    <string name="map_direction_up">위쪽</string>
+    <string name="map_direction_up_right">오른쪽 위</string>
     <string name="map_loading">지도를 불러오는 중…</string>
     <string name="map_description">출발 %1$s, 도착 %2$s 경로 지도</string>
     <string name="map_preview">경로 미리보기</string>
