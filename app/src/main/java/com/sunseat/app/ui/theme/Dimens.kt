@@ -34,8 +34,6 @@ object Sizes {
     val cabinLandscapeHeight = 152.dp
     val simulationCompactPlay = 112.dp
     val simulationMapInfo = 84.dp
-    /** 햇빛 따라가기 세로 지도에서 정보 카드 아래 남기는 최소 보이는 높이(#172). 경로 전체 맞춤이 차량 표식 밑으로 모이지 않게 한다. */
-    val simulationMapMinVisible = 96.dp
     val simulationSunRay = 56.dp
     val mapHeight = 240.dp
 

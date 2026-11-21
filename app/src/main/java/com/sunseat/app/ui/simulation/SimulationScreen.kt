@@ -85,8 +85,6 @@ fun SimulationScreen(
     // #161 #172: 지도 위 정보 카드(오버레이)의 측정 아래끝. 지도 보이는 영역은 그 아래에서 시작하고, 고정값은 측정 전 첫 프레임 어림으로만 쓴다.
     var infoCardBottom by remember { mutableStateOf(0.dp) }
     val mapTop = measuredOr(infoCardBottom, Sizes.simulationMapInfo)
-    var followRowHeight by remember { mutableStateOf(0.dp) }
-    val density = LocalDensity.current
     @Composable fun JourneyMap(mapModifier: Modifier) {
         Column(mapModifier) {
             Box(Modifier.fillMaxWidth().weight(1f).clipToBounds().testTag("simulation_map")) {
@@ -120,8 +118,7 @@ fun SimulationScreen(
                 }
             }
             // A separate row cannot cover the SDK logo or any map marker, at any font size.
-            // 가로(#172)에서는 지도 열이 낮아 따라가기 줄을 조작 막대로 옮겨 지도 보이는 높이를 남긴다. 어느 쪽이든 지도 밖이다(#122).
-            if (!state.following && !landscape) Surface(Modifier.fillMaxWidth().testTag("simulation_follow_row").onSizeChanged { followRowHeight = with(density) { it.height.toDp() } }, color = scheme.surface) {
+            if (!state.following) Surface(Modifier.fillMaxWidth().testTag("simulation_follow_row"), color = scheme.surface) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.s), horizontalArrangement = Arrangement.End) {
                     QuietButton(onClick = actions.follow) { Text(stringResource(R.string.simulation_follow)) }
                 }
@@ -149,16 +146,9 @@ fun SimulationScreen(
             if(landscape) Row(Modifier.fillMaxWidth().weight(1f)) {
                 JourneyMap(Modifier.weight(1f).fillMaxHeight())
                 CabinDetails(Modifier.weight(1f).fillMaxHeight())
-            } else BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
-                // 지도:차량 패널은 2:3(#56)이되, 따라가기를 끄면 경로 전체에 맞추므로 정보 카드 아래에 경로를 알아볼 보이는 높이를 남긴다(#172).
-                // 차량 패널은 스크롤하므로 그만큼 줄어도 내용이 사라지지 않는다.
-                val share = maxHeight * 2 / 5
-                val need = mapTop + Sizes.simulationMapMinVisible + Spacing.s + (if (state.following) 0.dp else measuredOr(followRowHeight, Spacing.touch))
-                val mapHeight = maxOf(share, need).coerceAtMost((maxHeight - Spacing.touch * 2).coerceAtLeast(share))
-                Column(Modifier.fillMaxSize()) {
-                    JourneyMap(Modifier.fillMaxWidth().height(mapHeight))
-                    CabinDetails(Modifier.fillMaxWidth().weight(1f))
-                }
+            } else {
+                JourneyMap(Modifier.fillMaxWidth().weight(2f))
+                CabinDetails(Modifier.fillMaxWidth().weight(3f))
             }
             Surface(Modifier.testTag("simulation_controls"), color = scheme.surface) {
                 if(landscape) Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal=Spacing.screen,vertical=Spacing.s),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(Spacing.l)) {
@@ -176,7 +166,6 @@ fun SimulationScreen(
                         PrimaryButton(onClick=actions.toggle,modifier=Modifier.widthIn(min=Sizes.simulationCompactPlay),enabled=point!=null) { Text(stringResource(if(state.playing) R.string.simulation_pause else R.string.simulation_play),softWrap=false) }
                         listOf(1,2,4).forEach { speed -> NeutralFilterChip(state.speed==speed,stringResource(R.string.simulation_speed,speed)) { actions.speed(speed) } }
                     }
-                    if (!state.following) QuietButton(onClick = actions.follow, modifier = Modifier.testTag("simulation_follow_row")) { Text(stringResource(R.string.simulation_follow)) }
                 } else Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Spacing.screen, vertical = Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     if(!landscape) MiniTimeline(result, boundaries)
                     Slider(value = (state.elapsedMillis.toFloat() / duration).coerceIn(0f, 1f), onValueChange = actions.seek,

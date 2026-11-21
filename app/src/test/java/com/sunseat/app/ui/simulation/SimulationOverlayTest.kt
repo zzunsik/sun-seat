@@ -36,7 +36,7 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * #161·#172: 햇빛 따라가기 지도 위 정보 카드(오버레이)는 측정한 높이만큼 지도 보이는 영역에서 빠지고, 큰 글자에서도 지도 표식을 덮지 않는다.
- * 버튼·라벨은 단어 중간에서 꺾이지 않는다. 따라가기를 끈(일시정지 화면) 지도 띠에도 경로를 알아볼 보이는 영역이 남는다.
+ * 버튼·라벨은 단어 중간에서 꺾이지 않는다.
  * 환경 행렬: 세로 390dp, 320dp·1.5배, 가로 832×384dp + 시스템 바 인셋 24dp.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -106,30 +106,18 @@ class SimulationOverlayTest {
         assertEquals("'$word' must not break across lines in '$full'", layout.getLineForOffset(at), layout.getLineForOffset(at + word.length - 1))
     }
 
-    @Test fun pausedPortrait() { render(following = false); checkInfoCard(); assertMapStripShowsRoute() }
+    @Test fun pausedPortrait() { render(following = false); checkInfoCard() }
     @Test fun followingPortrait() { render(following = true); checkInfoCard() }
 
     @Config(qualifiers = "w320dp-h844dp-xxhdpi")
     @Test fun pausedSmallLargeText() {
         render(following = false, fontScale = 1.5f)
         checkInfoCard()
-        assertMapStripShowsRoute()
         assertWordNotBroken(app.getString(R.string.simulation_play), app.getString(R.string.simulation_play))
         assertWordNotBroken("표준 시내버스", "시내버스(추정)")
     }
 
     @Config(qualifiers = "w832dp-h384dp-xxhdpi")
-    @Test fun pausedLandscapeWithSystemBars() { render(following = false, bars = true); checkInfoCard(); assertMapStripShowsRoute() }
-
-    /**
-     * 따라가기를 끈 지도는 경로 전체에 맞춘다. 보이는 영역이 너무 낮으면 정수 줌 맞춤이 경로를 차량 표식 밑으로 모은다(#168 PR #176 관찰).
-     * 정보 카드 아래 보이는 지도 높이가 `Sizes.simulationMapMinVisible` 이상이다.
-     */
-    private fun assertMapStripShowsRoute() {
-        val map = compose.onNode(androidx.compose.ui.test.SemanticsMatcher.keyIsDefined(MapVisibleAreaKey), useUnmergedTree = true).fetchSemanticsNode()
-        val visible = map.config[MapVisibleAreaKey]
-        val heightDp = (visible.bottom - visible.top) / compose.density.density
-        assertTrue("visible map below the info card is only ${heightDp}dp", heightDp >= com.sunseat.app.ui.theme.Sizes.simulationMapMinVisible.value - 0.5f)
-    }
+    @Test fun pausedLandscapeWithSystemBars() { render(following = false, bars = true); checkInfoCard() }
 
 }
