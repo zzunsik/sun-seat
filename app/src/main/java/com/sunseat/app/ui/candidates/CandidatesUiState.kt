@@ -39,6 +39,7 @@ internal data class PreviewEntry(val id: Int, val sheetBefore: SheetAnchor)
  *   시트가 잠깐 기본 앵커를 지나도 축약 여정 바를 유지한다(#101).
  * @property journeyBar 시트 최대 높이(완전 확장 앵커)를 정하는 축약 여정 바 높이(dp). 시트가 움직이는 동안에는 바뀌지 않는다(#162).
  * @property pendingJourneyBar 움직이는 동안 새로 잰 높이. 시트가 멈추면 [journeyBar]에 반영한다.
+ * @property transition 시트를 움직이는 전환의 번호. 끊긴 앞 전환의 [CandidatesEvent.SheetAnimated]가 뒤 전환의 복원 상태를 지우지 않게 한다.
  */
 internal data class CandidatesUiState(
     val sheet: SheetAnchor = SheetAnchor.Default,
@@ -49,11 +50,12 @@ internal data class CandidatesUiState(
     val orientation: ScreenOrientation = ScreenOrientation.Portrait,
     val journeyBar: Float = 0f,
     val pendingJourneyBar: Float? = null,
+    val transition: Int = 0,
 ) {
     val landscape: Boolean get() = orientation == ScreenOrientation.Landscape
 
-    /** 목록 상단을 축약 여정 바로 고정해야 하는 복원 중인가(#101). 결과에서 돌아온 첫 프레임도 포함한다. */
-    val holdCompactHeader: Boolean get() = !landscape && restoring == SheetAnchor.Expanded
+    /** 목록 상단을 축약 여정 바로 고정해야 하는 복원 중인가(#101). 결과에서 돌아온 첫 프레임도 포함한다. 가로에는 시트가 없어 화면이 쓰지 않는다. */
+    val holdCompactHeader: Boolean get() = restoring == SheetAnchor.Expanded
 }
 
 internal sealed interface CandidatesEvent {
@@ -68,8 +70,8 @@ internal sealed interface CandidatesEvent {
     data class SheetTarget(val anchor: SheetAnchor) : CandidatesEvent
     /** 시트 움직임 시작(끌기·애니메이션)과 멈춤. */
     data class SheetMotion(val moving: Boolean) : CandidatesEvent
-    /** [CandidatesEffect.AnimateSheet]가 끝남(중단 포함). */
-    data class SheetAnimated(val anchor: SheetAnchor) : CandidatesEvent
+    /** [CandidatesEffect.AnimateSheet]가 끝남(중단 포함). [transition]이 지금 전환이 아니면 무시한다. */
+    data class SheetAnimated(val anchor: SheetAnchor, val transition: Int = 0) : CandidatesEvent
     /** 축약 여정 바 높이(dp)를 잼. */
     data class JourneyBarMeasured(val height: Float) : CandidatesEvent
     /** 범주 탭(#82). [changed]는 다른 범주를 골랐는가(빈 범주의 "전체 보기" 포함). */
@@ -83,11 +85,15 @@ internal sealed interface CandidatesEvent {
     data object CandidatesChanged : CandidatesEvent
     /** 완전 확장의 축약 여정 바 누름: 기본 높이로 내려 펼친 헤더를 보인다. */
     data object JourneyBarTap : CandidatesEvent
+    /** 여정(출발·도착·수단)이 같은 화면에서 바뀜: 미리보기·결과 왕복을 버린다. */
+    data object TripChanged : CandidatesEvent
+    /** 열린 미리보기의 후보가 목록에서 사라짐(다시 불러오기 등): 미리보기를 닫은 것으로 본다. */
+    data object PreviewLost : CandidatesEvent
 }
 
 internal sealed interface CandidatesEffect {
     /** 목록·미리보기 시트를 [anchor]로 움직인다(세로만). 끝나면 [CandidatesEvent.SheetAnimated]. */
-    data class AnimateSheet(val anchor: SheetAnchor) : CandidatesEffect
+    data class AnimateSheet(val anchor: SheetAnchor, val transition: Int = 0) : CandidatesEffect
     /** 목록 맨 위(새 1순위)부터 보인다(#83 #136). */
     data object ScrollToTop : CandidatesEffect
     /** 후보 [id] 카드가 화면 밖이면 보이게 옮기고, 보이면 위치를 그대로 둔다(#145 #99). */
@@ -100,8 +106,15 @@ internal sealed interface CandidatesEffect {
 
 internal data class CandidatesTransition(val state: CandidatesUiState, val effects: List<CandidatesEffect> = emptyList())
 
-/** 전환 함수. 순수 함수이며 같은 상태·이벤트에는 같은 결과를 낸다. */
-internal fun reduceCandidates(state: CandidatesUiState, event: CandidatesEvent): CandidatesTransition = when (event) {
+/** 전환 함수. 순수 함수이며 같은 상태·이벤트에는 같은 결과를 낸다. 시트를 움직이는 전환에는 새 전환 번호를 붙인다. */
+internal fun reduceCandidates(state: CandidatesUiState, event: CandidatesEvent): CandidatesTransition {
+    val next = transition(state, event)
+    if (next.effects.none { it is CandidatesEffect.AnimateSheet }) return next
+    val number = state.transition + 1
+    return CandidatesTransition(next.state.copy(transition = number), next.effects.map { if (it is CandidatesEffect.AnimateSheet) it.copy(transition = number) else it })
+}
+
+private fun transition(state: CandidatesUiState, event: CandidatesEvent): CandidatesTransition = when (event) {
     is CandidatesEvent.CardTap -> if (state.preview != null) CandidatesTransition(state) else CandidatesTransition(
         state.copy(preview = PreviewEntry(event.id, state.sheet), away = null, restoring = null),
         // 미리보기는 요약 높이(기본 앵커)로 열고 선택 경로에 맞춘다(#102). 사용자가 옮긴 지도도 행 탭에는 맞춘다(#71).
@@ -129,7 +142,7 @@ internal fun reduceCandidates(state: CandidatesUiState, event: CandidatesEvent):
         if (event.moving) state.copy(gesture = SheetGesture.Moving) else state.copy(gesture = SheetGesture.Idle).settleMeasurements(),
     )
     is CandidatesEvent.SheetAnimated -> CandidatesTransition(
-        state.restoring?.let { state.copy(restoring = null, sheet = if (state.preview == null) it else state.sheet).settleMeasurements() } ?: state,
+        if (event.transition != state.transition) state else state.restoring?.let { state.copy(restoring = null, sheet = if (state.preview == null) it else state.sheet).settleMeasurements() } ?: state,
     )
     // #162: 시트 앵커(완전 확장 높이)는 시트가 움직이는 동안 바뀌지 않는다. 새 측정은 멈춘 뒤 반영한다.
     is CandidatesEvent.JourneyBarMeasured -> CandidatesTransition(
@@ -146,6 +159,8 @@ internal fun reduceCandidates(state: CandidatesUiState, event: CandidatesEvent):
     CandidatesEvent.FitAction -> CandidatesTransition(state, listOf(CandidatesEffect.Camera(FitReason.EXPLICIT)))
     CandidatesEvent.CandidatesChanged -> CandidatesTransition(state, listOf(CandidatesEffect.Camera(FitReason.SELECTION)))
     CandidatesEvent.JourneyBarTap -> CandidatesTransition(state, listOfNotNull(CandidatesEffect.AnimateSheet(SheetAnchor.Default).takeUnless { state.landscape || state.preview != null }))
+    CandidatesEvent.TripChanged -> CandidatesTransition(state.copy(preview = null, away = null, restoring = null))
+    CandidatesEvent.PreviewLost -> CandidatesTransition(state.copy(preview = null))
 }
 
 /** 목록으로 돌아올 때 공통 효과: 들어가기 전 시트 높이(세로), 선택 카드 보이기, 선택 카드로 초점. */
@@ -174,8 +189,9 @@ internal val CandidatesUiStateSaver: Saver<CandidatesUiState, Any> = Saver(
             sheet = SheetAnchor.entries[v[0]], orientation = ScreenOrientation.entries[v[1]],
             preview = entry(v[2], v[3]), away = entry(v[4], v[5]),
         ).let { state ->
-            // 결과에서 돌아온 새 구성은 첫 프레임부터 되돌리는 중으로 본다(축약 여정 바 유지, #101). [CandidatesEvent.ReturnFromResult]가 이어 받는다.
-            state.copy(restoring = state.away?.sheetBefore?.takeUnless { state.landscape })
+            // 결과에서 돌아온 새 구성은 첫 프레임부터 되돌리는 중으로 본다(축약 여정 바 유지, #101). 저장한 방향과 지금 방향이 달라도
+            // 첫 프레임에 펼친 헤더가 끼지 않도록 방향과 무관하게 두고, 가로로 돌면 [CandidatesEvent.Rotate]가, 아니면 [CandidatesEvent.ReturnFromResult]가 이어 받는다.
+            state.copy(restoring = state.away?.sheetBefore)
         }
     },
 )

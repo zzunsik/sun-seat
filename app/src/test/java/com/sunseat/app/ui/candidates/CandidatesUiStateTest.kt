@@ -44,8 +44,11 @@ class CandidatesUiStateTest {
         CandidatesEvent.SheetMotion(true), CandidatesEvent.SheetMotion(false), CandidatesEvent.SheetAnimated(Expanded),
         CandidatesEvent.JourneyBarMeasured(80f), CandidatesEvent.CategoryChange(true), CandidatesEvent.CategoryChange(false),
         CandidatesEvent.SortChange(true), CandidatesEvent.SortChange(false), CandidatesEvent.Rotate(portrait), CandidatesEvent.Rotate(landscape),
-        CandidatesEvent.FitAction, CandidatesEvent.CandidatesChanged, CandidatesEvent.JourneyBarTap,
+        CandidatesEvent.FitAction, CandidatesEvent.CandidatesChanged, CandidatesEvent.JourneyBarTap, CandidatesEvent.TripChanged, CandidatesEvent.PreviewLost,
     )
+
+    /** 전환 번호를 뺀 효과(번호는 [transitionNumbers]가 따로 본다). */
+    private fun List<CandidatesEffect>.plain() = map { if (it is AnimateSheet) it.copy(transition = 0) else it }
 
     /** 기대 효과: 상태 이름·이벤트 → 효과 목록. 표에 없는 칸은 효과 없음. */
     private fun expectedEffects(name: String, state: CandidatesUiState, event: CandidatesEvent): List<CandidatesEffect> {
@@ -70,7 +73,7 @@ class CandidatesUiStateTest {
 
     @Test fun transitionTableEffects() {
         for ((name, state) in states) for (event in events) {
-            assertEquals("$name × $event", expectedEffects(name, state, event), reduceCandidates(state, event).effects)
+            assertEquals("$name × $event", expectedEffects(name, state, event), reduceCandidates(state, event).effects.plain())
         }
     }
 
@@ -105,7 +108,7 @@ class CandidatesUiStateTest {
         assertTrue(closing.holdCompactHeader)
         // 복원 중의 시트 값(기본 앵커를 지남)은 무시한다.
         assertEquals(closing, reduceCandidates(closing, CandidatesEvent.SheetTarget(Default)).state)
-        val done = reduceCandidates(closing, CandidatesEvent.SheetAnimated(Expanded)).state
+        val done = reduceCandidates(closing, CandidatesEvent.SheetAnimated(Expanded, closing.transition)).state
         assertNull(done.restoring)
         assertFalse(done.holdCompactHeader)
         assertEquals(Expanded, done.sheet)
@@ -118,13 +121,13 @@ class CandidatesUiStateTest {
         assertTrue("first frames of the list keep the compact bar", leaving.holdCompactHeader)
         // 저장·복원(새 구성)에는 측정값·복원 애니메이션이 빠진다.
         @Suppress("UNCHECKED_CAST") val restored = CandidatesUiStateSaver.restore(with(CandidatesUiStateSaver) { androidx.compose.runtime.saveable.SaverScope { true }.save(leaving) }!!)!!
-        assertEquals(leaving.copy(journeyBar = 0f), restored)
+        assertEquals(leaving.copy(journeyBar = 0f, transition = 0), restored)
         assertTrue(restored.holdCompactHeader)
         val back = reduceCandidates(restored, CandidatesEvent.ReturnFromResult)
         assertNull(back.state.away)
-        assertEquals(listOf(AnimateSheet(Expanded), Reveal(3), FocusCard(3)), back.effects)
+        assertEquals(listOf(AnimateSheet(Expanded), Reveal(3), FocusCard(3)), back.effects.plain())
         // 떠나는 동안 애니메이션이 끝나도 돌아올 때 쓸 값은 남긴다.
-        assertEquals(PreviewEntry(3, Expanded), reduceCandidates(leaving, CandidatesEvent.SheetAnimated(Expanded)).state.away)
+        assertEquals(PreviewEntry(3, Expanded), reduceCandidates(leaving, CandidatesEvent.SheetAnimated(Expanded, leaving.transition)).state.away)
     }
 
     /** #162: 시트가 움직이는 동안 잰 축약 여정 바 높이는 앵커에 바로 쓰지 않고 멈춘 뒤 반영한다. */
@@ -149,7 +152,7 @@ class CandidatesUiStateTest {
         assertEquals(previewFromExpanded.preview, turned.preview)
         val back = reduceCandidates(turned, CandidatesEvent.Rotate(portrait))
         assertEquals(previewFromExpanded.preview, back.state.preview)
-        assertEquals(listOf(AnimateSheet(Default)), back.effects)
+        assertEquals(listOf(AnimateSheet(Default)), back.effects.plain())
         // 가로에서 닫으면 시트 복원 없이 카드·초점·맞춤만.
         assertEquals(listOf(Reveal(3), FocusCard(3), Camera(FitReason.PREVIEW_CLOSE)), reduceCandidates(turned, CandidatesEvent.PreviewClose(CloseSource.Back)).effects)
         // 복원 중에 가로로 돌리면 복원을 버린다.
@@ -160,7 +163,33 @@ class CandidatesUiStateTest {
     @Test fun saverRoundTripsEveryNamedState() {
         for ((name, state) in states) {
             val saved = with(CandidatesUiStateSaver) { androidx.compose.runtime.saveable.SaverScope { true }.save(state) }!!
-            assertEquals(name, state.copy(journeyBar = 0f, pendingJourneyBar = null, restoring = state.away?.sheetBefore?.takeUnless { state.landscape }, gesture = SheetGesture.Idle), CandidatesUiStateSaver.restore(saved))
+            assertEquals(name, state.copy(journeyBar = 0f, pendingJourneyBar = null, restoring = state.away?.sheetBefore, gesture = SheetGesture.Idle, transition = 0), CandidatesUiStateSaver.restore(saved))
         }
+    }
+
+    /** 시트를 움직이는 전환마다 새 번호를 붙이고, 끊긴 앞 전환의 애니메이션 끝 알림은 뒤 전환의 복원 상태를 지우지 않는다. */
+    @Test fun transitionNumbers() {
+        val opened = reduceCandidates(expanded, CandidatesEvent.CardTap(1))
+        assertEquals(expanded.transition + 1, opened.state.transition)
+        assertEquals(opened.state.transition, (opened.effects.first() as AnimateSheet).transition)
+        val closing = reduceCandidates(opened.state, CandidatesEvent.PreviewClose(CloseSource.Back))
+        val first = (closing.effects.first() as AnimateSheet).transition
+        // 복원 중 다른 카드 → 다시 닫기: 첫 닫기의 늦은 알림은 무시한다.
+        val reopened = reduceCandidates(closing.state, CandidatesEvent.CardTap(2)).state
+        val closingAgain = reduceCandidates(reopened, CandidatesEvent.PreviewClose(CloseSource.Button)).state
+        assertEquals(closingAgain, reduceCandidates(closingAgain, CandidatesEvent.SheetAnimated(Expanded, first)).state)
+        assertNull(reduceCandidates(closingAgain, CandidatesEvent.SheetAnimated(Expanded, closingAgain.transition)).state.restoring)
+        // 시트를 움직이지 않는 전환은 번호를 바꾸지 않는다.
+        assertEquals(expanded.transition, reduceCandidates(expanded, CandidatesEvent.FitAction).state.transition)
+    }
+
+    /** 같은 화면에서 여정이 바뀌거나 미리보기 후보가 사라지면 미리보기·결과 왕복을 버리고 행 탭이 다시 먹는다. */
+    @Test fun tripChangeAndLostPreviewClearPreview() {
+        val restoring = reduceCandidates(previewFromExpanded, CandidatesEvent.PreviewClose(CloseSource.Back)).state
+        val changed = reduceCandidates(restoring, CandidatesEvent.TripChanged).state
+        assertNull(changed.preview); assertNull(changed.away); assertNull(changed.restoring)
+        val lost = reduceCandidates(previewFromDefault, CandidatesEvent.PreviewLost).state
+        assertNull(lost.preview)
+        assertEquals(PreviewEntry(7, Default), reduceCandidates(lost, CandidatesEvent.CardTap(7)).state.preview)
     }
 }

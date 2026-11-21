@@ -13,6 +13,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -23,6 +24,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.wrapContentSize
@@ -51,6 +53,7 @@ class CandidatesTransitionTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private lateinit var sheet: BottomSheetScaffoldState
     private var state by mutableStateOf(CandidatesState.Options(emptyList()))
+    private var request by mutableStateOf(CandidatesFixtures.transitRequest)
 
     private fun settle() { compose.mainClock.advanceTimeBy(5000); compose.waitForIdle() }
     private fun revision() = compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[MapCameraRevisionKey]
@@ -72,7 +75,7 @@ class CandidatesTransitionTest {
         val screen: @androidx.compose.runtime.Composable () -> Unit = {
             CompositionLocalProvider(LocalMapRenderer provides MapRenderer.PREVIEW) {
                 SunSeatTheme {
-                    CandidatesScreen(CandidatesFixtures.transitRequest, state, CandidatesActions(
+                    CandidatesScreen(request, state, CandidatesActions(
                     onHighlight = { state = state.copy(selectedId = it.id) },
                     onCategory = { state = state.copy(category = it) },
                     onSort = { state = state.copy(sort = it) },
@@ -265,5 +268,56 @@ class CandidatesTransitionTest {
         closeWithButton()
         assertSheet(SheetValue.Expanded)
         assertCardVisible(2)
+    }
+
+    /** 화면 읽기가 꺼져 있으면 닫은 뒤 초점을 옮기지 않는다(초점을 받은 카드는 목록을 스크롤하므로 보던 위치 #99를 지킨다). */
+    @Test fun closingWithoutScreenReaderLeavesFocusAndScroll() {
+        render()
+        compose.onNodeWithTag("candidate_list").performScrollToIndex(3)
+        settle()
+        val before = scroll()
+        tap("candidate_2")
+        closeWithBack()
+        compose.onAllNodes(androidx.compose.ui.test.isFocused()).assertCountEquals(0)
+        assertEquals(before, scroll(), 0.5f)
+    }
+
+    /**
+     * 완전 확장으로 되돌리는 도중 다른 카드를 열면 앞 닫기의 남은 효과(복원·카드 보이기·닫기 맞춤)를 버리고 새 미리보기를 요약 높이로 연다.
+     * 움직이는 시트 위의 손가락 누름은 시트가 먼저 받으므로, 애니메이션 도중에도 들어오는 화면 읽기의 두 번 누름(접근성 누름 동작)으로 연다.
+     */
+    @Test fun tappingAnotherCardDuringRestoreOpensItsPreview() {
+        render()
+        dragHandle(-3000f)
+        tap("candidate_1")
+        compose.mainClock.autoAdvance = false
+        compose.onAllNodesWithContentDescription("경로 목록으로 돌아가기")[0].performTouchInput { click() }
+        var frames = 0
+        while (frames < 30 && compose.onAllNodes(androidx.compose.ui.test.hasTestTag("candidate_2")).fetchSemanticsNodes().isEmpty()) { compose.mainClock.advanceTimeByFrame(); frames++ }
+        compose.mainClock.advanceTimeByFrame()
+        compose.onNodeWithTag("candidate_2").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        compose.mainClock.autoAdvance = true
+        settle()
+        compose.onNodeWithTag("candidates_preview_sheet").assertExists()
+        assertEquals(listOf(2), compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[CandidateMapRouteIdsKey])
+        assertSheet(SheetValue.PartiallyExpanded)
+        closeWithButton()
+        assertSheet(SheetValue.Expanded)
+        compose.onNodeWithTag("candidates_journey_bar").assertExists()
+        assertCardVisible(2)
+    }
+
+    /** 같은 화면에서 여정을 바꾼 뒤에도 완전 확장 → 미리보기 → 닫기 → 축약 여정 바 누름이 펼친 헤더로 돌아온다(복원 상태가 남지 않음). */
+    @Test fun tripChangeOnSameScreenKeepsTransitionsWorking() {
+        render()
+        request = request.copy(destination = request.destination.copy(name = "견본 도착지"))
+        settle()
+        dragHandle(-3000f)
+        tap("candidate_1")
+        closeWithButton()
+        assertSheet(SheetValue.Expanded)
+        tap("candidates_journey_bar")
+        assertSheet(SheetValue.PartiallyExpanded)
+        compose.onNodeWithContentDescription("출발지와 도착지 바꾸기").assertExists()
     }
 }

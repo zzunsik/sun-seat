@@ -11,6 +11,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.layout.navigationBarsPadding
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancelAndJoin
+import androidx.lifecycle.withResumed
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import androidx.compose.foundation.verticalScroll
@@ -157,20 +160,27 @@ fun CandidatesScreen(
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val landscape = configuration.screenWidthDp > configuration.screenHeightDp
     // #171: 시트 자리·미리보기·결과에서 돌아오기·시트 움직임·방향·시트 앵커 측정값은 상태 하나다(CandidatesUiState).
-    // 화면은 이벤트만 보내고, 전환 함수가 돌려준 효과(시트 이동·스크롤·초점·카메라 맞춤)를 아래 효과 실행기가 차례로 실행한다.
-    // 회전·재생성·결과 화면 왕복에 남기고, 여정(출발·도착·수단)이 바뀌면 새로 시작한다.
-    var ui by rememberSaveable(request.origin, request.destination, request.mode, stateSaver = CandidatesUiStateSaver) {
+    // 화면은 이벤트만 보내고, 전환 함수가 돌려준 효과(시트 이동·스크롤·초점·카메라 맞춤)를 아래 효과 실행기가 실행한다.
+    // 회전·재생성·결과 화면 왕복에 남긴다. 상태 객체는 화면이 사는 동안 하나라서 오래 도는 효과도 늘 같은 상태에 보낸다.
+    var ui by rememberSaveable(stateSaver = CandidatesUiStateSaver) {
         mutableStateOf(CandidatesUiState(orientation = if (landscape) ScreenOrientation.Landscape else ScreenOrientation.Portrait))
     }
-    val effects = remember { kotlinx.coroutines.channels.Channel<CandidatesEffect>(kotlinx.coroutines.channels.Channel.UNLIMITED) }
+    // 전환 하나가 낸 효과 묶음.
+    val effects = remember { kotlinx.coroutines.channels.Channel<List<CandidatesEffect>>(kotlinx.coroutines.channels.Channel.UNLIMITED) }
     fun dispatch(event: CandidatesEvent) {
         val transition = reduceCandidates(ui, event)
         ui = transition.state
-        transition.effects.forEach { effects.trySend(it) }
+        if (transition.effects.isNotEmpty()) effects.trySend(transition.effects)
     }
     fun measuredJourneyBar(height: Dp) { if (height.value != (ui.pendingJourneyBar ?: ui.journeyBar)) dispatch(CandidatesEvent.JourneyBarMeasured(height.value)) }
+    // 같은 화면에서 여정(출발·도착·수단)이 바뀌면 미리보기·결과 왕복을 버린다.
+    val trip = Triple(request.origin, request.destination, request.mode)
+    var lastTrip by remember { mutableStateOf(trip) }
+    if (lastTrip != trip) SideEffect { lastTrip = trip; dispatch(CandidatesEvent.TripChanged) }
     val previewCandidate = ui.preview?.let { entry -> options?.visible?.firstOrNull { it.id == entry.id } }
     val preview = previewCandidate != null
+    // 열린 미리보기의 후보가 새 목록에 없으면 닫은 것으로 본다(그대로 두면 행 탭이 막힌다).
+    if (options != null && ui.preview != null && previewCandidate == null) SideEffect { if (ui.preview != null) dispatch(CandidatesEvent.PreviewLost) }
     val listScroll = rememberLazyListState()
     var fitTrigger by remember { mutableLongStateOf(0L) }
     var fitRevision by remember { mutableLongStateOf(0L) }
@@ -196,61 +206,78 @@ fun CandidatesScreen(
     LaunchedEffect(routes, options?.selectedId) { dispatch(CandidatesEvent.CandidatesChanged) }
     LaunchedEffect(landscape) { dispatch(CandidatesEvent.Rotate(if (landscape) ScreenOrientation.Landscape else ScreenOrientation.Portrait)) }
     // 미리보기에서 자리 결과로 갔다가 Back으로 돌아오면(새 구성) 들어가기 전 시트 높이·선택 카드·초점으로 돌아간다(#145 #158).
-    LaunchedEffect(Unit) { if (ui.away != null) dispatch(CandidatesEvent.ReturnFromResult) }
+    // 예측 뒤로 가기 도중(취소될 수 있음)에는 처리하지 않고 화면이 실제로 다시 앞에 온(RESUMED) 뒤에 처리한다.
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle) { lifecycle.withResumed { }; if (ui.away != null) dispatch(CandidatesEvent.ReturnFromResult) }
     // 목록 시트가 향하는 자리(끌기 중 가장 가까운 앵커). 미리보기·복원 중의 값은 전환 함수가 거른다.
     LaunchedEffect(sheetState, landscape) { if (!landscape) snapshotFlow { sheetTarget() }.collect { dispatch(CandidatesEvent.SheetTarget(it)) } }
     // #162: 시트가 끌리거나 움직이는 동안은 시트 앵커 측정값을 바꾸지 않는다. 움직임을 구성 시점에 읽어 같은 프레임의 측정보다 먼저 알린다.
     val sheetMoving = !landscape && sheetState.isAnimationRunning
     if (sheetMoving != (ui.gesture == SheetGesture.Moving)) SideEffect { dispatch(CandidatesEvent.SheetMotion(sheetMoving)) }
     val density = LocalDensity.current
-    // #145: 목록이 화면에서 실제로 보이는 아래끝(목록 좌표). 기본 높이 시트에서는 목록 아랫부분이 화면 밖에 있다.
+    val currentDensity by rememberUpdatedState(density)
+    val currentLandscape by rememberUpdatedState(landscape)
+    // #145: 목록이 화면에서 실제로 보이는 아래끝(목록 좌표). 기본 높이 시트에서는 목록 아랫부분이 화면 밖에 있다. 목록이 없으면 음의 무한대.
     var listVisibleEnd by remember { mutableFloatStateOf(Float.MAX_VALUE) }
+    // 시트·패널에 지금 배치된 내용이 미리보기인가. 시트 애니메이션은 내용이 바뀐 뒤의 앵커로 움직인다.
+    var panelShowsPreview by remember { mutableStateOf<Boolean?>(null) }
     // #158: 카드마다 초점 요청자. 화면 읽기가 켜져 있으면 터치 모드에서도 카드가 초점을 받을 수 있게 한다.
     val cardFocus = remember { HashMap<Int, androidx.compose.ui.focus.FocusRequester>() }
     val screenReader = rememberTouchExplorationEnabled()
     val currentScreenReader by rememberUpdatedState(screenReader)
     val currentOptions by rememberUpdatedState(options)
     val currentRequest by rememberUpdatedState(request)
-    // 효과 실행기: 전환 함수가 낸 효과를 낸 순서대로 실행한다. 시트 애니메이션이 사용자 끌기로 끊겨도 다음 효과는 실행한다.
+    // 효과 실행기. 시트를 움직이는 전환(미리보기 열기·닫기, 결과에서 돌아오기, 회전 등)의 효과는 차례로 실행하고, 새 전환이 오면
+    // 앞 전환의 남은 효과(복원·카드 보이기·초점·닫기 맞춤)를 버린다. 맞춤·맨 위로 같은 즉시 효과는 기다리지 않고 바로 실행한다.
+    // 시트 애니메이션이 사용자 끌기로 끊겨도 같은 전환의 다음 효과는 실행한다.
     LaunchedEffect(effects) {
         suspend fun guarded(block: suspend () -> Unit) {
             try { block() } catch (e: kotlinx.coroutines.CancellationException) { if (!kotlinx.coroutines.currentCoroutineContext().isActive) throw e }
         }
-        for (effect in effects) when (effect) {
-            is CandidatesEffect.AnimateSheet -> try {
-                // 시트 내용(목록↔미리보기)이 바뀐 뒤의 앵커로 움직이도록 한 프레임 기다린다.
-                guarded {
-                    androidx.compose.runtime.withFrameNanos { }
-                    if (!ui.landscape) { if (effect.anchor == SheetAnchor.Expanded) sheetState.expand() else sheetState.partialExpand() }
+        suspend fun run(effect: CandidatesEffect) {
+            when (effect) {
+                is CandidatesEffect.AnimateSheet -> try {
+                    guarded {
+                        // 시트 내용(목록과 미리보기)이 바뀌어 배치된 뒤의 앵커로 움직인다.
+                        var frames = 0
+                        do { androidx.compose.runtime.withFrameNanos { }; frames++ } while (frames < REVEAL_WAIT_FRAMES && panelShowsPreview != (ui.preview != null))
+                        if (!currentLandscape) { if (effect.anchor == SheetAnchor.Expanded) sheetState.expand() else sheetState.partialExpand() }
+                    }
+                } finally { dispatch(CandidatesEvent.SheetAnimated(effect.anchor, effect.transition)) }
+                CandidatesEffect.ScrollToTop -> guarded { listScroll.scrollToItem(0) }
+                is CandidatesEffect.Reveal -> guarded {
+                    // 목록이 다시 구성되고 시트가 멈춘 뒤 판단한다. 미리보기 요약 높이에서 목록 높이로 시트 앵커가 바뀌는 데 몇 프레임 걸리므로
+                    // 목록 윗부분이 화면에 들어올 때(목록 시트는 접혀도 최소 높이가 보인다)까지 기다린다.
+                    val minVisible = with(currentDensity) { Spacing.touch.toPx() }
+                    var frames = 0
+                    do { androidx.compose.runtime.withFrameNanos { }; frames++ } while (frames < REVEAL_WAIT_FRAMES &&
+                        (listScroll.layoutInfo.totalItemsCount == 0 || sheetState.isAnimationRunning || listVisibleEnd < minVisible))
+                    val position = currentOptions?.visible.orEmpty().indexOfFirst { it.id == effect.id }
+                    if (position >= 0 && listVisibleEnd.isFinite()) {
+                        val index = position + optionListLeadingItems(currentRequest)
+                        val item = listScroll.layoutInfo.visibleItemsInfo.firstOrNull { it.key == effect.id }
+                        // 선택 카드의 윗부분(시간 줄)이 터치 높이만큼 보이면 목록 위치를 그대로 둔다(#99 스크롤 보존).
+                        if (item == null || item.offset < 0 || item.offset + minVisible > listVisibleEnd) listScroll.scrollToItem(index)
+                    }
                 }
-            } finally { dispatch(CandidatesEvent.SheetAnimated(effect.anchor)) }
-            CandidatesEffect.ScrollToTop -> guarded { listScroll.scrollToItem(0) }
-            is CandidatesEffect.Reveal -> guarded {
-                // 목록이 다시 구성되고 시트가 멈춘 뒤 판단한다. 미리보기 요약 높이에서 목록 높이로 시트 앵커가 바뀌는 데 몇 프레임 걸리므로
-                // 목록 윗부분이 화면에 들어올 때(목록 시트는 접혀도 최소 높이가 보인다)까지 기다린다.
-                val minVisible = with(density) { Spacing.touch.toPx() }
-                var frames = 0
-                do { androidx.compose.runtime.withFrameNanos { }; frames++ } while (frames < REVEAL_WAIT_FRAMES &&
-                    (listScroll.layoutInfo.totalItemsCount == 0 || sheetState.isAnimationRunning || listVisibleEnd < minVisible))
-                val items = currentOptions?.visible.orEmpty()
-                val position = items.indexOfFirst { it.id == effect.id }
-                if (position >= 0) {
-                    val index = position + optionListLeadingItems(currentRequest)
-                    val item = listScroll.layoutInfo.visibleItemsInfo.firstOrNull { it.key == effect.id }
-                    // 선택 카드의 윗부분(시간 줄)이 터치 높이만큼 보이면 목록 위치를 그대로 둔다(#99 스크롤 보존).
-                    if (item == null || item.offset < 0 || item.offset + minVisible > listVisibleEnd) listScroll.scrollToItem(index)
+                // 화면 읽기가 켜져 있을 때만 옮긴다. 초점을 받은 카드는 목록이 카드 전체를 보이게 스크롤하므로, 터치로 쓸 때는 보던 위치(#99)를 지킨다.
+                is CandidatesEffect.FocusCard -> if (currentScreenReader) guarded {
+                    // 카드가 구성되어 초점 요청자가 붙을 때까지 몇 프레임 기다린다(스크롤 직후).
+                    for (attempt in 0 until REVEAL_WAIT_FRAMES) {
+                        androidx.compose.runtime.withFrameNanos { }
+                        val requester = cardFocus[effect.id] ?: continue
+                        if (runCatching { requester.requestFocus(androidx.compose.ui.focus.FocusDirection.Enter) }.getOrDefault(false)) break
+                    }
                 }
+                is CandidatesEffect.Camera -> requestFit(effect.reason)
             }
-            // 화면 읽기가 켜져 있을 때만 옮긴다. 초점을 받은 카드는 목록이 카드 전체를 보이게 스크롤하므로, 보던 위치를 보존하는 터치·키보드 사용에는 쓰지 않는다(#99).
-            is CandidatesEffect.FocusCard -> if (currentScreenReader) guarded {
-                // 카드가 구성되어 초점 요청자가 붙을 때까지 몇 프레임 기다린다(스크롤 직후).
-                for (attempt in 0 until REVEAL_WAIT_FRAMES) {
-                    androidx.compose.runtime.withFrameNanos { }
-                    val requester = cardFocus[effect.id] ?: continue
-                    if (runCatching { requester.requestFocus(androidx.compose.ui.focus.FocusDirection.Enter) }.getOrDefault(false)) break
-                }
-            }
-            is CandidatesEffect.Camera -> requestFit(effect.reason)
+        }
+        var running: kotlinx.coroutines.Job? = null
+        for (batch in effects) {
+            if (batch.any { it is CandidatesEffect.AnimateSheet || it is CandidatesEffect.Reveal || it is CandidatesEffect.FocusCard }) {
+                running?.cancelAndJoin()
+                running = launch { batch.forEach { run(it) } }
+            } else launch { batch.forEach { run(it) } }
         }
     }
     var headerHeight by remember { mutableStateOf(0.dp) }
@@ -353,12 +380,12 @@ fun CandidatesScreen(
     val panel: @Composable () -> Unit = {
             if (preview && previewCandidate != null) {
                 val paneTitle = stringResource(R.string.candidates_preview_title)
-                Column(Modifier.testTag("candidates_preview_sheet").semantics { this.paneTitle = paneTitle }.fillMaxWidth()
+                Column(Modifier.testTag("candidates_preview_sheet").onGloballyPositioned { panelShowsPreview = true }.semantics { this.paneTitle = paneTitle }.fillMaxWidth()
                     .then(if (landscape) Modifier.fillMaxHeight() else Modifier.heightIn(max = (viewportHeight - headerHeight - (if (dragHandleHeight > 0.dp) dragHandleHeight else Spacing.touch)).coerceAtLeast(Spacing.touch)))
                     .verticalScroll(rememberScrollState()).navigationBarsPadding()) {
                     RoutePreviewSheet(previewCandidate, request, onSeat = { dispatch(CandidatesEvent.SeatOpen); actions.onSelect(previewCandidate) }) { previewSummaryHeight = with(density) { it.toDp() } }
                 }
-            } else Column(Modifier.testTag("candidates_sheet").fillMaxWidth().then(if (landscape) Modifier.fillMaxHeight() else Modifier.heightIn(max = listSheetMax)).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+            } else Column(Modifier.testTag("candidates_sheet").onGloballyPositioned { panelShowsPreview = false }.fillMaxWidth().then(if (landscape) Modifier.fillMaxHeight() else Modifier.heightIn(max = listSheetMax)).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                 if (options != null && request.mode == TravelMode.TRANSIT) {
                     CategoryTabs(RouteCategory.entries.map { category ->
                         val label = categoryLabel(category)
