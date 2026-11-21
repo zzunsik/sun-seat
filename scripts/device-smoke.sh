@@ -166,6 +166,8 @@ tap() { set -- $1; sh_ input tap $(( ($1 + $3) / 2 )) $(( ($2 + $4) / 2 )); }
 drag() { sh_ input touchscreen swipe "$1" "$2" "$3" "$4" "${5:-800}"; }   # 지도·시트는 600ms 이상 천천히 끈다
 motion() { sh_ input motionevent "$@" 2>&1 | grep -qiE "error|unknown|usage" && return 1; return 0; }   # 누른 채 움직이기(Android 11+)
 alive() { sh_ pidof "$PKG" | grep -q .; }
+# 지도 카메라 debug 로그(#168)의 마지막 줄에서 경로 외곽 상자와 표식 상자(px)만 꺼낸다. 로그가 없으면 빈 문자열.
+footprints() { "$ADB" -s "$serial" logcat -d -s SunSeatMapCamera:D 2>/dev/null | tr -d '\r' | grep -o 'route=.*' | tail -1; }
 wait_id() { # 아이디 시간(초)
   local end=$(( SECONDS + ${2:-15} ))
   while [ $SECONDS -lt $end ]; do dump; has_id "$1" && return 0; alive || return 1; sleep 1; done
@@ -264,7 +266,7 @@ fi
 
 if [ $list_ok = 1 ] && want 3; then
   begin 3 "시트를 약 60dp 올렸다 내림(#148)"
-  dump; s0=$(by_id candidates_sheet_handle); m0=$(map_band_px)
+  dump; s0=$(by_id candidates_sheet_handle); m0=$(map_band_px); f0=$(footprints)
   if [ -n "$s0" ]; then
     # 손을 떼지 않고 올린 채로 화면을 읽은 뒤 제자리로 내리고 뗀다(input motionevent). 떼고 다시 잡으면 시트가 걸림점으로 돌아가 버린다.
     read -r cx cy <<<"$(center "$s0")"; d=$(px 60)
@@ -287,9 +289,14 @@ if [ $list_ok = 1 ] && want 3; then
     check "$(lt $diff "$(px 8)")" "내린 뒤 손잡이 위치가 처음과 8dp 안(차이 $(dp $diff)dp)"
     check "$([ "$m2" -gt 0 ] && echo 0 || echo 1)" "지도 띠가 다시 보인다"
     alive; check $? "앱이 살아 있다"
-    note "지도 발자국(표식 위치) 비교: #168의 debug 로그가 들어온 뒤 켠다(지금은 시트 위치만 본다)"
+    # #168: 시트만 움직이면 카메라도 지도 내용도 그대로다. debug 로그(보이는 영역·발자국 상자 px)의 마지막 줄을 전후로 비교한다.
+    f2=$(footprints)
+    if [ -n "$f0" ] && [ -n "$f2" ]; then
+      note "지도 발자국 처음 [$f0] → 내린 뒤 [$f2]"
+      check "$([ "$f0" = "$f2" ] && echo 0 || echo 1)" "시트를 올렸다 내려도 지도 표식 위치가 그대로다(#148)"
+    else note "지도 카메라 debug 로그(SunSeatMapCamera)가 없어 지도 발자국은 비교하지 않았다(release 빌드이거나 지도를 쓸 수 없음)"; fi
   else check 1 "손잡이 노드가 있다"; fi
-  finish "손잡이 $(fmt "$s0") → $(fmt "${s2:-}") (지도 발자국 비교는 #168 뒤 활성화)"
+  finish "손잡이 $(fmt "$s0") → $(fmt "${s2:-}")"
 fi
 
 if [ $list_ok = 1 ] && { want 2 || want 4 || want 5; }; then
