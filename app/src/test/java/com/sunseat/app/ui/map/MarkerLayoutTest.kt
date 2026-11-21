@@ -61,6 +61,20 @@ class MarkerLayoutTest {
         assertNotEquals("the destination moves aside", 0, placements[1].variant)
     }
 
+    @Test fun pinsAvoidCoveringAnotherStopWhenTheyCan() {
+        // 디자인 리뷰(#170): 몸통을 돌린 도착 표식이 다른 정류장 원을 덮으면 그 정류장 표식처럼 읽힌다. 덮지 않는 자리가 있으면 그쪽을 고른다.
+        val stop = LatLng(seoul.latitude - 80e-5, seoul.longitude)
+        val route = Route(listOf(Leg(Mode.SUBWAY, listOf(seoul, stop), Duration.ofMinutes(3), "a", "b", lineName = "2호선")))
+        val state = MapState(routes = listOf(route), origin = NamedPlace("출발지", seoul), destination = NamedPlace("도착지", seoul))
+        val marks = state.marks(sizes(), project(seoul))
+        val placements = markerLayout(marks)
+        // 출발·도착 좌표에 있는 제 정류장 원은 꼬리 끝이 가리키므로 빼고 본다.
+        val circles = marks.zip(placements).filter { it.first.kind == MarkKind.STOP && it.first.at != seoul }.map { (m, p) -> box(m, p) }
+        marks.zip(placements).filter { it.first.kind == MarkKind.ORIGIN || it.first.kind == MarkKind.DESTINATION }.forEach { (m, p) ->
+            assertTrue("${m.kind} must not cover a stop circle", circles.none { overlaps(box(m, p), it) })
+        }
+    }
+
     // ---------- #152: 도착 순간의 도착 표식은 숨기지 않고 먼저 자리를 잡는다 ----------
 
     @Test fun arrivedDestinationIsNeverHiddenAndWins() {
@@ -90,7 +104,7 @@ class MarkerLayoutTest {
         val fixedBoxes = marks.zip(placements).filter { it.first.fixed }.map { (m, p) -> box(m, p) }
         assertTrue("vehicle and sun ray are fixed marks", marks.count { it.fixed } == 2)
         marks.zip(placements).forEach { (mark, placement) ->
-            if (mark.fixed) return@forEach
+            if (mark.fixed || mark.soft) return@forEach
             if (placement.hidden) assertEquals("${mark.kind} hidden while playing keeps its text in the info card", Fallback.INFO_CARD, mark.fallback)
             else assertTrue("${mark.kind} must not sit under the vehicle or its sun ray", fixedBoxes.none { overlaps(box(mark, placement), it) })
         }
@@ -121,7 +135,7 @@ class MarkerLayoutTest {
                 val visible = marks.zip(placements).filter { !it.second.hidden }
                 for (i in visible.indices) for (j in i + 1 until visible.size) {
                     val (a, pa) = visible[i]; val (b, pb) = visible[j]
-                    if (a.fixed && b.fixed) continue
+                    if (a.fixed && b.fixed || a.soft || b.soft) continue
                     assertFalse("${a.kind} and ${b.kind} overlap (font $fontScale, playing $playing)", overlaps(box(a, pa), box(b, pb)))
                 }
                 marks.zip(placements).filter { it.second.hidden }.forEach { (mark, _) ->

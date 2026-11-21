@@ -15,7 +15,7 @@ enum class PinSide { UP, DOWN, RIGHT, LEFT }
 enum class Fallback { NONE, INFO_CARD, TALKBACK_SUMMARY }
 
 /** 표식 종류(우선순위 표의 행, DESIGN 11.1). */
-internal enum class MarkKind { ORIGIN, DESTINATION, VEHICLE, SUN_RAY, CURRENT_LOCATION, STOP_LABEL }
+internal enum class MarkKind { ORIGIN, DESTINATION, VEHICLE, SUN_RAY, CURRENT_LOCATION, STOP_LABEL, STOP }
 
 /**
  * 배치할 표식 하나. [x]·[y]는 좌표의 화면 위치(px, 평행 이동해도 결과가 같다), [variants]는 놓을 수 있는 상자들(좌표 기준, 앞이 먼저)이고
@@ -31,6 +31,8 @@ internal data class Mark(
     val priority: Int,
     val fallback: Fallback = Fallback.NONE,
     val fixed: Boolean = false,
+    /** 자리를 바꾸지 않고 막지도 않지만, 출발·도착 표식이 되도록 피하는 표식(정류장 원). */
+    val soft: Boolean = false,
 )
 
 /** 배치 결과: 고른 자리([variant], 0 = 기본) 또는 숨김. */
@@ -66,17 +68,25 @@ private fun overlap(a: ScreenBox, b: ScreenBox): Float {
 internal fun markerLayout(marks: List<Mark>): List<Placement> {
     val placed = mutableListOf<ScreenBox>()
     val result = HashMap<Int, Placement>()
-    marks.forEachIndexed { i, mark -> if (mark.fixed) { placed += mark.variants.first().at(mark.x, mark.y); result[i] = Placement(mark.key, 0) } }
-    val order = marks.indices.filter { !marks[it].fixed }.sortedByDescending { marks[it].priority }
-    // 출발·도착 표식은 함께 자리를 고른다: 한쪽만 비켜서는 서로 피할 수 없는 거리가 있다(#160). 기본 자리에 가까운 조합부터 본다.
+    val soft = mutableListOf<ScreenBox>()
+    marks.forEachIndexed { i, mark ->
+        if (mark.soft) { soft += mark.variants.first().at(mark.x, mark.y); result[i] = Placement(mark.key, 0) }
+        else if (mark.fixed) { placed += mark.variants.first().at(mark.x, mark.y); result[i] = Placement(mark.key, 0) }
+    }
+    val order = marks.indices.filter { it !in result }.sortedByDescending { marks[it].priority }
+    // 출발·도착 표식은 함께 자리를 고른다: 한쪽만 비켜서는 서로 피할 수 없는 거리가 있다(#160).
+    // 서로·고정 표식과 겹치지 않는 조합 중 정류장 원을 덜 덮는 조합(다른 정류장 표식처럼 읽히지 않게), 그다음 기본 자리에 가까운 조합을 고른다.
     val pins = order.filter { marks[it].priority >= MarkPriority.DESTINATION }
     if (pins.size > 1) {
         val boxes = pins.map { i -> marks[i].variants.map { it.at(marks[i].x, marks[i].y) } }
         fun combos(k: Int): List<List<Int>> = if (k == pins.size) listOf(emptyList()) else combos(k + 1).flatMap { rest -> boxes[k].indices.map { listOf(it) + rest } }
-        val best = combos(0).sortedWith(compareBy({ it.sum() }, { it.joinToString() })).firstOrNull { combo ->
-            val chosen = combo.mapIndexed { k, v -> boxes[k][v] }
-            chosen.indices.all { k -> placed.none { overlap(it, chosen[k]) > 0f } && (k + 1 until chosen.size).all { overlap(chosen[k], chosen[it]) <= 0f } }
-        }
+        fun chosen(combo: List<Int>) = combo.mapIndexed { k, v -> boxes[k][v] }
+        fun hard(combo: List<Int>): Double = chosen(combo).let { c -> c.indices.sumOf { k -> placed.sumOf { overlap(it, c[k]).toDouble() } + (k + 1 until c.size).sumOf { overlap(c[k], c[it]).toDouble() } } }
+        fun softCost(combo: List<Int>): Double = chosen(combo).sumOf { box -> soft.sumOf { overlap(it, box).toDouble() } }
+        val all = combos(0)
+        val best = all.filter { hard(it) <= 0.0 }.minWithOrNull(compareBy({ softCost(it) }, { it.sum() }, { it.joinToString() }))
+            // 피할 조합이 없으면: 숨길 수 없는 표식뿐이면 가장 덜 겹치는 조합, 숨길 수 있으면(재생 중) 아래에서 하나씩 놓고 못 놓는 쪽을 숨긴다.
+            ?: if (pins.all { marks[it].fallback == Fallback.NONE }) all.minWithOrNull(compareBy({ hard(it) }, { softCost(it) }, { it.sum() })) else null
         if (best != null) pins.forEachIndexed { k, i -> placed += boxes[k][best[k]]; result[i] = Placement(marks[i].key, best[k]) }
     }
     order.filter { it !in result }.forEach { i ->
@@ -133,6 +143,8 @@ internal sealed interface MarkKey {
     data object CurrentLocation : MarkKey
     /** 선택 경로 [RouteLinePolicy.stops]의 [index]번째 정류장 이름표. */
     data class StopLabel(val index: Int) : MarkKey
+    /** 선택 경로의 [index]번째 정류장 원. */
+    data class Stop(val index: Int) : MarkKey
 }
 
 /**
@@ -174,6 +186,7 @@ internal fun MapState.marks(sizes: MarkSizes, project: (LatLng) -> Pair<Float, F
     }
     val maxPush = maxOf(sizes.originWidth, sizes.destinationWidth) + sizes.gap
     routes.getOrNull(selectedRoute)?.let { RouteLinePolicy.stops(it) }.orEmpty().forEachIndexed { index, stop ->
+        project(stop.location).let { (sx, sy) -> val r = sizes.stopRadius; out += Mark(MarkKey.Stop(index), MarkKind.STOP, stop.location, sx, sy, listOf(ScreenBox(-r, -r, r, r)), 0, soft = true) }
         if (!stop.labeled) return@forEachIndexed
         val (x, y) = project(stop.location)
         val width = sizes.labelWidth(stop)
@@ -215,7 +228,7 @@ internal fun MapState.layoutFootprints(sizes: MarkSizes, scale: MapScale): (Int)
     return { zoom ->
         val s = scale.worldPx(zoom)
         val marks = marks(sizes) { p -> ((Mercator.x(p.longitude) - bx) * s).toFloat() to ((Mercator.y(p.latitude) - by) * s).toFloat() }
-        val placed = marks.zip(markerLayout(marks)).filter { (mark, placement) -> !placement.hidden && !mark.fixed }
+        val placed = marks.zip(markerLayout(marks)).filter { (mark, placement) -> !placement.hidden && !mark.fixed && !mark.soft }
             .map { (mark, placement) -> Footprint(mark.at, mark.variants[placement.variant].inflate(sizes.gap)) }
         path + stops + placed
     }

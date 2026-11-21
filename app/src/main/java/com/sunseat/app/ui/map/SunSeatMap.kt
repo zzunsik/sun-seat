@@ -146,7 +146,7 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
         // #170: 표식 배치(그리기와 같은 카메라). 보이는 표식 상자는 테스트가 의미 속성으로 본다.
         val layout = shown?.let { cam -> state.marks(markSizes) { at -> cam.toScreen(at, width, height, scale) }.let { marks -> marks.zip(markerLayout(marks)) } }.orEmpty()
         val placements = layout.associate { (_, placement) -> placement.key to placement }
-        val markBoxes = layout.filter { (_, placement) -> !placement.hidden }.map { (mark, placement) ->
+        val markBoxes = layout.filter { (mark, placement) -> !placement.hidden && !mark.soft }.map { (mark, placement) ->
             mark.kind.name to mark.variants[placement.variant].let { ScreenBox(mark.x + it.left, mark.y + it.top, mark.x + it.right, mark.y + it.bottom) } }
         val hiddenMarks = layout.filter { (_, placement) -> placement.hidden }.map { (mark, _) -> mark.kind.name to mark.fallback }
         SideEffect { report() }
