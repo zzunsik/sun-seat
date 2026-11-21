@@ -183,5 +183,24 @@ class RoutePreviewTest {
     fun smallScreenLargeTextLongNames() = titleKeepsWidth("아주 긴 견본 출발지 이름과 부가 설명", "아주 긴 견본 목적지 이름과 부가 설명", 1.5f)
 
     @Test @Config(qualifiers = "w844dp-h390dp-xxhdpi")
-    fun landscapeKeepsSeatActionAndSummary() = titleKeepsWidth("서울역", "강남역", 1f)
+    fun landscapeKeepsSeatActionAndSummary() = landscapePreview()
+
+    /** #144: 가로 미리보기는 왼쪽(축약 여정 바 + 지도), 오른쪽(요약 패널)으로 나란히 둔다. 패널은 지도를 덮지 않는다. */
+    private fun landscapePreview() {
+        open(CandidatesFixtures.readable.toUi(0, null, false))
+        val title = compose.onNodeWithText("서울역 → 강남역", useUnmergedTree = true).assertIsDisplayed()
+        val header = compose.onNodeWithTag("candidates_header").fetchSemanticsNode().boundsInRoot
+        val layout = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+        title.fetchSemanticsNode().config[SemanticsActions.GetTextLayoutResult].action!!.invoke(layout)
+        assertTrue(layout.first().lineCount <= 2)
+        val fit = compose.onNodeWithText("지도 맞춤").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        assertTrue("fit action sits on the map below the header", fit.top >= header.bottom)
+        compose.onNodeWithText("자리 보기").assertIsDisplayed()
+        compose.onNodeWithText("환승 2회", useUnmergedTree = true).assertIsDisplayed()
+        val panel = compose.onNodeWithTag("candidates_preview_sheet").fetchSemanticsNode().boundsInRoot
+        val map = compose.onNodeWithTag("candidate_map").fetchSemanticsNode()
+        assertTrue("preview panel sits beside the map", panel.left >= map.boundsInRoot.right - 0.5f)
+        assertTrue("map below the header is not covered", map.config[com.sunseat.app.ui.map.MapVisibleHeightKey] * compose.density.density >= map.boundsInRoot.height - 1f)
+        compose.onNodeWithTag("candidates_sheet_handle", useUnmergedTree = true).assertDoesNotExist()
+    }
 }
