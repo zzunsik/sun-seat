@@ -132,6 +132,18 @@ class SimulationScreenshotTest {
         compose.onNode(androidx.compose.ui.test.hasTestTag("simulation_follow_row")).assertDoesNotExist()
         compose.onNode(androidx.compose.ui.test.hasTestTag("simulation_info_card")).assertExists()
     }
+    /** #186: 따라가기를 끈 지도(차량 둘레, #183)에서 도착지가 화면 밖이면 보이는 지도 가장자리에 도착 방향을 글로도 둔다. */
+    @Test fun offscreenDestinationShowsADirectionCue() {
+        render(6, false, following = false)
+        val cue = compose.onNode(androidx.compose.ui.test.hasContentDescription("도착지는 화면 밖 위쪽")).fetchSemanticsNode().boundsInRoot
+        val map = compose.onNode(androidx.compose.ui.test.hasTestTag("simulation_map")).fetchSemanticsNode().boundsInRoot
+        val card = compose.onNode(androidx.compose.ui.test.hasTestTag("simulation_info_card")).fetchSemanticsNode().boundsInRoot
+        assertTrue("cue $cue must sit in the map $map below the info card $card", cue.top >= card.bottom - 0.5f && cue.bottom <= map.bottom + 0.5f && cue.left >= map.left && cue.right <= map.right)
+    }
+    @Test fun noDestinationCueAfterArrival() {
+        render(23, false, following = false)
+        org.junit.Assert.assertEquals(0, compose.onAllNodes(androidx.compose.ui.test.hasContentDescription("도착지는 화면 밖", substring = true)).fetchSemanticsNodes().size)
+    }
     @Test fun followButtonRetainsItsAction() {
         var followed = false
         render(6, false, following = false, actions = SimulationActions(follow = { followed = true }))

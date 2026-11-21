@@ -55,8 +55,9 @@ import com.sunseat.app.ui.theme.SunSeatTheme
 import kotlin.math.pow
 
 @Composable
-internal fun NativeMap(state: MapState, modifier: Modifier = Modifier, keyAvailable: Boolean = LocalMapKeyAvailable.current ?: com.sunseat.app.BuildConfig.KAKAO_NATIVE_APP_KEY.isNotBlank(), onAvailability: (MapAvailability) -> Unit = {}) {
+internal fun NativeMap(state: MapState, modifier: Modifier = Modifier, keyAvailable: Boolean = LocalMapKeyAvailable.current ?: com.sunseat.app.BuildConfig.KAKAO_NATIVE_APP_KEY.isNotBlank(), onAvailability: (MapAvailability) -> Unit = {}, onDestinationOnScreen: (Pair<Float, Float>?) -> Unit = {}) {
     val report by rememberUpdatedState(onAvailability)
+    val reportDestination by rememberUpdatedState(onDestinationOnScreen)
     if (!keyAvailable) {
         val unavailable by rememberUpdatedState(state.onUnavailable)
         androidx.compose.runtime.LaunchedEffect(Unit) { report(MapAvailability.MISSING_KEY); unavailable() }
@@ -113,7 +114,7 @@ internal fun NativeMap(state: MapState, modifier: Modifier = Modifier, keyAvaila
     }
     Box(modifier) {
         androidx.compose.runtime.key(session) {
-            AndroidView(factory = { session.view }, modifier = Modifier.fillMaxSize(), update = { if (ready && !failed) session.update(state, density.density) })
+            AndroidView(factory = { session.view }, modifier = Modifier.fillMaxSize(), update = { if (ready && !failed) { session.destinationReport = { reportDestination(it) }; session.update(state, density.density) } })
         }
         if (failed) {
             androidx.compose.runtime.LaunchedEffect(Unit) { report(MapAvailability.ERROR); latest.onUnavailable() }
@@ -182,6 +183,17 @@ private class MapSession(context: Context, private val ink: Int, private val sur
     private var lastViewport: Viewport? = null
     private var reported: CameraStatus? = null
     private var logoBottom: Int? = null
+    /** #186: 도착지의 화면 위치(px)를 알린다. 갱신마다와 카메라 이동이 끝날 때, 바뀐 때만. */
+    var destinationReport: ((Pair<Float, Float>?) -> Unit)? = null
+    private var lastDestinationPx: Pair<Float, Float>? = null
+    private fun reportDestination(target: KakaoMap) {
+        val at = lastState?.destination?.location ?: return
+        val px = target.toScreenPoint(at.sdk())?.let { it.x.toFloat() to it.y.toFloat() }
+        if (px == lastDestinationPx) return
+        lastDestinationPx = px
+        val report = destinationReport ?: return
+        view.post { if (!closed) report(px) }
+    }
     private val fitPolicy = MapFitPolicy()
     private var cursor: Label? = null
     private var ray: Label? = null
@@ -235,7 +247,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         if (geometry == null) {
             target.setOnCameraMoveStartListener { _, type -> if (type != GestureType.Unknown) view.post { if (!closed) { fitPolicy.gesture(); reportStatus(); gesture() } } }
             target.setOnCameraMoveEndListener { moved, position, _ ->
-                view.post { if (map === moved) { measureScale(moved)?.let { scale = it }; scheduleLog() } }
+                view.post { if (map === moved) { measureScale(moved)?.let { scale = it }; scheduleLog(); reportDestination(moved) } }
                 if (position.zoomLevel != decorZoom) view.post { if (map === moved) decorate(moved) }
                 else view.post { if (map === moved) layoutMarks(moved) } // 회전 등 줌 밖의 카메라 변화(#153)
                 // Map picker (#85): the pin sits at the view centre with no padding, so the camera target is the pin.
@@ -337,6 +349,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         coverState = state
         // #153: 새로 만든 이름표·차량에 가려 숨기거나 다시 보인 표식에 맞춰 이름표 자리를 다시 잰다(바뀐 것만 다시 그린다).
         layoutMarks(target)
+        reportDestination(target)
     }
 
     /** #170: 표식 배치 크기(px). 그리기와 같은 측정이다. */

@@ -2,6 +2,7 @@ package com.sunseat.app.ui.map
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
@@ -32,6 +33,12 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.draw.rotate
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import com.sunseat.app.R
 import com.sunseat.app.domain.Mode
 import com.sunseat.app.ui.theme.MapRouteColors
@@ -71,6 +78,8 @@ fun SunSeatMap(state: MapState, modifier: Modifier = Modifier) {
         if (state.focus != null) " · " + stringResource(R.string.location_use_current) else ""
     val keyAvailable = mapKeyAvailable()
     var availability by remember(keyAvailable) { mutableStateOf(if (keyAvailable) MapAvailability.LOADING else MapAvailability.MISSING_KEY) }
+    var destinationPx by remember { mutableStateOf<Pair<Float, Float>?>(null) }
+    val onDestination: (Pair<Float, Float>?) -> Unit = { if (it != destinationPx) destinationPx = it }
     Box(modifier.semantics {
         if (!availability.unavailable) contentDescription = description
         this[MapAvailabilityKey] = availability
@@ -80,12 +89,15 @@ fun SunSeatMap(state: MapState, modifier: Modifier = Modifier) {
             !keyAvailable -> NativeMap(state, Modifier.fillMaxSize(), keyAvailable = false)
             LocalMapRenderer.current == MapRenderer.PREVIEW -> {
                 androidx.compose.runtime.LaunchedEffect(Unit) { availability = MapAvailability.AVAILABLE }
-                MapPlaceholder(state, Modifier.fillMaxSize())
+                MapPlaceholder(state, Modifier.fillMaxSize(), onDestination)
             }
-            else -> NativeMap(state, Modifier.fillMaxSize(), onAvailability = { availability = it })
+            else -> NativeMap(state, Modifier.fillMaxSize(), onAvailability = { availability = it }, onDestinationOnScreen = onDestination)
         }
         // Separate node so the existing map description stays stable; colour/line shape is never the only cue. 사용 불가면 읽지 않는다(#173).
         if (!availability.unavailable) routeSummary(state.routes.getOrNull(state.selectedRoute))?.let { summary -> Box(Modifier.matchParentSize().semantics { contentDescription = summary }) }
+        // #186(경로 요약 노드 뒤, 맨 위):  햇빛 따라가기(재생 중)에서 도착지가 보이는 지도 밖이면 보이는 영역 가장자리에 도착 방향을 둔다.
+        if (!availability.unavailable && state.routeProgress != null && !state.arrived && state.destination != null)
+            destinationPx?.let { (x, y) -> OffscreenDestinationCue(x, y, state.padding, Modifier.matchParentSize()) }
         // No separate legend: the 출발/도착 markers carry their own text (DESIGN 11.1) and a legend box covered them.
     }
 }
@@ -95,7 +107,12 @@ fun SunSeatMap(state: MapState, modifier: Modifier = Modifier) {
  * (줌 0에서 세계 폭 [PREVIEW_WORLD_DP]dp). 네이티브와 같은 [MapFitPolicy]·발자국·보이는 영역을 쓰므로 정수 줌 단계 차이가 그대로 보인다.
  */
 @Composable
-fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
+fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) = MapPlaceholder(state, modifier) {}
+
+/** [onDestinationOnScreen]: 지금 카메라에서 도착지의 화면 위치(px, 뷰 기준). 화면 밖 도착 표시(#186)가 쓴다. */
+@Composable
+internal fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier, onDestinationOnScreen: (Pair<Float, Float>?) -> Unit) {
+    val reportDestination by rememberUpdatedState(onDestinationOnScreen)
     val scheme = com.sunseat.app.ui.theme.LightScheme
     val sun = com.sunseat.app.ui.theme.LightSunSeatColors.onSunContainer
     val policy = remember { MapFitPolicy() }
@@ -182,7 +199,8 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
         val markBoxes = layout.filter { (mark, placement) -> !placement.hidden && !mark.soft }.map { (mark, placement) ->
             mark.kind.name to mark.variants[placement.variant].let { ScreenBox(mark.x + it.left, mark.y + it.top, mark.x + it.right, mark.y + it.bottom) } }
         val hiddenMarks = layout.filter { (_, placement) -> placement.hidden }.map { (mark, _) -> mark.kind.name to mark.fallback }
-        SideEffect { report() }
+        val destinationPx = shown?.let { cam -> state.destination?.let { cam.toScreen(it.location, width, height, scale) } }
+        SideEffect { report(); reportDestination(destinationPx) }
     Box(Modifier.fillMaxSize().semantics {
         this[MapFootprintBoxesKey] = boxes
         this[MapMarkBoxesKey] = markBoxes
@@ -370,4 +388,56 @@ internal fun routeSummary(route: com.sunseat.app.domain.Route?): String? {
         }
     }
     return stringResource(R.string.map_route_summary, parts.joinToString(stringResource(R.string.map_route_separator)))
+}
+
+/**
+ * #186: 도착지가 보이는 지도 밖일 때 가장자리에 두는 "도착 ↗" 표시. 도착 표식과 같은 색(경로 색 채움 + 흰 글자)이고 화살표가 도착지 쪽을 가리킨다.
+ * TalkBack은 "도착지는 화면 밖 오른쪽 위" 같은 방향 글로 읽는다. 누르는 행동은 없다.
+ */
+@Composable
+private fun OffscreenDestinationCue(x: Float, y: Float, overlays: MapPadding, modifier: Modifier = Modifier) {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val destination = stringResource(R.string.input_destination)
+    val labels = CueDirection.entries.associateWith { stringResource(cueDirectionLabel(it)) }
+    val template = stringResource(R.string.map_destination_offscreen)
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier) {
+        val visible = with(density) { ScreenBox(0f, overlays.top.toPx(), constraints.maxWidth.toFloat(), constraints.maxHeight - overlays.bottom.toPx()) }
+        // 방향(글·화살표)은 보이는 영역 가운데에서 본 도착지 쪽이다. 자리는 표시 크기를 잰 뒤 가장자리 안쪽에 둔다.
+        val probe = offscreenCue(x, y, visible, 0f) ?: return@BoxWithConstraints
+        val label = String.format(template, labels.getValue(probe.direction))
+        // 표시 크기를 잰 뒤 가장자리 안쪽 자리를 정한다. 자리가 없으면(보이는 영역이 표시보다 작음) 표시를 만들지 않는다.
+        var bodySize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+        val gap = with(density) { Spacing.xs.toPx() }
+        val half = maxOf(bodySize.width, bodySize.height) / 2f
+        // 차량(보이는 영역 가운데, 표식 크기)과 표시가 겹치지 않을 만큼 가운데에서 떨어지게 한다.
+        val vehicle = with(density) { Sizes.mapMarker.toPx() }
+        val cue = offscreenCue(x, y, visible, half + gap, keepClear = vehicle / 2 + gap + half) ?: return@BoxWithConstraints
+        androidx.compose.foundation.layout.Row(
+            Modifier.onSizeChanged { bodySize = it }
+                .offset { androidx.compose.ui.unit.IntOffset((cue.x - bodySize.width / 2f).toInt(), (cue.y - bodySize.height / 2f).toInt()) }
+                .clearAndSetSemantics { contentDescription = label }
+                // 지도 위 도착 표식(경로 색 채움)과 다르게 보이도록 흰 바탕 + 가는 테두리 칩으로 두고 화살표를 앞세운다(#186 디자인 리뷰).
+                .background(com.sunseat.app.ui.theme.LightScheme.surface, androidx.compose.foundation.shape.CircleShape)
+                .border(Sizes.hairline, com.sunseat.app.ui.theme.LightScheme.outline, androidx.compose.foundation.shape.CircleShape)
+                .padding(horizontal = Spacing.s, vertical = Spacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // 뒤로 화살표(왼쪽, 180°)를 도착지 쪽으로 돌린다.
+            androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_ms_arrow_back), null,
+                Modifier.size(Sizes.iconMedium).rotate(probe.angleDegrees - 180f), tint = MapRouteColors.transit)
+            androidx.compose.foundation.layout.Spacer(Modifier.width(Spacing.xs))
+            Text(destination, color = com.sunseat.app.ui.theme.LightScheme.onSurface, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
+        }
+    }
+}
+
+private fun cueDirectionLabel(direction: CueDirection): Int = when (direction) {
+    CueDirection.RIGHT -> R.string.map_direction_right
+    CueDirection.DOWN_RIGHT -> R.string.map_direction_down_right
+    CueDirection.DOWN -> R.string.map_direction_down
+    CueDirection.DOWN_LEFT -> R.string.map_direction_down_left
+    CueDirection.LEFT -> R.string.map_direction_left
+    CueDirection.UP_LEFT -> R.string.map_direction_up_left
+    CueDirection.UP -> R.string.map_direction_up
+    CueDirection.UP_RIGHT -> R.string.map_direction_up_right
 }
