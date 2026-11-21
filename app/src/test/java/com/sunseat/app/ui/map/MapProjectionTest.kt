@@ -30,7 +30,9 @@ class MapProjectionTest {
         assertTrue(policy.shouldFit(state.copy(cameraRevision = 2)))
         assertFalse(policy.shouldFit(state.copy(cameraRevision = 2, fitEnabled = false)))
         assertFalse(policy.shouldFit(state.copy(cameraRevision = 2)))
-        assertTrue(policy.shouldFit(state.copy(automaticFit = true, padding = MapPadding(bottom = 50.dp), cameraRevision = 2)))
+        // #168: 자동 맞춤 화면도 보이는 영역(여백)만 바뀌면 다시 맞추지 않는다(#148). 경로가 바뀌면 맞춘다.
+        assertFalse(policy.shouldFit(state.copy(automaticFit = true, padding = MapPadding(bottom = 50.dp), cameraRevision = 2)))
+        assertTrue(policy.shouldFit(state.copy(automaticFit = true, padding = MapPadding(bottom = 50.dp), cameraRevision = 2, selectedRoute = -1)))
     }
 
     @Test fun selectedRouteBoundsExcludeOtherCandidates() {

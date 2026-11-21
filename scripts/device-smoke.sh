@@ -11,7 +11,7 @@
 #   --no-capture      실패한 흐름의 화면 캡처를 남기지 않는다
 # 환경 변수: ADB(adb 경로), ANDROID_SERIAL, SMOKE_LOCK_DIR, SMOKE_OUT, SMOKE_FORCE_3D=1(에뮬레이터에서도 흐름 6·7 실행)
 #
-# 종료 코드: 0 모든 흐름 통과(건너뜀 포함), 1 실패한 흐름 있음, 2 사용법 오류, 3 기기를 쓸 수 없음(잠금 사용 중·연결 없음·잠금 화면)
+# 종료 코드: 0 모든 흐름 통과(건너뜀 포함), 1 실패한 흐름 있음, 2 사용법 오류, 3 기기를 쓸 수 없음(잠금 사용 중·연결 없음·잠금 화면), 4 입력하려는데 다른 앱이 앞에 있어 멈춤(공용 기기)
 #
 # 기기에 하는 일: 앱 강제 종료·실행, 탭·끌기·뒤로 가기, 글자 크기(font_scale)·회전(accelerometer_rotation, user_rotation)
 # 임시 변경. 바꾼 설정은 끝날 때(실패·중단 포함) 원래 값으로 되돌린다. adb connect/disconnect/kill-server는 쓰지 않는다.
@@ -68,7 +68,22 @@ if [ -z "$serial" ]; then
 fi
 printf '%s\n' "$devices" | grep -qxF "$serial" || { echo "연결된 기기 목록에 지정한 기기가 없다(adb devices 확인)" >&2; exit 3; }
 a() { "$ADB" -s "$serial" "$@"; }
-sh_() { "$ADB" -s "$serial" shell "$@" | tr -d '\r'; }
+# 공용 기기: 입력(누름·끌기·글자·키)을 보내기 전마다 앞에 있는 앱이 이 앱인지 본다. 다른 앱이 앞에 있으면 입력 없이 멈춘다(종료 코드 4).
+front_or_exit() {
+  "$ADB" -s "$serial" shell dumpsys activity activities 2>/dev/null | grep 'topResumedActivity' | grep -q "$PKG/" && return 0
+  printf '다른 앱이 앞에 있어 입력을 보내지 않고 멈춘다(%s)\n' "$*" >&2
+  exit 4
+}
+sh_() {
+  # 누른 채 이어지는 동작(motionevent)은 motion DOWN에서 한 번 보고, 시작할 때 화면 깨우기는 보지 않는다.
+  if [ "${1:-}" = input ]; then
+    case "$*" in
+      "input motionevent "*|"input keyevent KEYCODE_WAKEUP") ;;
+      *) front_or_exit "$*" ;;
+    esac
+  fi
+  "$ADB" -s "$serial" shell "$@" | tr -d '\r'
+}
 
 # ---------- 결과 폴더 ----------
 [ -n "$out" ] || out="${TMPDIR:-/tmp}/sun-seat-device-smoke/$(date +%Y%m%d-%H%M%S)"
@@ -164,8 +179,10 @@ fmt() { set -- $1; [ $# = 4 ] && echo "[$1,$2][$3,$4]" || echo "(없음)"; }
 center() { set -- $1; echo "$(( ($1 + $3) / 2 )) $(( ($2 + $4) / 2 ))"; }
 tap() { set -- $1; sh_ input tap $(( ($1 + $3) / 2 )) $(( ($2 + $4) / 2 )); }
 drag() { sh_ input touchscreen swipe "$1" "$2" "$3" "$4" "${5:-800}"; }   # 지도·시트는 600ms 이상 천천히 끈다
-motion() { sh_ input motionevent "$@" 2>&1 | grep -qiE "error|unknown|usage" && return 1; return 0; }   # 누른 채 움직이기(Android 11+)
+motion() { [ "$1" = DOWN ] && front_or_exit "motionevent DOWN"; sh_ input motionevent "$@" 2>&1 | grep -qiE "error|unknown|usage" && return 1; return 0; }   # 누른 채 움직이기(Android 11+)
 alive() { sh_ pidof "$PKG" | grep -q .; }
+# 지도 카메라 debug 로그(#168)의 마지막 줄에서 경로 외곽 상자와 표식 상자(px)만 꺼낸다. 로그가 없으면 빈 문자열.
+footprints() { "$ADB" -s "$serial" logcat -d -s SunSeatMapCamera:D 2>/dev/null | tr -d '\r' | grep -o 'route=.*' | tail -1; }
 wait_id() { # 아이디 시간(초)
   local end=$(( SECONDS + ${2:-15} ))
   while [ $SECONDS -lt $end ]; do dump; has_id "$1" && return 0; alive || return 1; sleep 1; done
@@ -264,7 +281,7 @@ fi
 
 if [ $list_ok = 1 ] && want 3; then
   begin 3 "시트를 약 60dp 올렸다 내림(#148)"
-  dump; s0=$(by_id candidates_sheet_handle); m0=$(map_band_px)
+  dump; s0=$(by_id candidates_sheet_handle); m0=$(map_band_px); f0=$(footprints)
   if [ -n "$s0" ]; then
     # 손을 떼지 않고 올린 채로 화면을 읽은 뒤 제자리로 내리고 뗀다(input motionevent). 떼고 다시 잡으면 시트가 걸림점으로 돌아가 버린다.
     read -r cx cy <<<"$(center "$s0")"; d=$(px 60)
@@ -287,9 +304,14 @@ if [ $list_ok = 1 ] && want 3; then
     check "$(lt $diff "$(px 8)")" "내린 뒤 손잡이 위치가 처음과 8dp 안(차이 $(dp $diff)dp)"
     check "$([ "$m2" -gt 0 ] && echo 0 || echo 1)" "지도 띠가 다시 보인다"
     alive; check $? "앱이 살아 있다"
-    note "지도 발자국(표식 위치) 비교: #168의 debug 로그가 들어온 뒤 켠다(지금은 시트 위치만 본다)"
+    # #168: 시트만 움직이면 카메라도 지도 내용도 그대로다. debug 로그(보이는 영역·발자국 상자 px)의 마지막 줄을 전후로 비교한다.
+    f2=$(footprints)
+    if [ -n "$f0" ] && [ -n "$f2" ]; then
+      note "지도 발자국 처음 [$f0] → 내린 뒤 [$f2]"
+      check "$([ "$f0" = "$f2" ] && echo 0 || echo 1)" "시트를 올렸다 내려도 지도 표식 위치가 그대로다(#148)"
+    else note "지도 카메라 debug 로그(SunSeatMapCamera)가 없어 지도 발자국은 비교하지 않았다(release 빌드이거나 지도를 쓸 수 없음)"; fi
   else check 1 "손잡이 노드가 있다"; fi
-  finish "손잡이 $(fmt "$s0") → $(fmt "${s2:-}") (지도 발자국 비교는 #168 뒤 활성화)"
+  finish "손잡이 $(fmt "$s0") → $(fmt "${s2:-}")"
 fi
 
 if [ $list_ok = 1 ] && { want 2 || want 4 || want 5; }; then

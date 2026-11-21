@@ -3,6 +3,7 @@ package com.sunseat.app.ui.map
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
@@ -11,6 +12,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.remember
@@ -54,15 +57,19 @@ fun SunSeatMap(state: MapState, modifier: Modifier = Modifier) {
     }
 }
 
-/** 네이티브 지도 없이 실제 경로 좌표를 보여 주는 테스트 렌더러. */
+/**
+ * 네이티브 지도 없이 실제 경로 좌표를 보여 주는 테스트 렌더러. 카메라 정책(#168)이 정한 가운데 좌표·정수 줌을 Web Mercator로 투영한다
+ * (줌 0에서 세계 폭 [PREVIEW_WORLD_DP]dp). 네이티브와 같은 [MapFitPolicy]·발자국·보이는 영역을 쓰므로 정수 줌 단계 차이가 그대로 보인다.
+ */
 @Composable
 fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
     val scheme = com.sunseat.app.ui.theme.LightScheme
     val sun = com.sunseat.app.ui.theme.LightSunSeatColors.onSunContainer
-    val fitPolicy = remember { MapFitPolicy() }
+    val policy = remember { MapFitPolicy() }
     val camera = remember { PreviewCamera() }
-    var pan by remember { mutableStateOf(Offset.Zero) }
-    val onGesture by rememberUpdatedState(state.onGesture)
+    // 끌기로 카메라가 바뀌면 다시 그리고 의미 속성(발자국 상자)을 갱신한다.
+    var moves by remember { mutableIntStateOf(0) }
+    val latest by rememberUpdatedState(state)
     val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
     val labelStyle = androidx.compose.material3.MaterialTheme.typography.labelMedium
     val originLabel = stringResource(R.string.input_origin)
@@ -70,55 +77,65 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
     val busLabel = stringResource(R.string.common_bus)
     val subwayLabel = stringResource(R.string.common_subway)
     val moreLines = stringResource(R.string.map_line_more)
-    when (fitPolicy.camera(state)) {
-        MapCamera.FIT_ROUTE -> { camera.points = state.points(); camera.padding = state.padding; camera.revision++ }
-        // Drawing follows the vehicle each frame (projectionBase); the framed bounds stay as the camera once following stops.
-        MapCamera.FRAME_FOLLOW -> { camera.points = state.followTarget?.let { followBounds(it) }.orEmpty(); camera.padding = state.padding; camera.revision++ }
-        MapCamera.NONE -> Unit
-    }
-    LaunchedEffect(camera.revision, state.center) { pan = Offset.Zero }
-    val latest by rememberUpdatedState(state)
-    // #143: 정류장 노선 이름표가 정류장에서 뻗는 폭. 그리기와 같은 글자 측정으로 맞춤 틀 좌우 여백을 정한다.
     val density = androidx.compose.ui.platform.LocalDensity.current
-    // 차량을 따라갈 때(#146)는 이름표 여백을 두지 않는다(MapFitPolicy.labelMargins, 네이티브와 같음).
-    val labelSides = state.routes.getOrNull(state.selectedRoute)?.takeIf { fitPolicy.labelMargins }?.let { route ->
-        with(density) {
-            // #153: 첫 승차 정류장 이름표는 출발 표식 밖으로 밀린다.
-            val clearance = state.origin?.let { placeMarkerWidth(textMeasurer.measure(originLabel, labelStyle).size.width.toFloat(), Sizes.mapMarker.toPx(), Sizes.mapMarkerTail.toPx(), Spacing.xs.toPx()) / 2 + Spacing.xs.toPx() } ?: 0f
-            labelExtents(RouteLinePolicy.stops(route), Sizes.mapStopMarker.toPx() / 2, clearance) { stop ->
-                val name = when {
-                    stop.lines.isEmpty() -> if (stop.mode == Mode.SUBWAY) subwayLabel else busLabel
-                    stop.lines.size == 1 -> stop.lines.first()
-                    else -> String.format(moreLines, stop.lines.first(), stop.lines.size - 1)
-                }
-                // 이름표 상자 폭 + 화면 가장자리와의 틈(Spacing.xs). 반올림·테두리로 가장자리에 닿지 않게 한다.
-                textMeasurer.measure(name, labelStyle).size.width + Spacing.xs.toPx() * 3
-            }
+    val scale = remember(density.density) { MapScale(PREVIEW_WORLD_DP * density.density) }
+    fun stopName(stop: StopMarker) = when {
+        stop.lines.isEmpty() -> if (stop.mode == Mode.SUBWAY) subwayLabel else busLabel
+        stop.lines.size == 1 -> stop.lines.first()
+        else -> String.format(moreLines, stop.lines.first(), stop.lines.size - 1)
+    }
+    // 발자국 크기: 그리기와 같은 글자 측정(#143 이름표 폭 + 가장자리 틈, #151 이름표 높이 + 위아래 틈, #153 첫 승차 이름표는 출발 표식 밖).
+    val sizes = with(density) {
+        val pin = { text: String -> placeMarkerWidth(textMeasurer.measure(text, labelStyle).size.width.toFloat(), Sizes.mapMarker.toPx(), Sizes.mapMarkerTail.toPx(), Spacing.xs.toPx()) }
+        val originWidth = pin(originLabel)
+        MarkerSizes(
+            markerHeight = Sizes.mapMarker.toPx() + Spacing.xs.toPx(),
+            originWidth = originWidth, destinationWidth = pin(destinationLabel),
+            stopRadius = Sizes.mapStopMarker.toPx() / 2,
+            labelHeight = maxOf(Sizes.mapLabelHeight.toPx(), textMeasurer.measure("0", labelStyle).size.height.toFloat()) + Spacing.xs.toPx() * 2,
+            boardClearance = if (state.origin != null) originWidth / 2 + Spacing.xs.toPx() else 0f,
+            labelWidth = { stop -> textMeasurer.measure(stopName(stop), labelStyle).size.width + Spacing.xs.toPx() * 3 },
+        )
+    }
+    fun report() {
+        val status = CameraStatus(policy.mode, policy.fits)
+        if (status != camera.reported) { camera.reported = status; latest.onCameraStatus?.invoke(status) }
+    }
+    BoxWithConstraints(modifier.pointerInput(Unit) {
+        // Map picker (#85): the pin is the view centre, so report the camera centre when a drag ends.
+        fun reportCentre() { val idle = latest.onCameraIdle ?: return; camera.shown?.let { idle(it.center) } }
+        detectDragGestures(onDragEnd = { reportCentre() }, onDragCancel = { reportCentre() }) { change, drag ->
+            change.consume()
+            val shown = camera.shown ?: return@detectDragGestures
+            val w = size.width.toFloat(); val h = size.height.toFloat()
+            val moved = shown.copy(center = shown.fromScreen(w / 2 - drag.x, h / 2 - drag.y, w, h, scale))
+            camera.position = moved; camera.shown = moved
+            policy.gesture(); moves++
+            latest.onGesture()
+            report()
         }
-    } ?: (0f to 0f)
-    val latestLabels by rememberUpdatedState(labelSides)
-    // #151: 정류장 이름표 상자 높이(그리기와 같은 규칙) + 위아래 가장자리 틈(Spacing.xs). 이름표가 없으면 0.
-    val stopLabelHeight = if (labelSides.first > 0f || labelSides.second > 0f) with(density) { maxOf(Sizes.mapLabelHeight.toPx(), textMeasurer.measure("0", labelStyle).size.height.toFloat()) + Spacing.xs.toPx() * 2 } else 0f
-    val latestLabelHeight by rememberUpdatedState(stopLabelHeight)
-    Box(modifier.pointerInput(Unit) {
-        // Map picker (#85): the pin is the view centre, so report the coordinate under it when a drag ends.
-        // Uses the same projection as drawing, computed from layout size (drawing may not run in tests).
-        fun reportCentre() {
-            val idle = latest.onCameraIdle ?: return
-            val width = size.width.toFloat()
-            val height = size.height.toFloat()
-            val frame = previewFitFrame(camera.padding, width, height, latestLabels, latestLabelHeight)
-            val top = frame.top
-            val projection = MapProjection(latest.projectionBase(camera.points), (width - frame.left - frame.right).coerceAtLeast(1f), (height - top - frame.bottom).coerceAtLeast(1f), frame.inset)
-            idle(projection.unproject(width / 2 - frame.left - pan.x, height / 2 - top - pan.y))
-        }
-        detectDragGestures(onDragEnd = { reportCentre() }, onDragCancel = { reportCentre() }) { change, drag -> change.consume(); pan += drag; onGesture() }
     }) {
+        val width = if (constraints.hasBoundedWidth) constraints.maxWidth.toFloat() else 0f
+        val height = if (constraints.hasBoundedHeight) constraints.maxHeight.toFloat() else 0f
+        val viewport = with(density) { Viewport(width, height, top = state.padding.top.toPx(), bottom = state.padding.bottom.toPx()) }
+        val footprints = state.footprints(sizes)
+        val gap = with(density) { fitGap(viewport, Sizes.mapInset.toPx(), Spacing.s.toPx(), sizes.markerHeight) }
+        policy.update(state, CameraInput(viewport, scale, footprints, state.fitTarget, gap, camera.position))?.let { camera.position = it }
+        // 정책이 아직 카메라를 정하지 않았으면(맞춤 대기) 뷰 전체에 맞춘 모습을 보인다. 맞춤 횟수에는 넣지 않는다.
+        val whole = Viewport(width, height)
+        camera.shown = camera.position ?: fitCamera(footprints, whole, scale, gap)
+            ?: (state.center ?: state.focus)?.let { if (whole.ready) centerCamera(it.location, FIT_MAX_ZOOM, whole, scale) else null }
+        val shown = camera.shown
+        moves.let { } // 끌기 뒤 다시 구성한다.
+        val boxes = shown?.let { cam -> footprints.map { cam.screenBox(it, width, height, scale) } }.orEmpty()
+        SideEffect { report() }
+    Box(Modifier.fillMaxSize().semantics {
+        this[MapFootprintBoxesKey] = boxes
+        this[MapVisibleAreaKey] = ScreenBox(viewport.visibleLeft, viewport.visibleTop, viewport.visibleRight, viewport.visibleBottom)
+    })
     Canvas(Modifier.fillMaxSize().background(scheme.surfaceContainer)) {
-        val frame = previewFitFrame(camera.padding, size.width, size.height, labelSides, stopLabelHeight)
-        val top = frame.top
-        val projection = MapProjection(state.projectionBase(camera.points), (size.width - frame.left - frame.right).coerceAtLeast(1f), (size.height - top - frame.bottom).coerceAtLeast(1f), frame.inset)
-        fun position(point: com.sunseat.app.domain.LatLng): Offset = projection.project(point).let { Offset(it.first + frame.left, it.second + top) + pan }
+        val cam = camera.shown ?: CameraPosition(com.sunseat.app.domain.LatLng(37.5665, 126.978), FIT_MAX_ZOOM)
+        fun position(point: com.sunseat.app.domain.LatLng): Offset = cam.toScreen(point, size.width, size.height, scale).let { Offset(it.first, it.second) }
         val grid = Sizes.mapInset.toPx()
         var x = 0f
         while (x < size.width) { drawLine(scheme.outlineVariant, Offset(x, 0f), Offset(x, size.height), Sizes.hairline.toPx()); x += grid }
@@ -232,14 +249,14 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
     }
 }
 
-/** 테스트 지도가 투영의 기준으로 삼는 좌표: 카메라 요청(지도 선택) → 현재 위치 초점 → 따라가는 차량 둘레(#146) → 맞춤 좌표. */
-private fun MapState.projectionBase(fitted: List<com.sunseat.app.domain.LatLng>) =
-    (center ?: focus)?.let { listOf(it.location) } ?: followTarget?.let { followBounds(it) } ?: fitted
+/** 테스트 지도의 줌 0 세계 폭(dp). 256dp 타일 하나가 세계 전체다(Web Mercator 관례). */
+internal const val PREVIEW_WORLD_DP = 256.0
 
+/** 테스트 지도 카메라. [position]은 정책·끌기가 정한 카메라, [shown]은 지금 그리는 카메라(맞춤 전 대체 포함). */
 private class PreviewCamera {
-    var revision = 0L
-    var points: List<com.sunseat.app.domain.LatLng> = emptyList()
-    var padding: MapPadding = MapPadding()
+    var position: CameraPosition? = null
+    var shown: CameraPosition? = null
+    var reported: CameraStatus? = null
 }
 
 /** [RouteLineSpec]을 테스트 렌더러에 그린다. 테두리 → 속 선 → 진행 방향 쉐브론 순서(네이티브와 같은 모양). */
@@ -299,7 +316,3 @@ internal fun routeSummary(route: com.sunseat.app.domain.Route?): String? {
     }
     return stringResource(R.string.map_route_summary, parts.joinToString(stringResource(R.string.map_route_separator)))
 }
-
-/** 테스트 지도의 맞춤 틀. 실제 SDK 지도(NativeMap)와 같은 [fitFrame] 규칙이다(#138). */
-private fun androidx.compose.ui.unit.Density.previewFitFrame(padding: MapPadding, width: Float, height: Float, labels: Pair<Float, Float>, labelHeight: Float): FitFrame =
-    fitFrame(padding.top.toPx(), padding.bottom.toPx(), width, height, Sizes.mapInset.toPx(), com.sunseat.app.ui.theme.Spacing.s.toPx(), Sizes.mapMarker.toPx() + com.sunseat.app.ui.theme.Spacing.xs.toPx(), labels.first, labels.second, labelHeight)
