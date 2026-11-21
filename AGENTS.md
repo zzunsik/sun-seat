@@ -159,9 +159,9 @@
 
 ### 비밀 정보
 
-- `KAKAO_NATIVE_APP_KEY`, `SUNSEAT_API_BASE_URL`, `sdk.dir`, 서명 키 정보는 `local.properties`에만 둔다. 이 파일과 키 파일(`*.jks`, `*.keystore`)은 커밋하지 않는다. CI는 빈 키·주소로 빌드하고 저장소 Secrets를 쓰지 않는다.
+- `KAKAO_NATIVE_APP_KEY`, 게이트웨이 주소(`SUNSEAT_API_BASE_URL_DEBUG`·`_RELEASE`, 릴리스 워크플로는 같은 이름의 환경 변수로도 넘길 수 있다), `sdk.dir`, 서명 키 정보는 `local.properties`에만 둔다. 이 파일과 키 파일(`*.jks`, `*.keystore`)은 커밋하지 않는다. CI는 빈 키·주소로 빌드하고 저장소 Secrets를 쓰지 않는다. 게이트웨이 배포(`deploy-api.yml`)만 GitHub Environment 시크릿을 쓴다(아래 "저장소 설정").
 - 카카오 REST API 키는 APK에 넣지 않는다. 앱 API 게이트웨이(`workers/api`, Cloudflare Workers)의 시크릿(`wrangler secret put KAKAO_REST_API_KEY`)에만 두고, 앱은 게이트웨이를 부른다(#189). 로컬 `wrangler dev`용 `workers/api/.dev.vars`도 커밋하지 않는다. CI의 `check-apk-secrets.sh`가 빌드 산출물에 키 경로가 없는지 확인한다.
-- 게이트웨이 주소(`https://api.<하위 도메인>.workers.dev`)는 비밀이 아니지만 저장소에 고정하지 않고 빌드 설정으로 넣는다. 새 외부 API 키도 같은 방식(게이트웨이 경로 묶음 + 시크릿)으로 붙인다.
+- 게이트웨이 주소(운영 `https://api.<하위 도메인>.workers.dev`, 개발 `https://api-dev.<하위 도메인>.workers.dev`)는 비밀이 아니지만 저장소에 고정하지 않고 빌드 설정으로 넣는다. 새 외부 API 키도 같은 방식(게이트웨이 경로 묶음 + 시크릿)으로 붙인다.
 - 워크플로에서 비밀 값이나 환경 전체를 출력하지 않는다(`echo $SECRET`, `env`, 실패 시 설정 덤프).
 - 앱에 들어가는 키(Kakao 네이티브 앱 키)는 APK에서 꺼낼 수 있다고 본다. Kakao 개발자 콘솔에서 패키지명과 서명 키 해시로 사용을 제한한다.
 - 키가 유출되면 먼저 키를 폐기·재발급하고, 히스토리 수정 여부는 그다음에 정한다. 이슈에는 키 값 없이 "폐기 완료"만 적는다.
@@ -190,6 +190,7 @@
 - 외부 액션은 커밋 SHA로 고정하고 주석에 버전을 적는다(`uses: owner/action@<sha> # v1.2.3`). 업데이트는 Dependabot PR로 받는다. 저장소 설정이 SHA 고정을 강제하고, 허용 목록 밖의 액션은 실행되지 않는다.
 - `actions/checkout`에는 `persist-credentials: false`를 준다.
 - 포크에서 온 코드를 시크릿이나 쓰기 권한과 함께 실행하는 `pull_request_target`, `workflow_run`을 쓰지 않는다.
+- 배포 시크릿은 저장소 Secrets가 아니라 배포 브랜치를 제한한 GitHub Environment에 두고, 시크릿이 필요한 단계에만 `env:`로 넘긴다. 배포 워크플로는 `develop`·`main` push와 수동 실행에서만 돈다(#191).
 - `${{ github.event.* }}`(PR 제목, 브랜치 이름 등)를 `run:` 스크립트에 직접 넣지 않는다. `env:`로 받아 변수로 쓴다.
 - 아티팩트에는 테스트 리포트, 스크린샷 비교 결과, 기준 이미지 기록만 올리고 `retention-days`를 준다. APK, `local.properties`, 빌드 설정 파일은 올리지 않는다.
 
@@ -221,3 +222,9 @@ GitHub 설정으로 강제하는 것들이다. 설정을 바꾸면 이 절도 �
   - 처음 기여하는 사람의 PR은 승인해야 워크플로가 돈다.
   - 아티팩트와 로그는 14일 보관한다.
 - `CODEOWNERS`가 워크플로·작업 규칙·빌드 설정의 소유자를 정한다.
+- 앱 API 게이트웨이(`workers/api`) 자동 배포(#191, `.github/workflows/deploy-api.yml`, 절차는 `workers/api/README.md` "배포"):
+  - GitHub Environment `api-development`(배포 브랜치 `develop`만) → Worker `api-dev`(디버그 빌드), `api-production`(배포 브랜치 `main`만) → Worker `api`(릴리스 빌드).
+  - 각 환경에 시크릿 `CLOUDFLARE_API_TOKEN`(이 계정의 Workers Scripts 편집만), 변수 `CLOUDFLARE_ACCOUNT_ID`를 둔다. 토큰 교체는 저장소 소유자가 한다.
+  - 카카오 REST 키는 Worker마다 `wrangler secret put`으로 따로 넣는다. 워크플로는 키를 다루지 않는다.
+  - 릴리스 순서: 릴리스 PR `main` 머지 → 운영 게이트웨이 배포·스모크 통과 확인 → 태그 → APK 릴리스(#118). 배포가 실패하면 태그를 달지 않는다.
+  - 운영 배포 경로는 이 워크플로가 `main`에 처음 들어가는 첫 릴리스 PR 머지 때 처음 검증된다(`api-production`은 `main`에서만 실행되고, 수동 실행도 `main`에 있는 워크플로 파일로 돈다). 그 릴리스에서는 `main`의 `Deploy API gateway` 실행이 성공했는지 Actions에서 보고 나서 태그를 단다.

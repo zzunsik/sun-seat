@@ -4,8 +4,10 @@ import { type Env, GROUPS, RETRY_AFTER_SECONDS, handleRequest, resolve } from ".
 import wranglerSource from "../wrangler.jsonc?raw";
 
 /** wrangler.jsonc(주석 포함 JSON)를 읽는다. 주석은 한 줄 전체로만 쓴다는 가정. */
-const wrangler = JSON.parse(wranglerSource.replace(/^\s*\/\/.*$/gm, "")) as {
-  ratelimits: { name: string; simple: { limit: number; period: number } }[];
+type RateLimitConfig = { name: string; namespace_id: string; simple: { limit: number; period: number } };
+type WorkerConfig = { name: string; secrets?: { required?: string[] }; ratelimits: RateLimitConfig[] };
+const wrangler = JSON.parse(wranglerSource.replace(/^\s*\/\/.*$/gm, "")) as WorkerConfig & {
+  env: Record<string, Partial<WorkerConfig>>;
 };
 const kakaoLimit = wrangler.ratelimits.find((r) => r.name === "KAKAO_RATE_LIMITER")!.simple;
 
@@ -313,5 +315,28 @@ describe("배포 설정으로 실행", () => {
     // 다른 IP는 영향을 받지 않는다.
     const other = await exports.default.fetch(get(req("local/search/keyword"), { headers: { "cf-connecting-ip": "198.51.100.201" } }));
     expect(other.status).toBe(200);
+  });
+});
+
+/** 운영(최상위)과 개발(env.development) Worker는 같은 허용 목록·호출 제한을 쓴다(#191). */
+describe("배포 환경", () => {
+  const dev = wrangler.env.development!;
+
+  it("운영은 api, 개발은 api-dev로 배포된다", () => {
+    expect(wrangler.name).toBe("api");
+    expect(dev.name).toBe("api-dev");
+    expect(Object.keys(wrangler.env)).toEqual(["development"]);
+  });
+
+  it("개발 환경은 운영과 같은 호출 제한 바인딩·상한·기간을 쓰고 카운터(namespace_id)만 따로 쓴다", () => {
+    // ratelimits는 환경으로 이어지지 않는다. 빠지면 개발 Worker에 호출 제한이 없게 된다.
+    expect(dev.ratelimits?.map((r) => [r.name, r.simple])).toEqual(wrangler.ratelimits.map((r) => [r.name, r.simple]));
+    const prodIds = wrangler.ratelimits.map((r) => r.namespace_id);
+    for (const r of dev.ratelimits!) expect(prodIds).not.toContain(r.namespace_id);
+  });
+
+  it("개발 환경도 카카오 키 시크릿을 필수로 둔다", () => {
+    expect(wrangler.secrets?.required).toEqual(["KAKAO_REST_API_KEY"]);
+    expect(dev.secrets?.required).toEqual(wrangler.secrets?.required);
   });
 });
