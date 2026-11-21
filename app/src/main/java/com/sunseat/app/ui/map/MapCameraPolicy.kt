@@ -155,7 +155,7 @@ sealed interface CameraMode {
 }
 
 /** 맞춘 대상. */
-enum class FitTarget { SELECTED_ROUTE, ALL_ROUTES, ENDPOINTS }
+enum class FitTarget { SELECTED_ROUTE, ALL_ROUTES, ENDPOINTS, VEHICLE }
 
 /**
  * 맞춤 요청 이유. [overridesUserMove]가 참이면 사용자가 지도를 옮긴 뒤에도 맞춘다(DESIGN 12.3:
@@ -223,11 +223,22 @@ internal data class CameraInput(
     val gap: Float = 0f,
     val current: CameraPosition? = null,
     val followTarget: LatLng? = null,
+    /**
+     * 맞춤 대상을 경로 전체 대신 이 좌표 둘레(따라가기와 같은 2×반경)로 한다(#183: 햇빛 따라가기의 낮은 지도 띠에서 따라가기를 꺼도
+     * 긴 경로 전체 맞춤은 경로가 수십 px로 줄어 알아볼 수 없었다). 재생 중 차량 위치, 도착 뒤에는 도착지(#152).
+     */
+    val fitAround: LatLng? = null,
     val followRadiusMeters: Double = FOLLOW_RADIUS_METERS,
     val defaultZoom: Int = FIT_MAX_ZOOM,
     /** 줌마다 다른 발자국(표식 배치 결과, #170). 있으면 [footprints] 대신 쓴다. */
     val footprintsAt: ((Int) -> List<Footprint>)? = null,
 )
+
+/** [at] 둘레 2×반경 범위를 보이는 영역에 넣는 가장 큰 줌에서 [at]을 보이는 영역 가운데에 둔다(#146 따라가기, #183 재생 중 맞춤). */
+private fun frameAround(at: LatLng, input: CameraInput): CameraPosition? {
+    val zoom = fitCamera(followBounds(at, input.followRadiusMeters).map { Footprint(it) }, input.viewport, input.scale, 0f)?.zoom ?: return null
+    return centerCamera(at, zoom, input.viewport, input.scale)
+}
 
 /** 정책 결과: 옮길 카메라(없으면 그대로)와 다음 모드. */
 internal data class CameraDecision(val move: CameraPosition?, val mode: CameraMode)
@@ -239,12 +250,8 @@ internal fun cameraPolicy(mode: CameraMode, request: CameraRequest, input: Camer
     val (action, next) = cameraAction(mode, request)
     val move = when (action) {
         CameraAction.NONE -> null
-        CameraAction.FIT -> input.footprintsAt?.let { fitCamera(it, input.viewport, input.scale, input.gap) } ?: fitCamera(input.footprints, input.viewport, input.scale, input.gap)
-        CameraAction.FRAME_FOLLOW -> (if (request is CameraRequest.FollowStart) request.target else input.followTarget)?.let { at ->
-            // 차량 둘레 2×반경 범위를 보이는 영역에 넣는 줌에서 차량을 보이는 영역 가운데에 둔다(#146).
-            val zoom = fitCamera(followBounds(at, input.followRadiusMeters).map { Footprint(it) }, input.viewport, input.scale, 0f)?.zoom ?: return@let null
-            centerCamera(at, zoom, input.viewport, input.scale)
-        }
+        CameraAction.FIT -> input.fitAround?.let { at -> frameAround(at, input) } ?: input.footprintsAt?.let { fitCamera(it, input.viewport, input.scale, input.gap) } ?: fitCamera(input.footprints, input.viewport, input.scale, input.gap)
+        CameraAction.FRAME_FOLLOW -> (if (request is CameraRequest.FollowStart) request.target else input.followTarget)?.let { at -> frameAround(at, input) }
         CameraAction.RECENTER_FOLLOW -> (request as CameraRequest.FollowTo).target.let { at ->
             input.current?.let { centerCamera(at, it.zoom, input.viewport, input.scale) }
                 ?: fitCamera(followBounds(at, input.followRadiusMeters).map { Footprint(it) }, input.viewport, input.scale, 0f)?.let { centerCamera(at, it.zoom, input.viewport, input.scale) }
