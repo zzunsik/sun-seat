@@ -212,6 +212,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
             target.setOnCameraMoveStartListener { _, type -> if (type != GestureType.Unknown) gesture() }
             target.setOnCameraMoveEndListener { moved, position, _ ->
                 if (position.zoomLevel != decorZoom) view.post { if (map === moved) decorate(moved) }
+                else view.post { if (map === moved) placeNames(moved) } // 회전 등 줌 밖의 카메라 변화(#153)
                 // Map picker (#85): the pin sits at the view centre with no padding, so the camera target is the pin.
                 cameraIdle?.let { report -> val at = LatLng(position.position.latitude, position.position.longitude); view.post { if (map === moved) report(at) } }
             }
@@ -331,11 +332,13 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         lastCursor = position
         coverState = state
         uncover()
+        // #153: 새로 만든 이름표·차량에 가려 숨기거나 다시 보인 표식에 맞춰 이름표 자리를 다시 잰다(바뀐 것만 다시 그린다).
+        placeNames(target)
     }
 
     /**
      * #153: 출발·도착 표식 밑에 들어간 정류장 노선 이름표를 표식 바깥으로 민다([stopLabelOffset], 테스트 지도와 같은 규칙).
-     * 화면에서 표식과 정류장 사이 거리는 줌에 따라 바뀌므로 [decorate]가 줌이 바뀔 때 다시 잰다.
+     * 화면에서 표식과 정류장 사이 거리는 카메라에 따라 바뀌므로 [update]마다와 카메라 이동이 끝날 때 다시 잰다.
      */
     private fun placeNames(target: KakaoMap) {
         if (stopNames.isEmpty()) return
@@ -349,7 +352,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
             val offset = stopLabelOffset(name.stop.labelOnLeft, paint.measureText(name.name) + metrics.textPadding * 2, height, metrics.stop / 2, boxes, metrics.textPadding, maxPush).toInt()
             if (offset != name.offset) {
                 name.offset = offset
-                name.label.setStyles(LabelStyle.from(nameIcon(name.name, name.stop.color.toArgb(), name.stop.labelOnLeft, offset)).setApplyDpScale(false).setAnchorPoint(if (name.stop.labelOnLeft) 1f else 0f, .5f))
+                name.label.changeStyles(com.kakao.vectormap.label.LabelStyles.from(LabelStyle.from(nameIcon(name.name, name.stop.color.toArgb(), name.stop.labelOnLeft, offset)).setApplyDpScale(false).setAnchorPoint(if (name.stop.labelOnLeft) 1f else 0f, .5f)))
             }
         }
     }
