@@ -24,6 +24,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.liveRegion
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -58,7 +60,7 @@ internal fun NativeMap(state: MapState, modifier: Modifier = Modifier, keyAvaila
     if (!keyAvailable) {
         val unavailable by rememberUpdatedState(state.onUnavailable)
         androidx.compose.runtime.LaunchedEffect(Unit) { report(MapAvailability.MISSING_KEY); unavailable() }
-        MapNotice(R.string.map_missing_key, modifier)
+        MapNotice(state.unavailableMessage ?: R.string.map_missing_key, modifier, announce = true)
         return
     }
     val context = LocalContext.current
@@ -115,17 +117,19 @@ internal fun NativeMap(state: MapState, modifier: Modifier = Modifier, keyAvaila
         }
         if (failed) {
             androidx.compose.runtime.LaunchedEffect(Unit) { report(MapAvailability.ERROR); latest.onUnavailable() }
-            MapNotice(R.string.map_error, Modifier.fillMaxSize())
+            MapNotice(state.unavailableMessage ?: R.string.map_error, Modifier.fillMaxSize(), announce = true)
         }
         else if (!ready) MapNotice(R.string.map_loading, Modifier.fillMaxSize())
     }
 }
 
 @Composable
-internal fun MapNotice(message: Int, modifier: Modifier = Modifier) {
+internal fun MapNotice(message: Int, modifier: Modifier = Modifier, announce: Boolean = false) {
     androidx.compose.material3.Surface(modifier, color = SunSeatTheme.scheme.surfaceContainer) {
         Box(Modifier.padding(Spacing.l), contentAlignment = Alignment.Center) {
-            Text(stringResource(message), color = SunSeatTheme.scheme.onSurfaceVariant, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
+            // #173: 사용 불가 안내는 지도 노드가 낭독 출처다. 화면이 열린 뒤 지도가 실패해도 이유가 들리게 polite 라이브 영역으로 둔다.
+            Text(stringResource(message), Modifier.then(if (announce) Modifier.semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite } else Modifier),
+                color = SunSeatTheme.scheme.onSurfaceVariant, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         }
     }
 }

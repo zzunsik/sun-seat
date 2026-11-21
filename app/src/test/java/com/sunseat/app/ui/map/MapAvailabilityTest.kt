@@ -44,7 +44,8 @@ import org.robolectric.annotation.Config
 class MapAvailabilityTest {
     @get:Rule val compose = createComposeRule()
     private fun text(id: Int) = ApplicationProvider.getApplicationContext<android.content.Context>().getString(id)
-    private val notice get() = text(R.string.map_missing_key)
+    private var notice = ""
+    private fun notice(id: Int) { notice = text(id) }
 
     private fun render(content: @Composable () -> Unit) {
         compose.setContent {
@@ -57,8 +58,12 @@ class MapAvailabilityTest {
     private fun noticeCount() = compose.onAllNodes(hasText(notice, substring = true) or hasContentDescription(notice, substring = true)).fetchSemanticsNodes().size
     private fun routeDescriptions() = compose.onAllNodes(hasContentDescription("경로 지도", substring = true) or hasContentDescription("선택 경로:", substring = true)).fetchSemanticsNodes().size
 
-    private fun assertSingleNotice() {
+    private fun assertSingleNotice(id: Int = R.string.map_missing_key) {
+        notice(id)
         assertEquals("the unavailable notice is read once", 1, noticeCount())
+        // 화면이 열린 뒤 지도가 실패해도 이유가 들리게 안내는 polite 라이브 영역이다.
+        val node = compose.onNode(hasText(notice, substring = true)).fetchSemanticsNode()
+        assertEquals(androidx.compose.ui.semantics.LiveRegionMode.Polite, node.config[androidx.compose.ui.semantics.SemanticsProperties.LiveRegion])
         assertEquals("no route map description or summary for a map that is not there", 0, routeDescriptions())
         assertEquals(MapAvailability.MISSING_KEY, compose.onNode(SemanticsMatcher.keyIsDefined(MapAvailabilityKey)).fetchSemanticsNode().config[MapAvailabilityKey])
     }
@@ -68,7 +73,9 @@ class MapAvailabilityTest {
         val pin = LatLng(37.56, 126.98)
         val pick = MapPickState(EndpointField.DESTINATION, pin, MapFocus(pin, 1), status = PickAddressStatus.NONE).copy(mapUnavailable = true)
         render { MapPickScreen(pick, InputActions(), NamedPlace("서울역", LatLng(37.5547, 126.9707)), null) }
-        assertSingleNotice()
+        // 지도 선택은 상태만 말하고(행동은 아래 패널) 다른 화면의 "앱 업데이트…"·"자리 추천…" 줄을 쓰지 않는다.
+        assertSingleNotice(R.string.map_unavailable_short)
+        assertEquals(0, compose.onAllNodes(hasText(text(R.string.map_missing_key), substring = true)).fetchSemanticsNodes().size)
         // 아래 패널은 다음 행동만 말한다(같은 안내를 두 번 읽지 않는다).
         assertEquals(1, compose.onAllNodes(hasText(text(R.string.map_pick_unavailable))).fetchSemanticsNodes().size)
         assertEquals(0, compose.onAllNodes(hasContentDescription("가운데 핀 위치", substring = true)).fetchSemanticsNodes().size)

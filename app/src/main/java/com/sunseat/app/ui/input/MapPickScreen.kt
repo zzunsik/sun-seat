@@ -103,6 +103,7 @@ internal fun MapPickScreen(
                             onGesture = actions.onPickCameraMoving,
                             onCameraIdle = actions.onPickCameraIdle,
                             onUnavailable = actions.onPickMapUnavailable,
+                            unavailableMessage = R.string.map_unavailable_short,
                         ),
                         Modifier.fillMaxSize(),
                     )
@@ -125,7 +126,8 @@ internal fun MapPickScreen(
                 verticalArrangement = Arrangement.spacedBy(Spacing.s),
             ) {
                 if (pick.mapUnavailable) {
-                    Text(stringResource(R.string.map_pick_unavailable), Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurface)
+                    // #173: 이유는 지도 노드(라이브 영역)가 말하고 이 줄은 다음 행동만 말한다(같은 안내를 두 번 알리지 않는다).
+                    Text(stringResource(R.string.map_pick_unavailable), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurface)
                 } else {
                     Column(Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
                         Text(headline, style = MaterialTheme.typography.titleMedium, color = scheme.onSurface)

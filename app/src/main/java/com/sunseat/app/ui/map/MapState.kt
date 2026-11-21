@@ -36,6 +36,8 @@ data class MapState(
     val onCameraIdle: ((LatLng) -> Unit)? = null,
     /** 지도 키 없음·인증 실패로 지도를 쓸 수 없다. */
     val onUnavailable: () -> Unit = {},
+    /** 사용 불가일 때 지도 위 안내를 화면에 맞게 바꾼다(#173: 지도 선택은 상태만 말하고 행동은 아래 패널이 말한다). null이면 기본 안내. */
+    val unavailableMessage: Int? = null,
     /** 카메라 모드·맞춤 횟수가 바뀌면 알린다(#141: 사용자가 옮긴 뒤 "지도 맞춤"). */
     val onCameraStatus: ((CameraStatus) -> Unit)? = null,
 )
