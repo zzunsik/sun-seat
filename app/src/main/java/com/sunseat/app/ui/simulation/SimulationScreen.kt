@@ -14,6 +14,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -73,12 +74,12 @@ fun SimulationScreen(
     }
     @Composable fun JourneyMap(mapModifier: Modifier) {
         Column(mapModifier) {
-            Box(Modifier.fillMaxWidth().weight(1f).clipToBounds()) {
+            Box(Modifier.fillMaxWidth().weight(1f).clipToBounds().testTag("simulation_map")) {
                 SunSeatMap(MapState(routes = listOf(route), origin = request.origin, destination = request.destination,
                     cursor = cursor, followCursor = state.following, onGesture = actions.unfollow,
                     routeProgress = point?.routeProgress ?: 0f, showDecorations = false,
                     padding=MapPadding(top=Sizes.simulationMapInfo,bottom=Spacing.s)), Modifier.fillMaxSize())
-                Surface(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(Spacing.s),color=scheme.surface,shape=MaterialTheme.shapes.medium) {
+                Surface(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(Spacing.s).testTag("simulation_info_card"),color=scheme.surface,shape=MaterialTheme.shapes.medium) {
                     Column(Modifier.padding(horizontal=Spacing.m,vertical=Spacing.s),verticalArrangement=Arrangement.spacedBy(Spacing.xs)) {
                         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
                             Text(stringResource(if(state.elapsedMillis>=duration) R.string.simulation_arrived_time else if(state.playing) R.string.simulation_moving_time else R.string.simulation_paused_time,currentTime),style=MaterialTheme.typography.titleSmall)
@@ -104,7 +105,7 @@ fun SimulationScreen(
                 }
             }
             // A separate row cannot cover the SDK logo or any map marker, at any font size.
-            if (!state.following) Surface(Modifier.fillMaxWidth(), color = scheme.surface) {
+            if (!state.following) Surface(Modifier.fillMaxWidth().testTag("simulation_follow_row"), color = scheme.surface) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.s), horizontalArrangement = Arrangement.End) {
                     QuietButton(onClick = actions.follow) { Text(stringResource(R.string.simulation_follow)) }
                 }
@@ -112,7 +113,7 @@ fun SimulationScreen(
         }
     }
     @Composable fun CabinDetails(detailModifier: Modifier) {
-            Column(detailModifier.verticalScroll(rememberScrollState()).padding(horizontal=Spacing.screen,vertical=if(landscape) Spacing.s else Spacing.screen), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+            Column(detailModifier.testTag("simulation_details").verticalScroll(rememberScrollState()).padding(horizontal=Spacing.screen,vertical=if(landscape) Spacing.s else Spacing.screen), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                 if (point != null && point.leg.mode != Mode.WALK) CabinPanel(point, request.mode, state, actions)
                 if (result.arrival != result.modeledArrival) Text(stringResource(R.string.simulation_modeled_note, time(result.arrival)), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             }
@@ -131,7 +132,7 @@ fun SimulationScreen(
                 JourneyMap(Modifier.fillMaxWidth().weight(2f))
                 CabinDetails(Modifier.fillMaxWidth().weight(3f))
             }
-            Surface(color = scheme.surface) {
+            Surface(Modifier.testTag("simulation_controls"), color = scheme.surface) {
                 if(landscape) Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal=Spacing.screen,vertical=Spacing.s),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(Spacing.l)) {
                     Column(Modifier.weight(1f)) {
                         Slider(value=(state.elapsedMillis.toFloat()/duration).coerceIn(0f,1f),onValueChange=actions.seek,
