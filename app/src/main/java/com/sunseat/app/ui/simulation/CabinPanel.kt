@@ -78,7 +78,8 @@ internal fun CabinPanel(point: TimelinePoint, mode: TravelMode, state: Simulatio
     }
     @Composable fun SeatSummary() {
         // #161: 글이 한 줄에 안 들어가면 "자리 고르기"를 아래로 내려 글이 단어 중간에서 꺾이지 않게 한다(DESIGN 4.4).
-        val seatTitle=stringResource(R.string.simulation_selected_seat,chosen.label())
+        // "모형 2번"은 한 덩어리로 둔다(어절 줄바꿈이 "모형"과 "2번" 사이에서 줄을 바꾸지 않게 이음 공백).
+        val seatTitle=stringResource(R.string.simulation_selected_seat,chosen.label().replace(Regex(" (?=\\d+번)"),"\u00A0"))
         val seatTitleStyle=MaterialTheme.typography.titleSmall.copy(lineBreak=WordLineBreak,localeList=KoreanLocale)
         com.sunseat.app.ui.components.ReflowRow(modifier = Modifier.fillMaxWidth(), headline = seatTitle, headlineStyle = seatTitleStyle, text = {
             Column {

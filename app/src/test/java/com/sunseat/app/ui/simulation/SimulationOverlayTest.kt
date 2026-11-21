@@ -127,7 +127,7 @@ class SimulationOverlayTest {
         checkInfoCard()
         assertWordNotBroken(app.getString(R.string.simulation_play), app.getString(R.string.simulation_play))
         assertWordNotBroken("표준 시내버스", "시내버스(추정)")
-        assertWordNotBroken("내 자리:", "2번")
+        assertWordNotBroken("내 자리:", "모형 2번")
         assertWordNotBroken("직사광 예상", "등받이")
         assertWordNotBroken("직사광 예상", "닿음")
     }
