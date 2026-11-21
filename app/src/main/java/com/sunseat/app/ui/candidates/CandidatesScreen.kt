@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -161,21 +162,36 @@ fun CandidatesScreen(
     val mapRoutes = candidateMapRoutes(options?.visible.orEmpty(), options?.selectedId, preview)
     // #145: 미리보기에 들어가기 전 목록 시트 높이(완전 확장/기본). 닫으면 이 높이로 되돌려, 펼쳐 둔 목록에서 고른 카드가 시트 아래로 밀리지 않게 한다.
     // 목록 스크롤 위치는 그대로 두므로 고를 때 보이던 카드가 같은 자리에 다시 보인다. 회전·재생성 뒤에도 유지한다.
+    // 카드를 누를 때 시트가 끌리는 중이면 가장 가까운 앵커(targetValue)를 들어가기 전 높이로 본다.
     var sheetBeforePreview by rememberSaveable { mutableStateOf(SheetValue.PartiallyExpanded) }
-    fun closePreview() { showPreview = false }
+    // 미리보기를 연 뒤 아직 목록 높이를 되돌리지 않았다. 미리보기에서 자리 결과로 갔다가 Back으로 돌아와도(새 구성) 되돌린다.
+    var restorePending by rememberSaveable { mutableStateOf(false) }
+    // 완전 확장으로 되돌리는 동안에는 시트가 잠깐 기본 앵커를 지나도 펼친 헤더를 끼워 보이지 않고 축약 여정 바를 유지한다(#101).
+    var restoringExpanded by remember { mutableStateOf(restorePending && sheetBeforePreview == SheetValue.Expanded) }
+    var revealSelected by remember { mutableLongStateOf(0L) }
+    // 목록이 처음 그려지는 프레임부터 축약 여정 바를 유지하도록 닫기와 함께 표시한다.
+    fun closePreview() { restoringExpanded = sheetBeforePreview == SheetValue.Expanded; showPreview = false }
     BackHandler(enabled = preview) { closePreview() }
     LaunchedEffect(routes, options?.selectedId) { userMoved = false; fitTrigger++ }
     // 이 화면 안에서 미리보기를 연 적이 있을 때만 닫힘을 맞춤 시점으로 본다(첫 구성·결과에서 복귀는 위 후보 집합 맞춤이 맡는다).
     var previewShown by remember { mutableStateOf(false) }
     LaunchedEffect(preview) {
-        if (preview) { previewShown = true; androidx.compose.runtime.withFrameNanos { }; scaffoldState.bottomSheetState.partialExpand(); fitTrigger++ }
+        if (preview) { previewShown = true; restorePending = true; androidx.compose.runtime.withFrameNanos { }; scaffoldState.bottomSheetState.partialExpand(); fitTrigger++ }
         // #135: 목록으로 돌아오면 시트가 목록 높이에 자리 잡은 뒤(아래 맞춤 효과가 기다린다) 보이는 지도 띠에 선택 경로를 다시 맞춘다.
-        // 완전 확장으로 돌아오면 보이는 지도 띠가 없어 맞춤은 사용자가 시트를 내려 지도가 보일 때까지 기다린다.
-        // #145: 목록 내용이 그려진 뒤(목록 기준 앵커) 들어가기 전 시트 높이로 되돌린다.
-        else if (previewShown) {
-            androidx.compose.runtime.withFrameNanos { }
-            if (sheetBeforePreview == SheetValue.Expanded) scaffoldState.bottomSheetState.expand() else scaffoldState.bottomSheetState.partialExpand()
-            fitTrigger++
+        // 완전 확장으로 돌아오면 보이는 지도 띠가 없어 맞춤은 사용자가 시트를 내려 지도가 처음 보일 때까지 기다린다.
+        // #145: 목록 내용이 그려진 뒤(목록 기준 앵커) 들어가기 전 시트 높이로 되돌리고, 선택 카드가 화면 밖이면 보이게 옮긴다(회전 등).
+        else if (restorePending || previewShown) {
+            val restore = restorePending
+            restoringExpanded = restore && sheetBeforePreview == SheetValue.Expanded
+            try {
+                androidx.compose.runtime.withFrameNanos { }
+                if (restore) {
+                    if (sheetBeforePreview == SheetValue.Expanded) scaffoldState.bottomSheetState.expand() else scaffoldState.bottomSheetState.partialExpand()
+                    restorePending = false
+                    revealSelected++
+                }
+            } finally { restoringExpanded = false }
+            if (previewShown) fitTrigger++
         }
     }
     val density = LocalDensity.current
@@ -217,7 +233,7 @@ fun CandidatesScreen(
     val compactHeader by remember(preview, fullHeaderPx) {
         derivedStateOf {
             val top = runCatching { scaffoldState.bottomSheetState.requireOffset() }.getOrDefault(Float.NaN)
-            !preview && top.isFinite() && top < fullHeaderPx - 0.5f
+            !preview && (restoringExpanded || top.isFinite() && top < fullHeaderPx - 0.5f)
         }
     }
     val offset = runCatching { with(density) { scaffoldState.bottomSheetState.requireOffset().toDp() } }.getOrDefault(maxHeight - peek)
@@ -299,7 +315,7 @@ fun CandidatesScreen(
                             sheetBeforePreview = if (scaffoldState.bottomSheetState.targetValue == SheetValue.Expanded) SheetValue.Expanded else SheetValue.PartiallyExpanded
                             showPreview = true
                             actions.onHighlight(it)
-                        }), listScroll)
+                        }), listScroll, revealSelected)
                     is CandidatesState.NoRoute -> Message(content, R.drawable.ic_ms_directions_bus, stringResource(state.titleRes), state.detailRes?.let { stringResource(it) }, if (state.suggestCar) stringResource(R.string.candidates_search_by_car) to actions.onSearchByCar else null, stringResource(R.string.candidates_edit_input) to actions.onBack)
                     is CandidatesState.Error -> Message(content, state.iconRes, stringResource(state.messageRes), null, if (state.canRetry) stringResource(R.string.search_retry) to actions.onRetry else null, stringResource(R.string.candidates_edit_input) to actions.onBack)
                 }
@@ -467,7 +483,7 @@ private fun Bar(width: Dp, height: Dp, shape: androidx.compose.ui.graphics.Shape
 }
 
 @Composable
-private fun OptionList(items: List<CandidateUi>, selectedId: Int?, request: TripRequest, content: PaddingValues, scopeNotice: String?, actions: CandidatesActions, listState: LazyListState) {
+private fun OptionList(items: List<CandidateUi>, selectedId: Int?, request: TripRequest, content: PaddingValues, scopeNotice: String?, actions: CandidatesActions, listState: LazyListState, reveal: Long = 0L) {
     val haptics = rememberSunSeatHaptics()
     var showScope by remember { mutableStateOf(false) }
     if (showScope && scopeNotice != null) AlertDialog(
@@ -479,7 +495,27 @@ private fun OptionList(items: List<CandidateUi>, selectedId: Int?, request: Trip
         } },
         confirmButton = { QuietButton(onClick = { showScope = false }) { Text(stringResource(R.string.candidates_scope_close)) } },
     )
-    LazyColumn(Modifier.fillMaxSize().testTag("candidate_list"), state = listState, contentPadding = PaddingValues(top = content.calculateTopPadding(), bottom = content.calculateBottomPadding())) {
+    // #145: 목록이 화면에서 실제로 보이는 아래끝(목록 좌표). 기본 높이 시트에서는 목록 아랫부분이 화면 밖에 있다.
+    var visibleEnd by remember { mutableFloatStateOf(Float.MAX_VALUE) }
+    val navigationBottomPx = with(LocalDensity.current) { WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding().toPx() }
+    val minVisiblePx = with(LocalDensity.current) { Spacing.touch.toPx() }
+    val currentItems by rememberUpdatedState(items)
+    val currentSelected by rememberUpdatedState(selectedId)
+    // 목록이 다시 구성될 때(미리보기 닫힘 직후, 시트가 아직 되돌아가기 전)의 값은 이미 처리한 것으로 보고, 새 요청만 처리한다.
+    var handled by remember { mutableLongStateOf(reveal) }
+    LaunchedEffect(reveal) {
+        if (reveal == handled) return@LaunchedEffect
+        handled = reveal
+        val id = currentSelected ?: return@LaunchedEffect
+        val position = currentItems.indexOfFirst { it.id == id }.takeIf { it >= 0 } ?: return@LaunchedEffect
+        val index = position + (if (scopeNotice != null) 1 else 0) + (if (request.departure != null) 1 else 0)
+        val item = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == id }
+        // 선택 카드의 윗부분(시간 줄)이 터치 높이만큼 보이면 목록 위치를 그대로 둔다(#99 스크롤 보존).
+        if (item == null || item.offset < 0 || item.offset + minVisiblePx > visibleEnd) listState.scrollToItem(index)
+    }
+    LazyColumn(Modifier.fillMaxSize().testTag("candidate_list").onGloballyPositioned {
+        visibleEnd = it.findRootCoordinates().size.height - navigationBottomPx - it.positionInRoot().y
+    }, state = listState, contentPadding = PaddingValues(top = content.calculateTopPadding(), bottom = content.calculateBottomPadding())) {
         if (scopeNotice != null) item(key = "walk_scope") {
             QuietButton(onClick = { showScope = true }, modifier = Modifier.testTag("walk_scope_notice").padding(horizontal = Spacing.xs)) {
                 Icon(painterResource(R.drawable.ic_ms_directions_walk), null, Modifier.size(Sizes.iconSmall))

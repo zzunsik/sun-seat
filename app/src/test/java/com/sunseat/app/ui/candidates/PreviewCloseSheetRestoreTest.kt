@@ -12,6 +12,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performScrollToKey
@@ -93,6 +94,69 @@ class PreviewCloseSheetRestoreTest {
         assertCardOnScreen(6)
         // #101: 완전 확장이므로 상단은 축약 여정 바다.
         compose.onNodeWithTag("candidates_journey_bar").assertExists()
+    }
+
+    /** 완전 확장으로 되돌리는 동안 펼친 헤더가 끼어 보이지 않는다(미리보기 바 → 축약 여정 바, #101). */
+    @Test fun restoringExpandedSheetNeverFlashesFullHeader() {
+        render()
+        compose.runOnIdle { scope.launch { sheet.bottomSheetState.expand() } }
+        settle()
+        compose.onNodeWithTag("candidate_2").performSemanticsAction(SemanticsActions.OnClick)
+        settle()
+        compose.mainClock.autoAdvance = false
+        compose.onAllNodesWithContentDescription("경로 목록으로 돌아가기")[0].performSemanticsAction(SemanticsActions.OnClick)
+        repeat(40) { frame ->
+            compose.mainClock.advanceTimeByFrame()
+            compose.onNodeWithContentDescription("출발지와 도착지 바꾸기").assertDoesNotExist()
+        }
+        compose.mainClock.autoAdvance = true
+        settle()
+        assertEquals(SheetValue.Expanded, sheet.bottomSheetState.currentValue)
+        compose.onNodeWithTag("candidates_journey_bar").assertExists()
+    }
+
+    /** 미리보기에서 자리 결과로 갔다가 Back으로 돌아와도(화면 재구성) 들어가기 전 시트 높이로 돌아간다. */
+    @Test fun returningFromSeatResultRestoresExpandedSheet() {
+        val base = CandidatesFixtures.options.toUi(java.time.LocalDateTime.of(2026, 11, 15, 9, 0)).first()
+        var state by mutableStateOf(CandidatesState.Options((0..9).map { base.copy(id = it) }))
+        val restoration = androidx.compose.ui.test.junit4.StateRestorationTester(compose)
+        restoration.setContent {
+            sheet = rememberBottomSheetScaffoldState()
+            scope = rememberCoroutineScope()
+            CompositionLocalProvider(LocalMapRenderer provides MapRenderer.PREVIEW) {
+                SunSeatTheme { CandidatesScreen(CandidatesFixtures.transitRequest, state, CandidatesActions(onHighlight = { state = state.copy(selectedId = it.id) }), scaffoldState = sheet) }
+            }
+        }
+        settle()
+        compose.runOnIdle { scope.launch { sheet.bottomSheetState.expand() } }
+        settle()
+        compose.onNodeWithTag("candidate_list").performScrollToKey(4)
+        settle()
+        compose.onNodeWithTag("candidate_6").performSemanticsAction(SemanticsActions.OnClick)
+        settle()
+        // 자리 보기로 화면을 떠나는 순간 구성을 버리고(내비게이션) 저장 상태로 다시 만든다(Back 복귀).
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("preview_seat").performSemanticsAction(SemanticsActions.OnClick)
+        restoration.emulateSavedInstanceStateRestore()
+        compose.mainClock.autoAdvance = true
+        settle()
+        assertEquals(SheetValue.Expanded, sheet.bottomSheetState.currentValue)
+        assertCardOnScreen(6)
+    }
+
+    /** 선택 카드가 화면 밖에 있으면(예: 미리보기 중 회전) 닫은 뒤 보이는 위치로 옮긴다. 보이면 스크롤을 유지한다. */
+    @Test fun closingPreviewRevealsSelectedCardOutsideScreen() {
+        render()
+        val screen = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        val touch = with(compose.density) { com.sunseat.app.ui.theme.Spacing.touch.toPx() }
+        // 기본 높이 시트에서 목록이 구성했지만 화면 아래로 가려진 카드(시트 밖으로 밀린 선택 카드와 같은 조건).
+        val hidden = (1..9).first { id ->
+            val node = compose.onAllNodes(androidx.compose.ui.test.hasTestTag("candidate_$id")).fetchSemanticsNodes().firstOrNull()
+            node != null && node.boundsInRoot.top + touch > screen.bottom
+        }
+        openAndClose(hidden)
+        assertEquals(SheetValue.PartiallyExpanded, sheet.bottomSheetState.currentValue)
+        assertCardOnScreen(hidden)
     }
 
     @Test fun closingPreviewKeepsDefaultSheetHeight() {
