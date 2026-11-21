@@ -17,7 +17,7 @@ import retrofit2.create
 import retrofit2.http.GET
 import retrofit2.http.Query
 
-/** 카카오모빌리티 자동차 길찾기(`GET https://apis-navi.kakaomobility.com/v1/directions`). */
+/** 카카오모빌리티 자동차 길찾기(앱 API `GET kakao/navi/directions` → `apis-navi.kakaomobility.com/v1/directions`). */
 class KakaoCarRouteApi internal constructor(
     private val service: KakaoNaviService,
 ) : CarRouteApi {
@@ -38,7 +38,7 @@ class KakaoCarRouteApi internal constructor(
 
 internal interface KakaoNaviService {
     /** @param origin `경도,위도` */
-    @GET("v1/directions")
+    @GET("navi/directions")
     suspend fun directions(
         @Query("origin") origin: String,
         @Query("destination") destination: String,

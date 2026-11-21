@@ -17,7 +17,7 @@ import retrofit2.create
 import retrofit2.http.GET
 import retrofit2.http.Query
 
-/** 카카오맵 대중교통 경로 조회(`GET /v2/routing/publictraffic`). */
+/** 카카오맵 대중교통 경로 조회(앱 API `GET kakao/routing/publictraffic` → 카카오 `/v2/routing/publictraffic`). */
 class KakaoTransitRouteApi internal constructor(
     private val service: KakaoTransitService,
 ) : TransitRouteApi {
@@ -39,7 +39,7 @@ class KakaoTransitRouteApi internal constructor(
 }
 
 internal interface KakaoTransitService {
-    @GET("v2/routing/publictraffic")
+    @GET("routing/publictraffic")
     suspend fun publicTraffic(
         @Query("start_x") startX: Double,
         @Query("start_y") startY: Double,
@@ -137,6 +137,7 @@ internal fun PtRoute.toOption(): TransitRouteOption? {
             transitStepIndex = stepIndex,
             mode = mode,
             busType = if (mode == Mode.BUS) p.vehicles.firstOrNull()?.type else null,
+            lineName = p.vehicles.map { it.name }.filter { it.isNotBlank() }.distinct().joinToString(" / ").takeIf { mode != Mode.WALK && it.isNotBlank() },
             path = step.path?.points.orEmpty().mapNotNull { it.toLatLng() },
             duration = Duration.ofSeconds(p.time.roundToLong()),
             startName = stopNames.firstOrNull().orEmpty(),

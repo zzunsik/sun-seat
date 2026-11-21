@@ -7,6 +7,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.core.view.WindowCompat
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -26,7 +28,9 @@ class MainActivity : ComponentActivity() {
         val graph = (application as SunSeatApp).graph
         val startup = SystemClock.elapsedRealtime()
         splash.setKeepOnScreenCondition { !graph.settings.loaded.value && SystemClock.elapsedRealtime() - startup < 300L }
-        setContent { SunSeatContent(graph, window) }
+        // debug 빌드에서만 테스트 태그를 리소스 ID로 내보내 실기기 점검 스크립트(scripts/device-smoke.sh, #169)가 uiautomator로 찾게 한다.
+        val root = if (BuildConfig.DEBUG) Modifier.semantics { testTagsAsResourceId = true } else Modifier
+        setContent { SunSeatContent(graph, window, root) }
     }
 }
 

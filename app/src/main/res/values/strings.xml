@@ -29,6 +29,21 @@
     <string name="input_search_hint_destination">도착지 이름이나 주소</string>
     <string name="input_search_close">검색 닫기</string>
     <string name="input_search_clear">검색어 지우기</string>
+
+    <!-- 지도에서 위치 선택 (#85) -->
+    <string name="map_pick_open">지도에서 선택</string>
+    <string name="map_pick_title_origin">지도에서 출발지 선택</string>
+    <string name="map_pick_title_destination">지도에서 도착지 선택</string>
+    <string name="map_pick_close">검색으로 돌아가기</string>
+    <string name="map_pick_guide">지도를 움직여 핀을 원하는 위치에 맞춰 주세요.</string>
+    <string name="map_pick_loading">주소를 확인하는 중…</string>
+    <string name="map_pick_unnamed">지도에서 선택한 위치</string>
+    <string name="map_pick_no_address">주소가 없는 곳이에요. 이 위치를 그대로 쓸 수 있어요.</string>
+    <string name="map_pick_address_error">주소를 불러오지 못했어요. 이 위치를 그대로 쓸 수 있어요.</string>
+    <string name="map_pick_confirm_origin">출발지로 선택</string>
+    <string name="map_pick_confirm_destination">도착지로 선택</string>
+    <string name="map_pick_recenter">현재 위치로 지도 이동</string>
+    <string name="map_pick_description">%1$s 지도. 가운데 핀 위치: %2$s</string>
     <string name="input_dismiss">닫기</string>
     <string name="common_ok">확인</string>
     <string name="common_cancel">취소</string>
@@ -52,6 +67,11 @@
     <string name="candidates_transfers">환승 %1$d회</string>
     <string name="candidates_search_by_car">자가용 보기</string>
     <string name="candidates_walk">도보 %1$d분</string>
+    <!-- 도보 데이터 범위 (#105): 응답의 도보는 승차~하차 사이 환승 구간뿐이고 접근 도보는 없다 -->
+    <string name="candidates_transfer_walk">환승 도보 %1$d분</string>
+    <string name="candidates_transfer_walk_under_minute">환승 도보 1분 미만</string>
+    <string name="candidates_walk_scope">도보와 구간 표시는 승차부터 하차까지예요.\n정류장을 오가는 도보와 대기 시간은 빠져요.</string>
+    <string name="candidates_walk_scope_sort">최소 도보는 환승 도보만 비교해요.\n정류장을 오가는 도보와 대기 시간은 빠져요.</string>
     <string name="candidates_arrival">%1$s 도착</string>
     <string name="candidates_no_transit_detail">도시 간 경로는 찾지 못할 수 있어요.\n자가용 경로를 찾아보세요.</string>
     <string name="candidates_try_car_detail">자가용 경로를 찾아보세요.</string>
@@ -147,9 +167,25 @@
     <string name="map_title">이동 경로</string>
     <string name="map_missing_key">지도를 사용할 수 없어요.\n앱 업데이트를 확인해 주세요.</string>
     <string name="map_error">지도를 불러오지 못했어요.\n자리 추천은 계속 볼 수 있어요.</string>
+    <string name="map_unavailable_short">지도를 사용할 수 없어요.</string>
+    <string name="map_destination_offscreen">도착지는 화면 밖 %1$s</string>
+    <string name="map_direction_right">오른쪽</string>
+    <string name="map_direction_down_right">오른쪽 아래</string>
+    <string name="map_direction_down">아래쪽</string>
+    <string name="map_direction_down_left">왼쪽 아래</string>
+    <string name="map_direction_left">왼쪽</string>
+    <string name="map_direction_up_left">왼쪽 위</string>
+    <string name="map_direction_up">위쪽</string>
+    <string name="map_direction_up_right">오른쪽 위</string>
     <string name="map_loading">지도를 불러오는 중…</string>
     <string name="map_description">출발 %1$s, 도착 %2$s 경로 지도</string>
     <string name="map_preview">경로 미리보기</string>
+    <string name="map_route_summary">선택 경로: %1$s</string>
+    <string name="map_route_board">%1$s %2$s 승차</string>
+    <string name="map_route_transfer">%1$s %2$s 환승</string>
+    <string name="map_route_alight">%1$s 하차</string>
+    <string name="map_route_separator">" → "</string>
+    <string name="map_line_more">%1$s 외 %2$d</string>
     <string name="settings_title">설정</string>
     <string name="settings_theme">화면 모드</string>
     <string name="settings_system">시스템</string>
@@ -230,11 +266,18 @@
     <string name="candidates_sort_walk">최소 도보</string>
     <string name="candidates_sort_sun_less">햇빛 적은 순</string>
     <string name="candidates_sort_sun_more">햇빛 많은 순</string>
-    <string name="candidates_filter_bus">버스만</string>
-    <string name="candidates_filter_subway">지하철만</string>
-    <string name="candidates_filter_mixed">버스+지하철</string>
-    <string name="candidates_filtered_empty">조건에 맞는 경로가 없어요</string>
-    <string name="candidates_clear_filters">필터 해제</string>
+    <!-- 정렬 드롭다운 버튼 TalkBack 설명(#83): 현재 기준 -->
+    <string name="candidates_sort_description">정렬 기준 %1$s</string>
+    <string name="candidates_sort_expanded">펼쳐짐</string>
+    <string name="candidates_sort_collapsed">접힘</string>
+    <string name="candidates_filter_all">전체</string>
+    <string name="candidates_filter_bus">버스</string>
+    <string name="candidates_filter_subway">지하철</string>
+    <string name="candidates_filter_mixed">혼합</string>
+    <!-- 범주 탭 TalkBack 설명(#82): 이름 + 받은 후보 수 -->
+    <string name="candidates_category_description">%1$s 경로 %2$d개</string>
+    <string name="candidates_filtered_empty">이 종류의 경로가 없어요</string>
+    <string name="candidates_clear_filters">전체 보기</string>
     <string name="candidates_highlight">경로 미리보기</string>
     <string name="candidates_selected">선택됨</string>
     <string name="candidates_view_seat">자리 보기</string>
@@ -349,7 +392,22 @@
     <string name="simulation_arrived_time">%1$s · 도착</string>
     <string name="simulation_progress">이동 %1$d%%</string>
     <string name="simulation_route_overview">출발 %1$s → 도착 %2$s</string>
+    <!-- #152: 차량과 겹친 노선 배지를 숨겨도(#146) 지금·다음에 탈 노선을 정보 카드에 남긴다 -->
+    <string name="simulation_ride_now">%1$s 탑승 중</string>
+    <string name="simulation_ride_next">다음 %1$s 탑승</string>
     <string name="candidates_preview_title">선택한 경로</string>
     <string name="candidates_preview_close">경로 목록으로 돌아가기</string>
-    <string name="candidates_fit_route">전체 경로 보기</string>
+    <string name="candidates_fit_route">지도 맞춤</string>
+    <string name="candidates_fit_route_action">선택 경로가 보이게 지도 맞추기</string>
+    <string name="candidates_fit_all_action">후보 경로가 모두 보이게 지도 맞추기</string>
+    <string name="candidates_journey_expand">여정 펼쳐서 바꾸기</string>
+    <string name="candidates_compact_schedule">%1$s → %2$s</string>
+    <string name="candidates_next_day">다음 날 %1$s</string>
+    <string name="candidates_scope_action">구간·햇빛 안내</string>
+    <string name="candidates_scope_detail">막대는 제공된 구간 시간 합에 비례해요. 총시간과의 차이를 도보나 대기로 추측하지 않아요. 햇빛·그늘은 계산 가능한 탑승 구간만 표시해 총시간과 다를 수 있어요.</string>
+    <string name="candidates_time_basis">경로는 지금 기준 · 햇빛은 %1$s 기준</string>
+    <string name="candidates_fastest">가장 빠름</string>
+    <string name="candidates_no_sun">해 없음</string>
+    <string name="candidates_scope_close">닫기</string>
+    <string name="candidates_map_selected">지도에 표시 중</string>
 </resources>

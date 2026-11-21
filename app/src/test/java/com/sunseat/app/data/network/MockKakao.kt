@@ -4,11 +4,9 @@ import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import retrofit2.Retrofit
 
-/** 테스트용 가짜 키. 실제 키가 아니다. */
-internal const val TEST_KEY = "test-key"
-
-internal fun MockWebServer.kakaoRetrofit(apiKey: String = TEST_KEY): Retrofit =
-    KakaoHttp.retrofit(url("/").toString(), KakaoHttp.okHttpClient(apiKey))
+/** 가짜 서버를 앱 API 게이트웨이로 쓰는 Retrofit(기준 주소 `/kakao/`). [apiConfigured]가 false면 앱 API 주소가 없는 빌드와 같다. */
+internal fun MockWebServer.kakaoRetrofit(apiConfigured: Boolean = true): Retrofit =
+    KakaoHttp.retrofit(url("/" + KakaoHttp.GROUP_PATH).toString(), KakaoHttp.okHttpClient(configured = apiConfigured))
 
 internal fun MockWebServer.enqueueJson(body: String, code: Int = 200) {
     enqueue(

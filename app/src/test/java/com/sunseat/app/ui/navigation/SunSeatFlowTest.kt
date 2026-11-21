@@ -8,6 +8,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasClickAction
@@ -88,6 +90,18 @@ class SunSeatFlowTest {
 
     private fun clickText(value: String) = compose.onNode(hasClickAction() and hasText(value)).tap()
 
+    /** #83: 정렬은 현재 기준을 보이는 드롭다운 버튼 하나다. */
+    private fun sortButton() = compose.onNodeWithTag("candidates_sort")
+    private fun sortItem(id: Int) = compose.onNode(androidx.compose.ui.test.hasAnyAncestor(androidx.compose.ui.test.isPopup()) and hasText(text(id)))
+    private fun chooseSort(id: Int) {
+        sortButton().tap()
+        sortItem(id).tap()
+    }
+    private fun assertSort(id: Int) {
+        sortButton().assert(hasText(text(id), substring = true))
+        compose.onAllNodes(androidx.compose.ui.test.isPopup()).assertCountEquals(0)
+    }
+
     private fun scrubLabel(): String = compose.onNodeWithContentDescription(text(R.string.simulation_slider))
         .fetchSemanticsNode().config[SemanticsProperties.StateDescription]
 
@@ -155,11 +169,11 @@ class SunSeatFlowTest {
         // 경로 후보: 직접 만든 응답의 두 경로(30분 지하철, 40분 버스+지하철)
         waitForText("30분")
         waitForText("40분")
-        clickText(text(R.string.candidates_sort_walk))
+        chooseSort(R.string.candidates_sort_walk)
         clickText(text(R.string.candidates_filter_subway))
         waitForTextGone("40분")
         compose.onNode(hasClickAction() and hasText("30분")).tap()
-        compose.onNodeWithText(text(R.string.candidates_preview_title)).assertExists()
+        compose.onNodeWithTag("candidates_preview_sheet").assertExists()
         clickText(text(R.string.candidates_view_seat))
 
         // 결과 → 햇빛 따라가기
@@ -187,8 +201,8 @@ class SunSeatFlowTest {
         compose.onNodeWithText(text(R.string.simulation_play)).assertDoesNotExist()
         back()
         waitForText("30분")
-        compose.onNodeWithText(text(R.string.candidates_sort_walk)).assertIsSelected()
-        compose.onNodeWithText(text(R.string.candidates_sort_recommended)).assertIsNotSelected()
+        assertSort(R.string.candidates_sort_walk)
+        compose.onNodeWithText(text(R.string.candidates_sort_recommended)).assertDoesNotExist()
         compose.onNodeWithText(text(R.string.candidates_filter_subway)).assertIsSelected()
         compose.onNodeWithText("40분").assertDoesNotExist()
         compose.onNode(hasClickAction() and hasText("30분")).assertIsSelected()
@@ -202,15 +216,15 @@ class SunSeatFlowTest {
         val graph = launch()
         enterTrip()
         waitForText("30분")
-        clickText(text(R.string.candidates_sort_walk))
+        chooseSort(R.string.candidates_sort_walk)
         clickText(text(R.string.candidates_filter_subway))
         repeat(3) {
             compose.onNode(hasClickAction() and hasText("30분")).tap()
-            compose.onNodeWithText(text(R.string.candidates_preview_title)).assertExists()
+            compose.onNodeWithTag("candidates_preview_sheet").assertExists()
             compose.onNodeWithText(text(R.string.result_legs)).assertDoesNotExist()
             assertEquals(1, graph.server.transitRequests)
             back()
-            compose.onNodeWithText(text(R.string.candidates_sort_walk)).assertIsSelected()
+            assertSort(R.string.candidates_sort_walk)
             compose.onNodeWithText(text(R.string.candidates_filter_subway)).assertIsSelected()
             compose.onNode(hasClickAction() and hasText("30분")).assertIsSelected()
         }
@@ -245,7 +259,7 @@ class SunSeatFlowTest {
         val graph = launch()
         enterTrip()
         waitForText("30분")
-        clickText(text(R.string.candidates_sort_walk))
+        chooseSort(R.string.candidates_sort_walk)
         clickText(text(R.string.candidates_filter_subway))
         compose.onNode(hasClickAction() and hasText("30분")).tap()
         val placeCalls = graph.server.placeRequests
@@ -255,7 +269,7 @@ class SunSeatFlowTest {
         assertEquals(placeCalls, graph.server.placeRequests)
         compose.onNodeWithContentDescription(text(R.string.input_search_clear)).tap()
         back()
-        compose.onNodeWithText(text(R.string.candidates_sort_walk)).assertIsSelected()
+        assertSort(R.string.candidates_sort_walk)
         compose.onNodeWithText(text(R.string.candidates_filter_subway)).assertIsSelected()
         compose.onNode(hasClickAction() and hasText("30분")).assertIsSelected()
         assertEquals(1, graph.server.transitRequests)
@@ -489,7 +503,7 @@ class SunSeatFlowTest {
         val graph = launch()
         enterTrip()
         waitForText("30분")
-        clickText(text(R.string.candidates_sort_walk))
+        chooseSort(R.string.candidates_sort_walk)
         clickText(text(R.string.candidates_filter_subway))
         compose.onNode(hasClickAction() and hasText("30분")).tap()
         clickText(text(R.string.candidates_view_seat))
@@ -505,7 +519,7 @@ class SunSeatFlowTest {
         back()
         waitForText("30분")
         compose.onNode(hasText("23:37 출발", substring = true) and !hasText("30분", substring = true)).assertExists()
-        compose.onNodeWithText(text(R.string.candidates_sort_walk)).assertIsSelected()
+        assertSort(R.string.candidates_sort_walk)
         compose.onNodeWithText(text(R.string.candidates_filter_subway)).assertIsSelected()
         compose.onNode(hasClickAction() and hasText("30분")).assertIsSelected()
         back()
@@ -544,6 +558,106 @@ class SunSeatFlowTest {
         clickText(text(R.string.input_time_now))
         val departure = next.atZone(graph.clock.zone).format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
         compose.waitUntil(10_000) { compose.onAllNodesWithText("$departure 출발", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        assertEquals(1, graph.server.transitRequests)
+    }
+
+    /**
+     * #82: 경로 종류는 전체/버스/지하철/혼합 중 하나만 고르는 탭이고 받은 후보 수를 함께 보인다.
+     * 같은 탭을 다시 눌러도 전체로 숨은 토글되지 않고, 0건 범주도 골라 빈 상태에서 '전체 보기'로 돌아온다.
+     * 종류 전환은 로컬 목록만 바꿔 경로 API를 다시 부르지 않고, 정렬은 그대로다.
+     * 고른 경로가 범주 밖으로 숨으면 목록과 지도 모두 선택을 해제한다.
+     */
+    /**
+     * #83: 정렬은 현재 기준 이름을 보이는 버튼 하나이고, 누르면 지원 기준 메뉴가 열린다.
+     * 현재 항목은 메뉴 안에서 선택 표시된다. 고르면 한 번 적용하고 닫히며, Back은 기준을 바꾸지 않고 메뉴만 닫는다.
+     * 범주·선택 경로·미리보기 복귀 후에도 기준이 유지되고 경로 API를 다시 부르지 않는다.
+     */
+    @Test fun sortDropdownShowsCurrentCriterionAndMenuSelectsOrCancels() {
+        val graph = launch()
+        enterTrip()
+        waitForText("30분")
+        waitForText("40분")
+        assertSort(R.string.candidates_sort_recommended)
+        compose.onNodeWithText(text(R.string.candidates_sort_time)).assertDoesNotExist()
+
+        // 열면 지원 기준이 모두 있고 현재 기준만 선택 표시다. 햇빛 피하기 목적이면 '햇빛 적은 순'이다.
+        sortButton().tap()
+        listOf(R.string.candidates_sort_recommended, R.string.candidates_sort_time, R.string.candidates_sort_transfers,
+            R.string.candidates_sort_walk, R.string.candidates_sort_sun_less).forEach { sortItem(it).assertExists() }
+        compose.onNodeWithText(text(R.string.candidates_sort_sun_more)).assertDoesNotExist()
+        sortItem(R.string.candidates_sort_recommended).assertIsSelected()
+        sortItem(R.string.candidates_sort_walk).assertIsNotSelected()
+        sortItem(R.string.candidates_sort_walk).tap()
+        assertSort(R.string.candidates_sort_walk)
+        // #105: 최소 도보 정렬의 비교 범위 안내가 그대로 보인다.
+        clickText(text(R.string.candidates_scope_action))
+        compose.waitUntil(10_000) { compose.onAllNodesWithText(text(R.string.candidates_walk_scope_sort).lines().first(), substring = true).fetchSemanticsNodes().isNotEmpty() }
+        clickText(text(R.string.candidates_scope_close))
+
+        // 다시 열면 고른 기준이 선택 표시다. Back은 메뉴만 닫고 기준과 화면을 그대로 둔다.
+        sortButton().tap()
+        sortItem(R.string.candidates_sort_walk).assertIsSelected()
+        sortItem(R.string.candidates_sort_recommended).assertIsNotSelected()
+        back()
+        assertSort(R.string.candidates_sort_walk)
+        compose.onNodeWithText("30분").assertExists()
+
+        // 범주를 바꾸고 미리보기를 열었다 닫아도 정렬이 유지된다.
+        clickText(text(R.string.candidates_filter_subway))
+        waitForTextGone("40분")
+        compose.onNode(hasClickAction() and hasText("30분")).tap()
+        back()
+        assertSort(R.string.candidates_sort_walk)
+        compose.onNode(hasClickAction() and hasText("30분")).assertIsSelected()
+        assertEquals(1, graph.server.transitRequests)
+    }
+
+    @Test fun categoryTabsSelectOneWithCountsAndRecoverFromEmpty() {
+        val graph = launch()
+        enterTrip()
+        waitForText("30분")
+        waitForText("40분")
+        fun tab(description: String) = compose.onNode(androidx.compose.ui.test.hasContentDescription(description) and
+            androidx.compose.ui.test.SemanticsMatcher.expectValue(SemanticsProperties.Role, androidx.compose.ui.semantics.Role.Tab))
+        // 직접 만든 응답: 지하철 1, 버스+지하철 1, 버스 0
+        tab("전체 경로 2개").assertIsSelected()
+        tab("버스 경로 0개").assertIsNotSelected()
+        tab("지하철 경로 1개").assertIsNotSelected()
+        tab("혼합 경로 1개").assertIsNotSelected()
+        chooseSort(R.string.candidates_sort_walk)
+
+        // 지하철 경로를 골라 미리보기를 열었다 닫으면 선택이 남는다.
+        compose.onNode(hasClickAction() and hasText("30분")).tap()
+        back()
+        compose.onNode(hasClickAction() and hasText("30분")).assertIsSelected()
+
+        tab("지하철 경로 1개").tap()
+        waitForTextGone("40분")
+        tab("지하철 경로 1개").assertIsSelected()
+        tab("전체 경로 2개").assertIsNotSelected()
+        compose.onNode(hasClickAction() and hasText("30분")).assertIsSelected()
+        // 같은 탭을 다시 눌러도 그대로다.
+        tab("지하철 경로 1개").tap()
+        tab("지하철 경로 1개").assertIsSelected()
+        compose.onNodeWithText("40분").assertDoesNotExist()
+
+        // 혼합으로 바꾸면 고른 지하철 경로가 숨으므로 목록·지도 선택을 함께 해제한다.
+        tab("혼합 경로 1개").tap()
+        waitForText("40분")
+        compose.onNodeWithText("30분").assertDoesNotExist()
+        assertEquals(-1, compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.candidates.CandidateMapSelectedRouteKey])
+
+        // 0건 범주도 고를 수 있고, 빈 상태에서 전체로 돌아온다.
+        tab("버스 경로 0개").tap()
+        tab("버스 경로 0개").assertIsSelected()
+        waitForText(text(R.string.candidates_filtered_empty))
+        compose.onNodeWithText("40분").assertDoesNotExist()
+        clickText("전체 보기")
+        waitForText("30분")
+        waitForText("40분")
+        tab("전체 경로 2개").assertIsSelected()
+        compose.onNode(hasClickAction() and hasText("30분")).assertIsNotSelected()
+        assertSort(R.string.candidates_sort_walk)
         assertEquals(1, graph.server.transitRequests)
     }
 

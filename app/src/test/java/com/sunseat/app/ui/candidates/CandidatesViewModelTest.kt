@@ -76,7 +76,7 @@ class CandidatesViewModelTest {
         val vm = CandidatesViewModel(transitRequest, transit, noCar, now = { clock }, compute = dispatcher)
         advanceUntilIdle()
         vm.setSort(CandidateSort.WALK)
-        vm.toggleFilter(TransitRouteType.SUBWAY)
+        vm.selectCategory(RouteCategory.SUBWAY)
         vm.highlight(0)
         val arrival = clock.withHour(23).withMinute(37)
         vm.updateRequest(transitRequest.copy(departure = arrival), 1)
@@ -85,7 +85,7 @@ class CandidatesViewModelTest {
         val state = vm.state.value as CandidatesState.Options
         assertEquals(1, transit.calls)
         assertEquals(CandidateSort.WALK, state.sort)
-        assertEquals(setOf(TransitRouteType.SUBWAY), state.filters)
+        assertEquals(RouteCategory.SUBWAY, state.category)
         assertEquals(0, state.selectedId)
         assertTrue(state.items.all { it.arrival == arrival.plus(it.totalDuration) })
         clock = clock.plusHours(1)
@@ -261,6 +261,18 @@ class CandidatesViewModelTest {
     }
 
     @Test
+    fun gatewayRefusalAndRateLimitCanRetryLater() = runTest(dispatcher) {
+        // 앱 API 게이트웨이(#189)의 403(거부)·429(호출 제한)는 "잠시 이용할 수 없어요"와 다시 시도로 안내한다.
+        for (error in listOf(ApiError.UNAUTHORIZED, ApiError.QUOTA_EXCEEDED)) {
+            val vm = CandidatesViewModel(transitRequest, FakeTransit(ApiResult.Failure(error)), noCar, compute = dispatcher)
+            advanceUntilIdle()
+            val err = vm.state.value as CandidatesState.Error
+            assertEquals(error.name, R.string.candidates_error_quota, err.messageRes)
+            assertTrue(error.name, err.canRetry)
+        }
+    }
+
+    @Test
     fun carRouteIsAutoSelected() = runTest(dispatcher) {
         val car = FakeCar(ApiResult.Success(CarRouteResult(CarRouteOption(carRoute, 9000, 0, 12000))))
         val vm = CandidatesViewModel(carRequest, noTransit, car, compute = dispatcher)
@@ -286,36 +298,59 @@ class CandidatesViewModelTest {
         val mixed = CandidatesFixtures.busOnly.copy(type = TransitRouteType.BUS_AND_SUBWAY, totalDuration = Duration.ofMinutes(45), transfers = 2)
         val vm = CandidatesViewModel(transitRequest, FakeTransit(ApiResult.Success(TransitRoutes(options + mixed))), noCar, compute = dispatcher)
         vm.setSort(CandidateSort.TIME)
-        vm.toggleFilter(TransitRouteType.BUS)
+        vm.selectCategory(RouteCategory.BUS)
         assertTrue(vm.state.value is CandidatesState.Loading)
         advanceUntilIdle()
         fun options() = vm.state.value as CandidatesState.Options
         fun ids() = options().visible.map { it.id }
         assertEquals(CandidateSort.RECOMMENDED, options().sort)
+        assertEquals(RouteCategory.ALL, options().category)
 
+        // #82: 범주는 하나만 고른다. 고른 경로가 새 범주에도 있으면 선택을 유지한다.
         vm.setSort(CandidateSort.TIME)
         assertEquals(listOf(0, 2, 1), ids())
         vm.highlight(2)
-        vm.toggleFilter(TransitRouteType.BUS)
-        vm.toggleFilter(TransitRouteType.BUS_AND_SUBWAY)
-        assertEquals(listOf(2, 1), ids())
+        vm.selectCategory(RouteCategory.MIXED)
+        assertEquals(listOf(2), ids())
         assertEquals(CandidateSort.TIME, options().sort)
+        assertEquals(2, options().selectedId)
+
+        // 고른 경로가 숨는 범주로 바꾸면 선택을 해제한다(목록에 없는데 지도만 선택된 상태 방지).
+        vm.selectCategory(RouteCategory.BUS)
+        assertEquals(listOf(1), ids())
         assertNull(options().selectedId)
+        // 같은 범주를 다시 골라도 전체로 숨은 토글되지 않는다.
+        vm.selectCategory(RouteCategory.BUS)
+        assertEquals(RouteCategory.BUS, options().category)
+        assertEquals(listOf(1), ids())
 
         vm.setSort(CandidateSort.TRANSFERS)
-        assertEquals(listOf(1, 2), ids())
-        assertEquals(setOf(TransitRouteType.BUS, TransitRouteType.BUS_AND_SUBWAY), options().filters)
         vm.highlight(1)
         vm.setSort(CandidateSort.WALK)
         assertEquals(1, options().selectedId)
 
-        vm.toggleFilter(TransitRouteType.BUS)
-        assertEquals(listOf(2), ids())
-        vm.toggleFilter(TransitRouteType.BUS_AND_SUBWAY)
-        assertTrue(options().filters.isEmpty())
-        vm.toggleFilter(TransitRouteType.BUS)
-        vm.clearFilters()
+        vm.selectCategory(RouteCategory.ALL)
         assertEquals(CandidateSort.WALK, options().sort)
         assertEquals(listOf(1, 2, 0), ids())
+        assertEquals(1, options().selectedId)
+    }
+
+    /** #82: 범주별 개수는 받은 후보 기준이며 햇빛 계산·정렬·범주 선택과 무관하게 그대로다. */
+    @Test fun categoryCountsStayFixedAcrossSunCalculationSortAndCategory() = runTest(dispatcher) {
+        val mixed = CandidatesFixtures.busOnly.copy(type = TransitRouteType.BUS_AND_SUBWAY)
+        val transit = FakeTransit(ApiResult.Success(TransitRoutes(options + mixed + mixed)))
+        val vm = CandidatesViewModel(transitRequest, transit, noCar, compute = dispatcher)
+        assertTrue(vm.state.value is CandidatesState.Loading)
+        runCurrent()
+        fun options() = vm.state.value as CandidatesState.Options
+        val expected = mapOf(RouteCategory.ALL to 4, RouteCategory.BUS to 1, RouteCategory.SUBWAY to 1, RouteCategory.MIXED to 2)
+        assertEquals(expected, options().counts)
+        advanceUntilIdle()
+        assertTrue(options().items.all { it.chosen.cachedResult != null })
+        assertEquals(expected, options().counts)
+        vm.setSort(CandidateSort.SUN)
+        vm.selectCategory(RouteCategory.SUBWAY)
+        assertEquals(expected, options().counts)
+        assertEquals(1, transit.calls)
     }
 }

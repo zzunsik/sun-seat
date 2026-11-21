@@ -44,6 +44,9 @@ fun SunSeatTheme(
 
 /** 테마 토큰 접근점 */
 object SunSeatTheme {
+    val route: RouteColors
+        @Composable @ReadOnlyComposable get() = if (LocalSunSeatColors.current == DarkSunSeatColors) DarkRouteColors else LightRouteColors
+
     val colors: SunSeatColors
         @Composable @ReadOnlyComposable get() = LocalSunSeatColors.current
 

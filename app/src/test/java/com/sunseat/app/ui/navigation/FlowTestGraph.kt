@@ -8,7 +8,6 @@ import com.sunseat.app.AppGraph
 import com.sunseat.app.data.KakaoApis
 import com.sunseat.app.data.favorites.DataStoreFavoritesRepository
 import com.sunseat.app.data.favorites.FavoritesRepository
-import com.sunseat.app.data.network.TEST_KEY
 import com.sunseat.app.data.network.fixture
 import com.sunseat.app.data.recent.DataStoreRecentPlacesRepository
 import com.sunseat.app.data.recent.RecentPlacesRepository
@@ -42,7 +41,7 @@ class InMemorySettings(initial: Settings = Settings.DEFAULT) : SettingsRepositor
 }
 
 /**
- * 가짜 카카오 서버. 응답은 모두 직접 만든 값(`src/test/resources/kakao`)이고 실제 응답이 아니다.
+ * 가짜 앱 API 게이트웨이(#189: 앱은 앱 API 게이트웨이 하나로 네 API를 부른다). 응답은 모두 직접 만든 값(`src/test/resources/kakao`)이고 실제 응답이 아니다.
  * 경로별로 응답을 바꿔 끼워 오류·경로 없음 상태를 만든다.
  */
 class FakeKakaoServer : AutoCloseable {
@@ -53,13 +52,17 @@ class FakeKakaoServer : AutoCloseable {
     @Volatile var places: () -> MockResponse = { json(fixture("kakao/place_keyword.json")) }
     @Volatile var transit: () -> MockResponse = { json(fixture("kakao/transit_routes.json")) }
     @Volatile var car: () -> MockResponse = { json(fixture("kakao/car_directions.json")) }
+    /** 좌표→주소(#85). 직접 만든 주소 응답이며 실제 응답이 아니다. */
+    @Volatile var addressRequests = 0
+    @Volatile var address: () -> MockResponse = { json(fixture("kakao/coord2address.json")) }
 
     init {
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse = when (request.url.encodedPath) {
-                "/v2/local/search/keyword.json" -> { placeRequests++; places() }
-                "/v2/routing/publictraffic" -> { transitRequests++; transit() }
-                "/v1/directions" -> { carRequests++; car() }
+                "/kakao/local/search/keyword" -> { placeRequests++; places() }
+                "/kakao/routing/publictraffic" -> { transitRequests++; transit() }
+                "/kakao/navi/directions" -> { carRequests++; car() }
+                "/kakao/local/geo/coord2address" -> { addressRequests++; address() }
                 else -> MockResponse.Builder().code(404).build()
             }
         }
@@ -68,7 +71,7 @@ class FakeKakaoServer : AutoCloseable {
 
     val apis: KakaoApis by lazy {
         val url = server.url("/").toString()
-        KakaoApis(apiKey = TEST_KEY, dapiBaseUrl = url, naviBaseUrl = url)
+        KakaoApis(apiBaseUrl = url)
     }
 
     override fun close() = server.close()

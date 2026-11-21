@@ -8,24 +8,28 @@ import com.sunseat.app.data.route.CarRouteApi
 import com.sunseat.app.data.route.KakaoCarRouteApi
 import com.sunseat.app.data.route.KakaoTransitRouteApi
 import com.sunseat.app.data.route.TransitRouteApi
-import okhttp3.OkHttpClient
 
 /**
  * 카카오 API 구현을 한곳에서 만든다. 화면은 인터페이스만 받아 테스트에서 가짜로 바꿀 수 있다.
- * 키가 비어 있으면 모든 호출이 네트워크 없이 `ApiError.MISSING_KEY`로 실패한다.
+ * 모든 호출은 앱 API 게이트웨이(`workers/api`, #189)의 `kakao/` 경로로 간다. REST 키는 앱에 없다.
+ * 앱 API 주소가 비어 있으면 모든 호출이 네트워크 없이 `ApiError.MISSING_KEY`로 실패한다.
  */
 class KakaoApis(
-    apiKey: String = BuildConfig.KAKAO_REST_API_KEY,
-    client: OkHttpClient = KakaoHttp.okHttpClient(apiKey),
-    dapiBaseUrl: String = KakaoHttp.DAPI_BASE_URL,
-    naviBaseUrl: String = KakaoHttp.NAVI_BASE_URL,
+    apiBaseUrl: String = BuildConfig.SUNSEAT_API_BASE_URL,
 ) {
-    private val dapi by lazy { KakaoHttp.retrofit(dapiBaseUrl, client) }
-    private val navi by lazy { KakaoHttp.retrofit(naviBaseUrl, client) }
+    private val baseUrl = KakaoHttp.apiBaseUrl(apiBaseUrl)
+    private val retrofit by lazy {
+        KakaoHttp.retrofit(
+            (baseUrl ?: KakaoHttp.UNCONFIGURED_BASE_URL) + KakaoHttp.GROUP_PATH,
+            KakaoHttp.okHttpClient(configured = baseUrl != null),
+        )
+    }
 
-    val placeSearch: PlaceSearchApi by lazy { KakaoPlaceSearchApi(dapi) }
+    val placeSearch: PlaceSearchApi by lazy { KakaoPlaceSearchApi(retrofit) }
 
-    val transitRoutes: TransitRouteApi by lazy { KakaoTransitRouteApi(dapi) }
+    val reverseGeocode: com.sunseat.app.data.place.ReverseGeocodeApi by lazy { com.sunseat.app.data.place.KakaoReverseGeocodeApi(retrofit) }
 
-    val carRoutes: CarRouteApi by lazy { KakaoCarRouteApi(navi) }
+    val transitRoutes: TransitRouteApi by lazy { KakaoTransitRouteApi(retrofit) }
+
+    val carRoutes: CarRouteApi by lazy { KakaoCarRouteApi(retrofit) }
 }

@@ -37,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
@@ -64,6 +65,9 @@ import com.sunseat.app.ui.components.DiagramSun
 import com.sunseat.app.ui.components.Exposure
 import com.sunseat.app.ui.components.ExposurePill
 import com.sunseat.app.ui.components.FloatingCapsule
+import com.sunseat.app.ui.components.overlay
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.layout.onSizeChanged
 import com.sunseat.app.ui.components.PrimaryButton
 import com.sunseat.app.ui.components.QuietButton
 import com.sunseat.app.ui.components.SeatSunDiagram
@@ -130,11 +134,18 @@ fun ResultScreen(
     val result = state.result
     if (showSchedule) com.sunseat.app.ui.input.TimeSheet(request.departure, request.mode, { showSchedule = false }, actions.onSchedule, now = now)
     Surface(modifier.fillMaxSize(), color = scheme.background, contentColor = scheme.onSurface) {
-        Box(Modifier.fillMaxSize()) {
+        // #172: 떠 있는 위·아래 캡슐(오버레이)의 측정 위치로 본문 여백을 정한다. 고정 여백은 측정 전 첫 프레임 어림으로만 쓴다(큰 글자에서 캡슐이 커져도 처음 화면의 글이 깔리지 않음).
+        var boxHeight by remember { mutableStateOf(0.dp) }
+        var topCapsuleBottom by remember { mutableStateOf(0.dp) }
+        var bottomCapsuleTop by remember { mutableStateOf(0.dp) }
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val topPadding = if (topCapsuleBottom > 0.dp) topCapsuleBottom + Spacing.l else insets.calculateTopPadding() + Sizes.topCapsuleClearance
+        val bottomPadding = if (bottomCapsuleTop > 0.dp && boxHeight > 0.dp) boxHeight - bottomCapsuleTop + Spacing.l else insets.calculateBottomPadding() + Sizes.bottomCapsuleClearance
+        Box(Modifier.fillMaxSize().onSizeChanged { boxHeight = with(density) { it.height.toDp() } }) {
             if (result == null) {
                 Loading(insets.calculateTopPadding(), animateIn)
             } else {
-                ResultContent(request, result, actions, animateIn, zone, insets.calculateTopPadding(), insets.calculateBottomPadding())
+                ResultContent(request, result, actions, animateIn, zone, topPadding, bottomPadding)
             }
 
             FloatingCapsule(
@@ -142,31 +153,25 @@ fun ResultScreen(
                     .align(Alignment.TopCenter)
                     .windowInsetsPadding(WindowInsets.safeDrawing)
                     .padding(horizontal = Spacing.m, vertical = Spacing.s)
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .overlay("result_journey_capsule") { _, bottom -> topCapsuleBottom = bottom },
             ) {
                 Row(Modifier.padding(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = actions.onBack) {
                         Icon(painterResource(R.drawable.ic_ms_arrow_back), contentDescription = stringResource(R.string.common_back))
                     }
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            "${request.origin.name} → ${request.destination.name}",
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            if (result != null) stringResource(
-                                R.string.result_schedule,
-                                stringResource(when (request.mode) { TravelMode.TAXI -> R.string.common_taxi; TravelMode.CAR -> R.string.common_car; else -> R.string.input_mode_transit }),
-                                state.departure.atZone(zone).format(TimeFormat), result.arrival.atZone(zone).format(TimeFormat),
-                            ) else stringResource(
-                                if (request.mode != TravelMode.TRANSIT) R.string.result_subtitle_car else R.string.result_subtitle_transit,
-                                state.departure.atZone(zone).format(TimeFormat),
-                            ),
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
+                    // #103: 축약 여정 바와 같은 글(2줄까지 줄바꿈 + 조건 줄, DESIGN 5.1). 시각은 오른쪽 아이콘으로 고친다.
+                    val mode = com.sunseat.app.ui.input.travelModeLabel(request.mode)
+                    com.sunseat.app.ui.input.JourneySummary(
+                        request.origin.name, request.destination.name,
+                        if (result != null) stringResource(R.string.result_schedule, mode,
+                            state.departure.atZone(zone).format(TimeFormat), result.arrival.atZone(zone).format(TimeFormat))
+                        else stringResource(
+                            if (request.mode != TravelMode.TRANSIT) R.string.result_subtitle_car else R.string.result_subtitle_transit,
+                            state.departure.atZone(zone).format(TimeFormat),
+                        ),
+                        Modifier.weight(1f).testTag("result_journey_bar"),
+                    )
                     IconButton(onClick = { showSchedule = true }) { Icon(painterResource(R.drawable.ic_ms_schedule), stringResource(R.string.input_time_title)) }
                 }
             }
@@ -177,7 +182,8 @@ fun ResultScreen(
                         .align(Alignment.BottomCenter)
                         .windowInsetsPadding(WindowInsets.safeDrawing)
                         .padding(horizontal = Spacing.m, vertical = Spacing.m)
-                        .fillMaxWidth(),
+                        .fillMaxWidth()
+                        .overlay("result_actions_capsule") { top, _ -> bottomCapsuleTop = top },
                 ) {
                     Row(Modifier.padding(Spacing.s), horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalAlignment = Alignment.CenterVertically) {
                         QuietButton(onClick = actions.onRestart, modifier = Modifier.weight(1f)) {
@@ -218,8 +224,8 @@ private fun ResultContent(
     actions: ResultActions,
     animateIn: Boolean,
     zone: ZoneId,
-    topInset: Dp,
-    bottomInset: Dp,
+    topPadding: Dp,
+    bottomPadding: Dp,
 ) {
     val scheme = SunSeatTheme.scheme
     val reduce = SunSeatTheme.reduceMotion || !animateIn
@@ -247,7 +253,7 @@ private fun ResultContent(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = Spacing.screen)
-            .padding(top = topInset + Sizes.topCapsuleClearance, bottom = bottomInset + Sizes.bottomCapsuleClearance),
+            .padding(top = topPadding, bottom = bottomPadding),
         verticalArrangement = Arrangement.spacedBy(Spacing.m),
     ) {
         Stagger(shown, index++) {

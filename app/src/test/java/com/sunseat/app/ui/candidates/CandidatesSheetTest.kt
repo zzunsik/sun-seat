@@ -6,6 +6,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.unit.dp
 import com.sunseat.app.ui.map.LocalMapRenderer
 import com.sunseat.app.ui.map.MapRenderer
 import com.sunseat.app.ui.map.points
@@ -75,12 +76,12 @@ class CandidatesSheetTest {
         for (id in listOf(0, 1, 2)) {
             compose.onNodeWithTag("candidate_list").performScrollToKey(id)
             compose.onNodeWithTag("candidate_$id").performSemanticsAction(SemanticsActions.OnClick)
-            compose.onNodeWithText("선택한 경로").assertExists()
+            compose.onNodeWithTag("candidates_preview_sheet").assertExists()
             compose.waitForIdle()
             assertEquals("미리보기 #$id 는 선택 경로만 그린다", listOf(id), shownIds())
             assertEquals(0, shownSelected())
-            // '전체 경로 보기'는 선택 경로 전체 구간에 카메라를 맞출 뿐 다른 후보를 다시 섞지 않는다.
-            compose.onNodeWithText("전체 경로 보기").performSemanticsAction(SemanticsActions.OnClick)
+            // '지도 맞춤'은 선택 경로 전체 구간에 카메라를 맞출 뿐 다른 후보를 다시 섞지 않는다.
+            compose.onNodeWithText("지도 맞춤").performSemanticsAction(SemanticsActions.OnClick)
             compose.waitForIdle()
             assertEquals(listOf(id), shownIds())
             compose.onAllNodesWithContentDescription("경로 목록으로 돌아가기")[0].performSemanticsAction(SemanticsActions.OnClick)
@@ -117,7 +118,7 @@ class CandidatesSheetTest {
 
     @Test fun previewCloseRestoresSelectionSortFiltersAndNonzeroScroll() {
         val base = CandidatesFixtures.options.toUi(java.time.LocalDateTime.of(2026, 11, 15, 9, 0)).first()
-        var state by mutableStateOf(CandidatesState.Options((0..9).map { base.copy(id = it) }, sort = CandidateSort.WALK, filters = setOf(base.type)))
+        var state by mutableStateOf(CandidatesState.Options((0..9).map { base.copy(id = it) }, sort = CandidateSort.WALK, category = RouteCategory.SUBWAY))
         val restoration = androidx.compose.ui.test.junit4.StateRestorationTester(compose)
         restoration.setContent {
             CompositionLocalProvider(LocalMapRenderer provides MapRenderer.PREVIEW) {
@@ -128,14 +129,14 @@ class CandidatesSheetTest {
         compose.waitForIdle()
         val before = compose.onNodeWithTag("candidate_list").fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
         compose.onNodeWithTag("candidate_5").performSemanticsAction(SemanticsActions.OnClick)
-        compose.onNodeWithText("선택한 경로").assertExists()
-        compose.onNodeWithText("전체 경로 보기").assertExists()
+        compose.onNodeWithTag("candidates_preview_sheet").assertExists()
+        compose.onNodeWithText("지도 맞춤").assertExists()
         restoration.emulateSavedInstanceStateRestore()
-        compose.onNodeWithText("선택한 경로").assertExists()
+        compose.onNodeWithTag("candidates_preview_sheet").assertExists()
         compose.waitUntil(10_000) { compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey] > 0 }
         var revision = compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey]
         compose.onNodeWithTag("candidate_map").performTouchInput { swipeLeft() }
-        compose.onNodeWithText("전체 경로 보기").performSemanticsAction(SemanticsActions.OnClick)
+        compose.onNodeWithText("지도 맞춤").performSemanticsAction(SemanticsActions.OnClick)
         compose.waitUntil(10_000) { compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey] > revision }
         revision = compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey]
         compose.onNodeWithTag("candidate_map").performTouchInput { swipeLeft() }
@@ -145,10 +146,10 @@ class CandidatesSheetTest {
         val after = compose.onNodeWithTag("candidate_list").fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
         assertEquals(before, after, 0.001f)
         assertEquals(CandidateSort.WALK, state.sort)
-        assertEquals(setOf(base.type), state.filters)
+        assertEquals(RouteCategory.SUBWAY, state.category)
         // Reopening the same card requests one settled route fit, preserving the list.
         compose.onNodeWithTag("candidate_5").performSemanticsAction(SemanticsActions.OnClick)
-        compose.onNodeWithText("선택한 경로").assertExists()
+        compose.onNodeWithTag("candidates_preview_sheet").assertExists()
         compose.waitUntil(10_000) { compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey] > revision }
         compose.mainClock.advanceTimeBy(1000)
         compose.waitForIdle()
@@ -157,9 +158,176 @@ class CandidatesSheetTest {
         compose.onAllNodesWithContentDescription("경로 목록으로 돌아가기")[0].performSemanticsAction(SemanticsActions.OnClick)
         compose.waitForIdle()
         assertEquals(before, compose.onNodeWithTag("candidate_list").fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value(), 0.001f)
+        // #135: 다시 연 미리보기에서 지도를 움직이지 않고 닫았으므로 목록 지도 띠에 한 번 다시 맞춘다. 아래 정렬 변경은 맞추지 않는다.
+        compose.waitUntil(10_000) { compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey] > revision }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.waitForIdle()
+        assertEquals(revision + 1, compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey])
+        revision++
+        compose.onNodeWithTag("candidates_sort").performSemanticsAction(SemanticsActions.OnClick)
         compose.onNodeWithText("최소 시간").performSemanticsAction(SemanticsActions.OnClick)
         compose.mainClock.advanceTimeBy(1000)
         compose.waitForIdle()
         assertEquals(revision, compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey])
+    }
+
+    /** #83: 열린 정렬 메뉴는 재생성(회전) 뒤에도 열려 있고, 현재 기준을 다시 고르면 기준을 바꾸지 않고 닫기만 한다. */
+    @Test fun sortMenuSurvivesRecreationAndReselectingCurrentOnlyCloses() {
+        val sorts = mutableListOf<CandidateSort>()
+        val state = CandidatesState.Options(CandidatesFixtures.options.toUi(java.time.LocalDateTime.of(2026, 11, 15, 9, 0)), sort = CandidateSort.TIME)
+        val restoration = androidx.compose.ui.test.junit4.StateRestorationTester(compose)
+        restoration.setContent {
+            CompositionLocalProvider(LocalMapRenderer provides MapRenderer.PREVIEW) {
+                SunSeatTheme { CandidatesScreen(CandidatesFixtures.transitRequest, state, CandidatesActions(onSort = { sorts += it })) }
+            }
+        }
+        compose.onNodeWithTag("candidates_sort").assert(hasText("최소 시간"))
+        compose.onNodeWithText("추천순").assertDoesNotExist()
+        compose.onNodeWithTag("candidates_sort").performSemanticsAction(SemanticsActions.OnClick)
+        compose.onNodeWithText("추천순").assertExists()
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithText("추천순").assertExists()
+        compose.onNode(hasText("최소 시간") and isSelected()).performSemanticsAction(SemanticsActions.OnClick)
+        compose.waitForIdle()
+        compose.onNodeWithText("추천순").assertDoesNotExist()
+        assertTrue(sorts.isEmpty())
+        compose.onNodeWithTag("candidates_sort").assert(hasText("최소 시간"))
+    }
+
+    private fun bounds(tag: String) = compose.onNodeWithTag(tag, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+
+    /** 상단 헤더(펼친 헤더·축약 여정 바)가 시트와 겹쳐 글줄 조각으로 남지 않는다(#101). */
+    private fun assertHeaderNotCut(where: String) {
+        val header = bounds("candidates_header")
+        val sheet = bounds("candidates_sheet_handle")
+        assertTrue("$where: header bottom ${header.bottom} overlaps sheet top ${sheet.top}", header.bottom <= sheet.top + 0.5f)
+    }
+
+    private fun renderSheet(request: com.sunseat.app.domain.TripRequest = CandidatesFixtures.transitRequest, fontScale: Float = 1f, onBack: () -> Unit = {}): Pair<androidx.compose.material3.BottomSheetScaffoldState, kotlinx.coroutines.CoroutineScope> {
+        lateinit var sheet: androidx.compose.material3.BottomSheetScaffoldState
+        lateinit var scope: kotlinx.coroutines.CoroutineScope
+        val state = CandidatesState.Options(CandidatesFixtures.options.toUi(java.time.LocalDateTime.of(2026, 11, 15, 9, 0)))
+        compose.setContent {
+            sheet = androidx.compose.material3.rememberBottomSheetScaffoldState()
+            scope = rememberCoroutineScope()
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            CompositionLocalProvider(LocalMapRenderer provides MapRenderer.PREVIEW, androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, fontScale)) {
+                SunSeatTheme { CandidatesScreen(request, state, CandidatesActions(onBack = onBack), scaffoldState = sheet) }
+            }
+        }
+        compose.mainClock.advanceTimeBy(5000)
+        compose.waitForIdle()
+        return sheet to scope
+    }
+
+    private fun expandAndCheckCompactBar(request: com.sunseat.app.domain.TripRequest = CandidatesFixtures.transitRequest, fontScale: Float = 1f) {
+        var backs = 0
+        val (sheet, scope) = renderSheet(request, fontScale) { backs++ }
+        fun cameraRevision() = compose.onNodeWithTag("candidate_map").fetchSemanticsNode().config[com.sunseat.app.ui.map.MapCameraRevisionKey]
+        // 헤더 전환으로 지도 크기가 바뀌어도 카메라를 다시 맞추지 않는다(#71 계약).
+        val revision = cameraRevision()
+        assertHeaderNotCut("collapsed")
+        compose.onNodeWithText("출발", useUnmergedTree = true).assertExists()
+        compose.runOnIdle { scope.launch { sheet.bottomSheetState.expand() } }
+        compose.mainClock.advanceTimeBy(5000)
+        compose.waitForIdle()
+        assertEquals(androidx.compose.material3.SheetValue.Expanded, sheet.bottomSheetState.currentValue)
+        assertHeaderNotCut("expanded")
+        // 가려진 펼친 헤더 컨트롤은 접근성 트리에도 남지 않는다.
+        compose.onNodeWithText("출발", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithContentDescription("출발지와 도착지 바꾸기").assertDoesNotExist()
+        // 축약 여정 바: 완전한 여정 확인 + 뒤로 + 누르면 펼친 헤더로 복귀(편집 경로 유지).
+        compose.onNodeWithText("${request.origin.name} → ${request.destination.name}", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("대중교통 · 지금 출발", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("뒤로").assertIsDisplayed().performSemanticsAction(SemanticsActions.OnClick)
+        assertEquals(1, backs)
+        compose.onNodeWithTag("candidates_journey_bar").assertHasClickAction().performSemanticsAction(SemanticsActions.OnClick)
+        compose.mainClock.advanceTimeBy(5000)
+        compose.waitForIdle()
+        assertEquals(androidx.compose.material3.SheetValue.PartiallyExpanded, sheet.bottomSheetState.currentValue)
+        assertHeaderNotCut("restored")
+        assertEquals(revision, cameraRevision())
+        compose.onNodeWithContentDescription("출발지와 도착지 바꾸기").assertIsDisplayed()
+        compose.onNodeWithText("지금 출발", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test fun expandedSheetShowsCompactJourneyBarInsteadOfHeaderFragment() = expandAndCheckCompactBar()
+
+    @Test @Config(qualifiers = "w320dp-h640dp-xxhdpi")
+    fun expandedSheetSmallScreenLargeTextLongNames() = expandAndCheckCompactBar(
+        CandidatesFixtures.transitRequest.copy(
+            origin = CandidatesFixtures.transitRequest.origin.copy(name = "아주 긴 견본 출발지 이름과 부가 설명"),
+            destination = CandidatesFixtures.transitRequest.destination.copy(name = "아주 긴 견본 목적지 이름과 부가 설명"),
+        ), fontScale = 1.5f)
+
+    @Test @Config(qualifiers = "w844dp-h390dp-xxhdpi")
+    fun expandedSheetLandscape() = landscapeHasNoSheetOrHeaderFragment()
+
+    /** #144: 가로는 아래 시트 대신 오른쪽 전체 높이 패널이라 완전 확장 상태가 없다. 펼친 헤더는 통째로 보이고 지도·목록과 겹치지 않는다(#101). */
+    private fun landscapeHasNoSheetOrHeaderFragment() {
+        var backs = 0
+        renderSheet { backs++ }
+        compose.onNodeWithTag("candidates_sheet_handle", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("candidates_journey_bar").assertDoesNotExist()
+        compose.onNodeWithContentDescription("출발지와 도착지 바꾸기").assertIsDisplayed()
+        val header = bounds("candidates_header")
+        val map = bounds("candidate_map")
+        val panel = bounds("candidates_sheet")
+        assertTrue("header $header sits above the map $map", header.bottom <= map.top + 0.5f)
+        assertTrue("list panel $panel sits beside header and map", panel.left >= header.right - 0.5f && panel.left >= map.right - 0.5f)
+        compose.onNodeWithTag("candidate_0").assertIsDisplayed()
+        compose.onNodeWithContentDescription("뒤로").performSemanticsAction(SemanticsActions.OnClick)
+        assertEquals(1, backs)
+    }
+
+    @Test fun draggingSheetNeverLeavesHeaderFragment() = dragAcrossHeader()
+
+    @Test @Config(qualifiers = "w320dp-h640dp-xxhdpi")
+    fun draggingSheetSmallScreenLargeText() = dragAcrossHeader(1.5f)
+
+    private fun dragAcrossHeader(fontScale: Float = 1f) {
+        renderSheet(fontScale = fontScale)
+        val step = with(compose.density) { 40.dp.toPx() }
+        compose.onNodeWithTag("candidate_list").performTouchInput { down(topCenter + androidx.compose.ui.geometry.Offset(0f, 10f)) }
+        repeat(10) { index ->
+            compose.onNodeWithTag("candidate_list").performTouchInput { moveBy(androidx.compose.ui.geometry.Offset(0f, -step)) }
+            compose.waitForIdle()
+            assertHeaderNotCut("drag step $index")
+        }
+        compose.onNodeWithTag("candidates_journey_bar").assertExists()
+        compose.onNodeWithTag("candidate_list").performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(5000)
+        compose.waitForIdle()
+        assertHeaderNotCut("drag settled")
+    }
+
+    @Test fun expandedSheetSurvivesRecreation() {
+        val restoration = androidx.compose.ui.test.junit4.StateRestorationTester(compose)
+        lateinit var sheet: androidx.compose.material3.BottomSheetScaffoldState
+        lateinit var scope: kotlinx.coroutines.CoroutineScope
+        val state = CandidatesState.Options(CandidatesFixtures.options.toUi(java.time.LocalDateTime.of(2026, 11, 15, 9, 0)))
+        restoration.setContent {
+            sheet = androidx.compose.material3.rememberBottomSheetScaffoldState()
+            scope = rememberCoroutineScope()
+            CompositionLocalProvider(LocalMapRenderer provides MapRenderer.PREVIEW) {
+                SunSeatTheme { CandidatesScreen(CandidatesFixtures.transitRequest, state, CandidatesActions(), scaffoldState = sheet) }
+            }
+        }
+        compose.mainClock.advanceTimeBy(5000)
+        compose.runOnIdle { scope.launch { sheet.bottomSheetState.expand() } }
+        compose.mainClock.advanceTimeBy(5000)
+        compose.waitForIdle()
+        restoration.emulateSavedInstanceStateRestore()
+        compose.mainClock.advanceTimeBy(5000)
+        compose.waitForIdle()
+        assertEquals(androidx.compose.material3.SheetValue.Expanded, sheet.bottomSheetState.currentValue)
+        assertHeaderNotCut("recreated")
+        compose.onNodeWithTag("candidates_journey_bar").assertIsDisplayed()
+        compose.onNodeWithTag("candidates_journey_bar").performSemanticsAction(SemanticsActions.OnClick)
+        compose.mainClock.advanceTimeBy(5000)
+        compose.waitForIdle()
+        assertEquals(androidx.compose.material3.SheetValue.PartiallyExpanded, sheet.bottomSheetState.currentValue)
+        assertHeaderNotCut("recreated then restored")
+        compose.onNodeWithContentDescription("출발지와 도착지 바꾸기").assertIsDisplayed()
     }
 }

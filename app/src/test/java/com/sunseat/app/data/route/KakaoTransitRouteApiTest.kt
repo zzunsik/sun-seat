@@ -43,7 +43,7 @@ class KakaoTransitRouteApiTest {
         api.search(origin, destination)
 
         val url = server.takeRequest().url
-        assertEquals("/v2/routing/publictraffic", url.encodedPath)
+        assertEquals("/kakao/routing/publictraffic", url.encodedPath)
         assertEquals("127.0", url.queryParameter("start_x"))
         assertEquals("37.5", url.queryParameter("start_y"))
         assertEquals("127.04", url.queryParameter("end_x"))
@@ -190,7 +190,7 @@ class KakaoTransitRouteApiTest {
         server.enqueueJson("""{"code":-10,"msg":"limit exceeded"}""", 400)
         assertEquals(ApiResult.Failure(ApiError.QUOTA_EXCEEDED, 400), api.search(origin, destination))
 
-        val noKey = KakaoTransitRouteApi(server.kakaoRetrofit(apiKey = ""))
+        val noKey = KakaoTransitRouteApi(server.kakaoRetrofit(apiConfigured = false))
         assertEquals(ApiResult.Failure(ApiError.MISSING_KEY), noKey.search(origin, destination))
         assertEquals(2, server.requestCount)
     }

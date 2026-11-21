@@ -22,16 +22,45 @@ object Spacing {
 
 /** 부품 크기 토큰. docs/DESIGN.md 4 */
 object Sizes {
+    val routeBar = 8.dp
+    val routeBarGap = 2.dp
+    val timelineNode = 12.dp
+    val timelineConnector = 2.dp
+    val selectionBar = 4.dp
+    val badgeHeight = 24.dp
+    val compactPillHeight = 28.dp
+    val secondaryButton = 40.dp
     val cabinHeight = 208.dp
     val cabinLandscapeHeight = 152.dp
     val simulationCompactPlay = 112.dp
     val simulationMapInfo = 84.dp
     val simulationSunRay = 56.dp
     val mapHeight = 240.dp
+
+    /** 축약 여정 바 최소 높이(DESIGN 4.2, 5.1) */
+    val journeyBar = 56.dp
+
+    /** 범주 탭 최소 높이와 선택 밑줄 두께(DESIGN 4.2, 12.2) */
+    val tabHeight = 48.dp
+    val tabIndicator = 3.dp
     val mapMarker = 32.dp
-    val mapRoute = 5.dp
-    val mapWalk = 3.dp
-    val mapSubway = 7.dp
+    /** 지도 경로선(논리 dp, docs/DESIGN.md 4.2·11.1). 선택 = 속 4 + 양쪽 테두리 1 */
+    val mapRouteSelected = 6.dp
+    val mapRouteCore = 4.dp
+    val mapRouteCasing = 1.dp
+    val mapRouteWalk = 3.dp
+    val mapRouteWalkGap = 3.dp
+    val mapRouteAlternate = 3.dp
+    /** 진행 방향 쉐브론 크기와 간격, 정류장 이름 라벨 최소 높이 */
+    val mapRouteArrow = 8.dp
+    val mapRouteArrowSpacing = 72.dp
+    val mapLabelHeight = 20.dp
+    /** 승차·환승·하차 표식과 그 테두리, 출발·도착 글자 표식 꼬리 */
+    val mapStopMarker = 14.dp
+    val mapStopBorder = 2.dp
+    val mapMarkerTail = 6.dp
+    /** 해 방향 선 굵기(경로선과 별개) */
+    val mapSunRayStroke = 5.dp
     val mapInset = 40.dp
     val mapSunRay = 72.dp
 

@@ -4,6 +4,7 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -11,13 +12,18 @@ import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 
-/** 카카오 API 공통 HTTP 설정. */
+/**
+ * 카카오 API 공통 HTTP 설정.
+ *
+ * 앱은 카카오를 직접 부르지 않고 앱 API 게이트웨이(`workers/api`, #189)의 `kakao/` 경로 묶음을 부른다.
+ * REST 키는 게이트웨이에만 있고 앱은 인증 헤더를 붙이지 않는다. 네 API가 기준 주소 `<앱 API>/kakao/` 하나를 같이 쓴다.
+ */
 object KakaoHttp {
-    /** 카카오 로컬·대중교통 경로. */
-    const val DAPI_BASE_URL = "https://dapi.kakao.com/"
+    /** 앱 API 게이트웨이에서 카카오 경로 묶음의 이름. 게이트웨이 `GROUPS.kakao`와 같다. */
+    const val GROUP_PATH = "kakao/"
 
-    /** 카카오모빌리티 자동차 길찾기. */
-    const val NAVI_BASE_URL = "https://apis-navi.kakaomobility.com/"
+    /** 앱 API 주소가 없을 때 Retrofit을 만들기 위한 자리표시 주소. 이 주소로는 요청을 보내지 않는다. */
+    internal const val UNCONFIGURED_BASE_URL = "https://sunseat-api.invalid/"
 
     internal val json = Json {
         ignoreUnknownKeys = true
@@ -25,8 +31,22 @@ object KakaoHttp {
         coerceInputValues = true
     }
 
-    fun okHttpClient(apiKey: String): OkHttpClient = OkHttpClient.Builder()
-        .addInterceptor(KakaoAuthInterceptor(apiKey))
+    /**
+     * 빌드 설정의 앱 API 주소(`SUNSEAT_API_BASE_URL`)를 기준 주소(끝에 `/`)로 바꾼다.
+     * 비었거나 http(s) 주소가 아니거나 쿼리가 붙어 있으면 null(= 설정 안 됨).
+     * http 주소도 받는다(로컬 `wrangler dev`·테스트용). 실제 기기는 평문 통신을 막으므로 https 주소를 쓴다.
+     */
+    fun apiBaseUrl(raw: String): String? {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return null
+        val url = (if (trimmed.endsWith("/")) trimmed else "$trimmed/").toHttpUrlOrNull() ?: return null
+        if (url.query != null || url.fragment != null) return null
+        return url.toString()
+    }
+
+    /** @param configured false면 모든 요청을 보내지 않고 [ApiNotConfiguredException]으로 실패시킨다. */
+    fun okHttpClient(configured: Boolean = true): OkHttpClient = OkHttpClient.Builder()
+        .addInterceptor(ApiConfiguredInterceptor(configured))
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
         .build()
@@ -38,17 +58,14 @@ object KakaoHttp {
         .build()
 }
 
-/** 키가 비어 있을 때 요청을 보내기 전에 던진다. */
-class MissingApiKeyException : IOException("KAKAO_REST_API_KEY가 비어 있습니다")
+/** 앱 API 주소가 없을 때 요청을 보내기 전에 던진다. */
+class ApiNotConfiguredException : IOException("SUNSEAT_API_BASE_URL이 비어 있습니다")
 
-/** `Authorization: KakaoAK {키}` 헤더를 붙인다. 키가 비어 있으면 요청을 보내지 않는다. */
-class KakaoAuthInterceptor(private val apiKey: String) : Interceptor {
+/** 앱 API 주소가 설정되지 않았으면 요청을 보내지 않는다. 인증 헤더는 붙이지 않는다(키는 게이트웨이에만 있다). */
+class ApiConfiguredInterceptor(private val configured: Boolean) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): okhttp3.Response {
-        if (apiKey.isBlank()) throw MissingApiKeyException()
-        val request = chain.request().newBuilder()
-            .header("Authorization", "KakaoAK $apiKey")
-            .build()
-        return chain.proceed(request)
+        if (!configured) throw ApiNotConfiguredException()
+        return chain.proceed(chain.request())
     }
 }
 
@@ -62,7 +79,7 @@ internal suspend fun <T : Any, R> kakaoCall(
 ): ApiResult<R> {
     val response = try {
         request()
-    } catch (_: MissingApiKeyException) {
+    } catch (_: ApiNotConfiguredException) {
         return ApiResult.Failure(ApiError.MISSING_KEY)
     } catch (_: IOException) {
         return ApiResult.Failure(ApiError.NETWORK)

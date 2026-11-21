@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.sunseat.app.R
 import com.sunseat.app.data.network.ApiError
 import com.sunseat.app.data.network.ApiResult
+import com.sunseat.app.data.network.retryable
 import com.sunseat.app.data.route.CarNoRouteReason
 import com.sunseat.app.data.route.CarRouteApi
 import com.sunseat.app.data.route.NoRouteReason
@@ -56,7 +57,10 @@ data class CandidateUi(
     /** 경로 조회 시점 또는 확정 출발 시각에 소요시간을 더한 예상값. */
     val arrival: LocalDateTime?,
     val transfers: Int,
-    /** 환승 도보 합(분). 출발지→첫 정류장, 마지막 정류장→도착지 도보는 응답에 없어 빠진다 */
+    /**
+     * 응답에 있는 도보 구간 합(분, 내림)으로 '최소 도보' 정렬 기준이다. 승차~하차 사이 환승 도보만이며
+     * 출발지→첫 정류장, 마지막 정류장→도착지 도보는 응답에 없어 빠진다(#105). 화면 표시는 [providedWalk]를 쓴다.
+     */
     val walkMinutes: Long,
     val fare: Int?,
     val fastest: Boolean,
@@ -67,14 +71,25 @@ data class CandidateUi(
     val type: TransitRouteType = TransitRouteType.OTHER,
 )
 
+/**
+ * 응답이 알려 준 도보 구간의 합(#105). 승차~하차 사이 환승 도보만이고 접근 도보는 포함하지 않는다.
+ * 도보 구간이 하나도 없으면 null이다. '0분'(알려진 0)과 구별하며, 전체 소요시간과 구간 합의 차이를
+ * 도보나 대기로 배분하지 않는다.
+ */
+val CandidateUi.providedWalk: Duration?
+    get() = chosen.route.legs.filter { it.mode == Mode.WALK }.takeIf { it.isNotEmpty() }
+        ?.fold(Duration.ZERO) { sum, leg -> sum + leg.duration }
+
 sealed interface CandidatesState {
     data class Loading(val mode: TravelMode) : CandidatesState
     data class Options(
         val items: List<CandidateUi>, val sort: CandidateSort = CandidateSort.RECOMMENDED,
-        val filters: Set<TransitRouteType> = emptySet(), val selectedId: Int? = null,
+        val category: RouteCategory = RouteCategory.ALL, val selectedId: Int? = null,
         val goal: SunGoal = SunGoal.AVOID,
     ) : CandidatesState {
-        val visible: List<CandidateUi> get() = orderCandidates(items, sort, filters, goal)
+        val visible: List<CandidateUi> get() = orderCandidates(items, sort, category.types, goal)
+        /** 범주 탭에 보일 개수(#82). 정렬·햇빛 계산과 무관하게 받은 후보 [items] 기준이다. */
+        val counts: Map<RouteCategory, Int> get() = categoryCounts(items)
     }
 
     /** 경로 없음. [suggestCar]면 "자가용 기준으로 좌석 보기"를 제안한다. */
@@ -102,7 +117,7 @@ internal fun TransitRouteOption.toUi(id: Int, now: LocalDateTime?, fastest: Bool
         totalDuration = totalDuration,
         arrival = now?.plus(totalDuration),
         transfers = transfers,
-        walkMinutes = route.legs.filter { it.mode == Mode.WALK }.sumOf { it.duration.toMinutes() },
+        walkMinutes = route.legs.filter { it.mode == Mode.WALK }.fold(Duration.ZERO) { sum, leg -> sum + leg.duration }.toMinutes(),
         fare = fare,
         fastest = fastest,
         chips = chips,
@@ -165,10 +180,15 @@ class CandidatesViewModel(
         calculateSun(refreshed, base, version)
     }
     fun setSort(sort: CandidateSort) { _state.update { if (it is CandidatesState.Options) it.copy(sort = sort) else it } }
-    fun toggleFilter(type: TransitRouteType) { _state.update {
-        if (it is CandidatesState.Options) it.copy(filters = if (type in it.filters) it.filters - type else it.filters + type, selectedId = null) else it
+    /**
+     * 범주 탭 하나를 고른다(#82). 같은 범주를 다시 골라도 그대로다. 고른 경로가 새 범주에서 숨으면
+     * 선택을 해제해 목록에 없는 경로가 지도에만 선택으로 남지 않게 한다(DESIGN 12.2).
+     */
+    fun selectCategory(category: RouteCategory) { _state.update { current ->
+        if (current !is CandidatesState.Options) return@update current
+        val kept = current.selectedId?.takeIf { id -> current.items.any { it.id == id && category.matches(it) } }
+        current.copy(category = category, selectedId = kept)
     } }
-    fun clearFilters() { _state.update { if (it is CandidatesState.Options) it.copy(filters = emptySet()) else it } }
     fun highlight(id: Int) { _state.update { if (it is CandidatesState.Options) it.copy(selectedId = id) else it } }
 
     fun load() {
@@ -241,13 +261,14 @@ class CandidatesViewModel(
 
     private fun ApiError.toState() = CandidatesState.Error(
         messageRes = when (this) {
-            ApiError.MISSING_KEY, ApiError.UNAUTHORIZED -> R.string.candidates_error_unavailable
-            ApiError.QUOTA_EXCEEDED -> R.string.candidates_error_quota
+            ApiError.MISSING_KEY -> R.string.candidates_error_unavailable
+            // 앱 API 게이트웨이·카카오의 거부(401·403)와 호출 제한(429)은 잠시 뒤 다시 시도하게 한다(#189).
+            ApiError.UNAUTHORIZED, ApiError.QUOTA_EXCEEDED -> R.string.candidates_error_quota
             ApiError.NETWORK -> R.string.search_error_network
             ApiError.UNKNOWN -> R.string.candidates_error_unknown
         },
         iconRes = if (this == ApiError.NETWORK) R.drawable.ic_ms_wifi_off else R.drawable.ic_ms_error,
-        canRetry = this != ApiError.MISSING_KEY && this != ApiError.UNAUTHORIZED,
+        canRetry = retryable,
     )
 }
 
@@ -267,7 +288,31 @@ internal fun CarNoRouteReason?.messageRes(): Int = when (this) {
 }
 
 
+/**
+ * 후보 정렬 기준(#83 드롭다운). [RECOMMENDED](추천순)는 앱 점수가 아니라 경로 API가 준 순서 그대로다.
+ * [SUN]은 햇빛 목적에 따라 적은 순(피하기)·많은 순(받기)이며, 계산이 끝나지 않았거나 비교할 수 없는 후보는 뒤에 둔다.
+ */
 enum class CandidateSort { RECOMMENDED, TIME, TRANSFERS, WALK, SUN }
+
+/**
+ * 후보 목록의 경로 종류 범주(#82). 하나만 고르며 [ALL]은 빈 집합 대신 이름이 있는 "전체"다.
+ * 분류를 알 수 없는 [TransitRouteType.OTHER]는 [ALL]에만 들어가고 다른 범주로 추측해 넣지 않는다.
+ */
+enum class RouteCategory(val types: Set<TransitRouteType>) {
+    ALL(emptySet()),
+    BUS(setOf(TransitRouteType.BUS)),
+    SUBWAY(setOf(TransitRouteType.SUBWAY)),
+    MIXED(setOf(TransitRouteType.BUS_AND_SUBWAY));
+
+    fun matches(item: CandidateUi): Boolean = types.isEmpty() || item.type in types
+}
+
+/**
+ * 범주별 후보 수. API가 알려 준 총계가 아니라 앱이 실제로 받은 후보 수를 센다(목록에 보이는 행과 같은 기준).
+ * 정렬·햇빛 계산 결과는 개수에 영향을 주지 않는다.
+ */
+fun categoryCounts(items: List<CandidateUi>): Map<RouteCategory, Int> =
+    RouteCategory.entries.associateWith { category -> items.count(category::matches) }
 
 /** Filters combine with OR; pending sun calculations sort last in both goals. */
 fun orderCandidates(items: List<CandidateUi>, sort: CandidateSort, filters: Set<TransitRouteType>, goal: SunGoal): List<CandidateUi> {
@@ -276,7 +321,8 @@ fun orderCandidates(items: List<CandidateUi>, sort: CandidateSort, filters: Set<
         CandidateSort.RECOMMENDED -> visible
         CandidateSort.TIME -> visible.sortedBy { it.totalDuration }
         CandidateSort.TRANSFERS -> visible.sortedBy { it.transfers }
-        CandidateSort.WALK -> visible.sortedBy { it.walkMinutes }
+        // 같은 분이면 응답 도보의 초 단위 합으로 가른다. 도보 구간 없음(null)은 0으로 본다(#105).
+        CandidateSort.WALK -> visible.sortedWith(compareBy<CandidateUi> { it.walkMinutes }.thenBy { it.providedWalk ?: Duration.ZERO })
         CandidateSort.SUN -> visible.sortedWith(compareBy<CandidateUi> { !it.comparableSun() }.thenComparator { a, b ->
             val av = a.chosen.cachedResult?.sunIfFollowed ?: Duration.ZERO
             val bv = b.chosen.cachedResult?.sunIfFollowed ?: Duration.ZERO

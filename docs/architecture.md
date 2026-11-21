@@ -57,18 +57,30 @@ com.sunseat.app
 
 ### 4.1 공통 HTTP(#7)
 - Retrofit 3 + OkHttp 5 + kotlinx.serialization. 코드는 `com.sunseat.app.data`(`network`, `place`)
-- `KakaoAuthInterceptor`가 `Authorization: KakaoAK {키}` 헤더를 붙인다. 키(`BuildConfig.KAKAO_REST_API_KEY`)가 비어 있으면 요청을 보내지 않고 바로 실패한다
+- 앱은 카카오를 직접 부르지 않는다. 앱 API 게이트웨이(`workers/api`, Cloudflare Workers, #189)의 `kakao/` 경로 묶음을 부르고, 게이트웨이가 Workers 시크릿의 REST 키로 `Authorization: KakaoAK {키}`를 붙여 카카오에 전달한다. REST 키는 APK에 없다(CI `scripts/check-apk-secrets.sh`가 확인)
+  - 기준 주소: `BuildConfig.SUNSEAT_API_BASE_URL`(디버그는 `local.properties`의 `SUNSEAT_API_BASE_URL_DEBUG` → 개발 게이트웨이 `https://api-dev.<하위 도메인>.workers.dev`, 릴리스는 `SUNSEAT_API_BASE_URL_RELEASE` → 운영 `https://api.<하위 도메인>.workers.dev`. 없으면 `SUNSEAT_API_BASE_URL`, #191) + `kakao/`. 주소가 비었거나 http(s) 주소가 아니면 요청을 보내지 않고 바로 실패한다(`ApiConfiguredInterceptor`)
+  - 경로 대응(게이트웨이 `GROUPS.kakao`, 앱의 Retrofit 경로와 같다. `KakaoApisTest`가 게이트웨이 소스와 대조한다)
+
+    | 앱이 부르는 경로 | 카카오 |
+    |---|---|
+    | `GET kakao/local/search/keyword` | `dapi.kakao.com/v2/local/search/keyword.json` |
+    | `GET kakao/local/geo/coord2address` | `dapi.kakao.com/v2/local/geo/coord2address.json` |
+    | `GET kakao/routing/publictraffic` | `dapi.kakao.com/v2/routing/publictraffic` |
+    | `GET kakao/navi/directions` | `apis-navi.kakaomobility.com/v1/directions` |
+
+  - 게이트웨이는 GET과 위 경로·파라미터만 전달한다. 모르는 경로 묶음 404, 허용 밖 경로·파라미터 403, 그 밖 메서드 405, IP별 호출 제한 초과 429, 시크릿 없음 503, 카카오 연결 실패 502. 카카오 응답의 상태·본문은 그대로 돌려준다. 자세한 내용과 호출 제한 근거는 [workers/api/README.md](../workers/api/README.md)
 - 결과는 `ApiResult`(`Success` / `Failure(ApiError, httpCode)`)로 돌려준다. `ApiError`
-  - `MISSING_KEY`: 키 없음(네트워크 호출 없음)
-  - `UNAUTHORIZED`: 401·403(잘못된 키, 앱에 해당 API 권한 없음) 또는 공통 오류 코드 -401·-903
-  - `QUOTA_EXCEEDED`: 429 또는 공통 오류 코드 -10(호출 한도)·-11(유료 사용 한도, 둘 다 HTTP 400), 본문의 `limit`/`throttl`/`quota` 문구
+  - `MISSING_KEY`: 앱 API 주소 없음(네트워크 호출 없음). 화면은 "사용할 수 없어요"로 안내하고 다시 시도를 두지 않는다
+  - `UNAUTHORIZED`: 401·403(게이트웨이의 허용 밖 거부, 게이트웨이 키 문제, 카카오 API 권한 없음) 또는 공통 오류 코드 -401·-903. 키가 게이트웨이에 있어 서버 쪽에서 고치므로 화면은 "잠시 이용할 수 없어요 … 나중에 다시"와 다시 시도로 안내한다
+  - `QUOTA_EXCEEDED`: 429(게이트웨이 IP별 제한 포함) 또는 공통 오류 코드 -10(호출 한도)·-11(유료 사용 한도, 둘 다 HTTP 400), 본문의 `limit`/`throttl`/`quota` 문구. 화면 안내는 `UNAUTHORIZED`와 같다
   - `NETWORK`: 연결 실패·시간 초과
-  - `UNKNOWN`: 그 밖의 서버 오류, 해석할 수 없는 응답
+  - `UNKNOWN`: 그 밖의 서버 오류(게이트웨이 502·503 포함), 해석할 수 없는 응답. "잠시 뒤 다시"와 다시 시도
+  - 다시 시도 가능 여부는 `ApiError.retryable`(`MISSING_KEY`만 불가) 하나로 정한다
 - 오류 본문 예: `{"errorType":"AccessDeniedError","message":"..."}`
 - `KakaoApis`가 구현을 만들고, 화면은 인터페이스(`PlaceSearchApi` 등)만 받는다
 
 ### 4.2 경로 API(#8, #9)
-- 대중교통(#8): `GET https://dapi.kakao.com/v2/routing/publictraffic` → `TransitRouteApi.search(origin, destination)` → `ApiResult<TransitRoutes>`
+- 대중교통(#8): `GET https://dapi.kakao.com/v2/routing/publictraffic`(앱은 게이트웨이 `kakao/routing/publictraffic`) → `TransitRouteApi.search(origin, destination)` → `ApiResult<TransitRoutes>`
   - 요청: `start_x`·`start_y`·`end_x`·`end_y`(경도·위도, 필수). 선택 `s_name`·`e_name`(지점 이름), `input_coord`·`output_coord`(기본 WGS84). 출발 시각 파라미터는 없다
   - 응답: `status`, `properties`(`total`, `bus`, `subway`, `busAndSubway`, `landingURL`), `routes[]`(status가 OK일 때)
     - `routes[].properties`: `type`(BUS/SUBWAY/BUS_AND_SUBWAY), `totalDistance`(m), `totalTime`(초), `transfers`, `fare.value`(원, 없을 수 있음)
@@ -79,7 +91,7 @@ com.sunseat.app
   - 첫 단계는 승차 정류장에서 시작하고 마지막 단계는 하차 정류장에서 끝난다. 출발지→승차, 하차→도착지 도보는 응답에 없다
   - `Route.duration`(단계 합)은 이동 시간만이고 대기·접근 시간이 빠진다. 전체 소요시간은 `TransitRouteOption.totalDuration`(`totalTime`)
   - 구간별 노선·정류장·안내 문구는 `TransitRouteOption.legDetails`(`legs`와 같은 순서)
-- 자가용(#9): `GET https://apis-navi.kakaomobility.com/v1/directions` → `CarRouteApi.search(origin, destination)` → `ApiResult<CarRouteResult>`
+- 자가용(#9): `GET https://apis-navi.kakaomobility.com/v1/directions`(앱은 게이트웨이 `kakao/navi/directions`) → `CarRouteApi.search(origin, destination)` → `ApiResult<CarRouteResult>`
   - 요청: `origin`·`destination`(`경도,위도`, 필수). 선택 `waypoints`(최대 5개, `|` 구분), `priority`(RECOMMEND 기본/TIME/DISTANCE/MAIN_ROAD/NO_TRAFFIC_INFO), `avoid`(ferries·toll·motorway·schoolzone·uturn), `alternatives`, `road_details`, `car_type`·`car_fuel`·`car_hipass`, `summary`. 앱은 origin·destination만 쓴다. 출발 시각은 이 API로 지정할 수 없다(호출 시점 교통 기준)
   - 응답: `trans_id`, `routes[]`(`result_code`, `result_msg`, `summary`, `sections[]`)
     - `summary`: `origin`·`destination`(`name`은 좌표 입력 시 빈 문자열, `x`, `y`), `priority`, `bound`, `fare`(`taxi`, `toll`, 원), `distance`(m), `duration`(초)
@@ -90,11 +102,19 @@ com.sunseat.app
 - 요청 파라미터·응답 구조는 첫 호출과 공식 문서로 확인해 이 절에 기록한다
 
 ### 4.3 장소 검색(#7)
-`GET https://dapi.kakao.com/v2/local/search/keyword.json` → `PlaceSearchApi.search(query, near, size)` → `List<Place>`(id, 이름, 지번·도로명 주소, 좌표, 카테고리)
+`GET https://dapi.kakao.com/v2/local/search/keyword.json`(앱은 게이트웨이 `kakao/local/search/keyword`) → `PlaceSearchApi.search(query, near, size)` → `List<Place>`(id, 이름, 지번·도로명 주소, 좌표, 카테고리)
 
 - 요청: `query`(필수), `x`·`y`(중심 경도·위도, 선택), `radius`(m, 0~20000), `size`(1~15, 기본 15), `page`(1~45), `sort`(`accuracy` 기본 / `distance`), `category_group_code`. 앱은 query·x·y·size만 쓴다
 - 응답: `documents[]`(`id`, `place_name`, `address_name`, `road_address_name`, `category_name`, `category_group_code`, `phone`, `place_url`, `distance`, `x`=경도, `y`=위도, 좌표는 문자열), `meta`(`total_count`, `pageable_count`, `is_end`, `same_name`)
 - 결과가 없으면 `documents`가 빈 배열(200). 좌표를 해석할 수 없는 문서는 건너뛴다. 빈 검색어는 호출하지 않는다
+
+### 4.4 좌표→주소(#85)
+`GET https://dapi.kakao.com/v2/local/geo/coord2address.json`(앱은 게이트웨이 `kakao/local/geo/coord2address`) → `ReverseGeocodeApi.address(location)` → `String?`(도로명 주소, 없으면 지번 주소, 둘 다 없으면 null)
+
+- 장소 검색과 같은 게이트웨이 경로 묶음·오류 분류(`kakaoCall`)를 쓴다
+- 요청: `x`(경도)·`y`(위도) 필수, `input_coord`(기본 WGS84). 앱은 x·y만 쓴다
+- 응답: `documents[]`의 `road_address`(`address_name`, `building_name` 등, 없으면 null)와 `address`(`address_name` 등). 주소가 없는 좌표(바다 등)는 빈 배열
+- 지도 선택 화면이 지도가 멈출 때만 디바운스해 부른다(매 프레임 호출 금지). 건물 이름·근처 상호는 장소 이름으로 쓰지 않는다
 
 ## 5. 저장
 - 설정(#15): DataStore

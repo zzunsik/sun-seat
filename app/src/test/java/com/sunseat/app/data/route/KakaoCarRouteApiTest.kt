@@ -43,10 +43,11 @@ class KakaoCarRouteApiTest {
         api.search(origin, destination)
 
         val request = server.takeRequest()
-        assertEquals("/v1/directions", request.url.encodedPath)
+        assertEquals("/kakao/navi/directions", request.url.encodedPath)
         assertEquals("127.0,37.5", request.url.queryParameter("origin"))
         assertEquals("127.03,37.52", request.url.queryParameter("destination"))
-        assertEquals("KakaoAK test-key", request.headers["Authorization"])
+        // REST 키는 앱 API 게이트웨이에만 있다(#189). 앱은 인증 헤더를 보내지 않는다.
+        assertNull(request.headers["Authorization"])
     }
 
     @Test
@@ -114,7 +115,7 @@ class KakaoCarRouteApiTest {
         server.enqueueJson("""{"code":-2,"msg":"invalid origin"}""", 400)
         assertEquals(ApiResult.Failure(ApiError.UNKNOWN, 400), api.search(origin, destination))
 
-        val noKey = KakaoCarRouteApi(server.kakaoRetrofit(apiKey = ""))
+        val noKey = KakaoCarRouteApi(server.kakaoRetrofit(apiConfigured = false))
         assertEquals(ApiResult.Failure(ApiError.MISSING_KEY), noKey.search(origin, destination))
         assertEquals(3, server.requestCount)
     }
