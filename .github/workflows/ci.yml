@@ -42,6 +42,14 @@ jobs:
       - name: APK에 REST 키 경로가 없는지 검사
         run: bash scripts/check-apk-secrets.sh
 
+      # 릴리스 빌드가 깨지면 태그를 단 뒤가 아니라 PR에서 알도록 서명 없이 빌드해 본다. 서명은 release.yml만 한다(#118).
+      # 만든 APK의 매니페스트(디버그 가능·디버그 전용 화면·권한 허용 목록)와 버전 규칙, REST 키 경로를 릴리스 워크플로와 같은 스크립트로 본다.
+      - name: 릴리스 빌드(서명 없음)와 APK 확인
+        run: |
+          ./gradlew assembleRelease --console=plain
+          bash scripts/check-release-apk.sh app/build/outputs/apk/release/app-release-unsigned.apk
+          bash scripts/check-apk-secrets.sh release
+
       - name: Lint (compose-lints 포함)
         run: ./gradlew lint --console=plain
 
@@ -147,11 +155,32 @@ jobs:
       - name: 테스트(vitest, Workers 런타임)
         run: npm test
 
+  # 릴리스 버전 규칙(AGENTS.md "릴리스")과 릴리스 워크플로의 태그 확인 스크립트 자체 테스트(#118).
+  # app/build.gradle.kts의 versionName·versionCode가 규칙(versionCode = 주 × 10000 + 중간 × 100 + 끝)에 맞는지도 PR에서 본다.
+  release-version:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: 버전 스크립트 자체 테스트
+        run: |
+          node --version
+          node --test scripts/release-version.test.mjs
+
+      - name: app/build.gradle.kts 버전 규칙
+        run: node scripts/release-version.mjs gradle app/build.gradle.kts
+
+      - name: 릴리스 태그 확인 자체 테스트
+        run: bash scripts/release-gate-test.sh
+
   # 머지 판단용 단일 검사. develop·main ruleset이 이 검사 하나를 필수로 건다(AGENTS.md "저장소 설정").
   # job을 추가하면 needs에 함께 넣는다.
   ci-passed:
     if: always()
-    needs: [build, test-guard, api-worker]
+    needs: [build, test-guard, api-worker, release-version]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
