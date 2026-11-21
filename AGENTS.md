@@ -99,7 +99,7 @@
 
 - JDK 25, Android SDK platform 37. Android Studio 없이 명령줄로 빌드한다.
 - 의존성 버전은 `gradle/libs.versions.toml`에서만 관리한다. 의존성 업데이트는 Dependabot PR로 받는다.
-  - 예외: Filament(`com.google.android.filament*`)는 Dependabot이 버전 업데이트를 올리지 않는다. 사람이 올리고, 같은 PR에서 `tools/simulation/*.mat`을 같은 버전의 `matc`로 다시 컴파일한다(`tools/simulation/README.md`). `FilamentMaterialVersionTest`가 런타임 버전과 `.filamat`의 material 버전이 다르면 실패한다. 보안 업데이트 PR이 와도 같은 절차로 재료를 함께 넣는다.
+  - 예외: Filament(`com.google.android.filament*`)는 Dependabot이 버전 업데이트를 올리지 않는다. 사람이 올리고, 같은 PR에서 `tools/simulation/*.mat`을 같은 버전의 `matc`로 다시 컴파일한다(`tools/simulation/README.md`). `FilamentMaterialVersionTest`가 런타임 버전과 `.filamat`의 material 버전이 다르면 실패한다. 새 Filament 릴리스는 사람이 확인한다. 무시 규칙은 보안 업데이트를 막지 않지만 지금은 Gradle 의존성이 의존성 그래프에 없어 보안 알림이 오지 않는다(#197). 어떤 경로로 올리든 같은 절차를 따른다.
 
 ## 코드 구조
 

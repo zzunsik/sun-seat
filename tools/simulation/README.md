@@ -29,16 +29,18 @@ is a native crash when the 3D view opens (#195), which Robolectric cannot show.
 A runtime bump and the recompiled `*.filamat` therefore go in the same PR:
 
 1. Change `filament` in `gradle/libs.versions.toml`.
-2. Recompile all three materials with that release's `matc.exe` (commands above)
+2. Recompile all materials with that release's `matc.exe` (commands above)
    and update the version and release link above.
 3. Add the release's material version (`MATERIAL_VERSION` in
    `libs/filabridge/include/filament/MaterialEnums.h` at that tag) to
-   `FilamentMaterialVersionTest`. The test fails until the version table, the
-   `.filamat` headers and this README agree.
+   `FilamentMaterialVersionTest`, and cross-check it with that `matc.exe --version`.
+   The test fails until the version table, the `.filamat` headers and this README agree.
 4. Check the 3D overview and close-up on a real device.
 
-Dependabot ignores Filament version updates for this reason (`.github/dependabot.yml`);
-security updates still arrive and must follow the same steps.
+Dependabot ignores Filament version updates for this reason (`.github/dependabot.yml`),
+so nothing announces a new Filament release; check releases by hand. The ignore rule
+does not block Dependabot security updates, but Gradle dependencies are not in the
+dependency graph yet, so none arrive (#197). Any Filament bump follows the steps above.
 
 ## Device fixtures
 

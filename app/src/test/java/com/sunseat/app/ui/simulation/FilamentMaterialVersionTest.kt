@@ -51,7 +51,11 @@ class FilamentMaterialVersionTest {
 
     @Test fun everyMaterialSourceHasACompiledFilamatWithTheSameName() {
         val sources = File("../tools/simulation").listFiles { f -> f.extension == "mat" }.orEmpty()
-            .associate { it.nameWithoutExtension to Regex("""\bname\s*:\s*(\w+)""").find(it.readText())!!.groupValues[1] }
+            .associate { mat ->
+                // material { name : … } 블록의 이름. 세 파일 모두 첫 줄에 두며, parameters의 name보다 먼저 온다.
+                val name = Regex("""\bname\s*:\s*(\w+)""").find(mat.readText())
+                mat.nameWithoutExtension to checkNotNull(name) { "${mat.name}에 material name이 없다" }.groupValues[1]
+            }
         val compiled = filamatFiles().associate { file ->
             file.nameWithoutExtension to chunks(file.readBytes()).getValue("MAT_NAME").cString()
         }
@@ -73,7 +77,9 @@ class FilamentMaterialVersionTest {
 
     /** 테스트 작업 폴더는 app/이다. */
     private fun filamentVersion(): String =
-        Regex("""(?m)^filament\s*=\s*"([^"]+)"""").find(File("../gradle/libs.versions.toml").readText())!!.groupValues[1]
+        checkNotNull(Regex("""(?m)^filament\s*=\s*"([^"]+)"""").find(File("../gradle/libs.versions.toml").readText())) {
+            "gradle/libs.versions.toml [versions]에 filament 버전이 없다"
+        }.groupValues[1]
 
     private fun filamatFiles(): List<File> =
         File("src/main/assets/simulation").listFiles { f -> f.extension == "filamat" }.orEmpty().sortedBy { it.name }
@@ -84,7 +90,7 @@ class FilamentMaterialVersionTest {
 
     /**
      * `.filamat`은 청크 목록이다: 태그(uint64 LE, 예 'MAT_VERS'), 크기(uint32 LE), 데이터.
-     * 같은 태그가 여러 번 나오면 첫 번째를 쓴다.
+     * 같은 태그가 여러 번 나오면 Filament(ChunkContainer)처럼 마지막 것을 쓴다.
      */
     private fun chunks(bytes: ByteArray): Map<String, ByteBuffer> {
         val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
@@ -95,7 +101,7 @@ class FilamentMaterialVersionTest {
             val size = buffer.int
             require(size >= 0 && size <= buffer.remaining()) { "잘린 청크 $name" }
             val data = buffer.slice().order(ByteOrder.LITTLE_ENDIAN).limit(size) as ByteBuffer
-            result.putIfAbsent(name, data)
+            result[name] = data
             buffer.position(buffer.position() + size)
         }
         assertEquals("청크 끝이 파일 끝과 맞지 않는다", 0, buffer.remaining())

@@ -12,7 +12,9 @@ updates:
         patterns: ["*"]
     # Filament 런타임을 올리면 미리 컴파일한 3D 재료(*.filamat)도 같은 버전의 matc로 다시 컴파일해야 한다.
     # 런타임만 올리면 3D 화면 진입 시 크래시한다(#195). 버전 업데이트는 받지 않고 사람이 함께 올린다
-    # (tools/simulation/README.md). versions 없이 이름만 무시하면 보안 업데이트는 계속 온다.
+    # (tools/simulation/README.md). versions 없이 이름만 무시하므로 보안 업데이트 PR은 막지 않는다.
+    # 다만 지금은 Gradle 의존성이 의존성 그래프에 없어 Gradle 보안 알림 자체가 오지 않는다(#197).
+    # 새 Filament 릴리스는 사람이 확인한다.
     ignore:
       - dependency-name: "com.google.android.filament*"
 
