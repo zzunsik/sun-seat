@@ -97,8 +97,8 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
         }
     } ?: (0f to 0f)
     val latestLabels by rememberUpdatedState(labelSides)
-    // #151: 정류장 이름표 상자 높이(그리기와 같은 규칙). 이름표가 없으면 0.
-    val stopLabelHeight = if (labelSides.first > 0f || labelSides.second > 0f) with(density) { maxOf(Sizes.mapLabelHeight.toPx(), textMeasurer.measure("0", labelStyle).size.height.toFloat()) } else 0f
+    // #151: 정류장 이름표 상자 높이(그리기와 같은 규칙) + 위아래 가장자리 틈(Spacing.xs). 이름표가 없으면 0.
+    val stopLabelHeight = if (labelSides.first > 0f || labelSides.second > 0f) with(density) { maxOf(Sizes.mapLabelHeight.toPx(), textMeasurer.measure("0", labelStyle).size.height.toFloat()) + Spacing.xs.toPx() * 2 } else 0f
     val latestLabelHeight by rememberUpdatedState(stopLabelHeight)
     Box(modifier.pointerInput(Unit) {
         // Map picker (#85): the pin is the view centre, so report the coordinate under it when a drag ends.
