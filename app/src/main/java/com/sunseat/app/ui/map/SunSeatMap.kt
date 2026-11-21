@@ -93,11 +93,11 @@ fun SunSeatMap(state: MapState, modifier: Modifier = Modifier) {
             }
             else -> NativeMap(state, Modifier.fillMaxSize(), onAvailability = { availability = it }, onDestinationOnScreen = onDestination)
         }
-        // #186: 햇빛 따라가기(재생 중)에서 도착지가 보이는 지도 밖이면 보이는 영역 가장자리에 도착 방향을 둔다.
-        if (!availability.unavailable && state.routeProgress != null && !state.arrived && state.destination != null)
-            destinationPx?.let { (x, y) -> OffscreenDestinationCue(x, y, state.padding, Modifier.matchParentSize()) }
         // Separate node so the existing map description stays stable; colour/line shape is never the only cue. 사용 불가면 읽지 않는다(#173).
         if (!availability.unavailable) routeSummary(state.routes.getOrNull(state.selectedRoute))?.let { summary -> Box(Modifier.matchParentSize().semantics { contentDescription = summary }) }
+        // #186(경로 요약 노드 뒤, 맨 위):  햇빛 따라가기(재생 중)에서 도착지가 보이는 지도 밖이면 보이는 영역 가장자리에 도착 방향을 둔다.
+        if (!availability.unavailable && state.routeProgress != null && !state.arrived && state.destination != null)
+            destinationPx?.let { (x, y) -> OffscreenDestinationCue(x, y, state.padding, Modifier.matchParentSize()) }
         // No separate legend: the 출발/도착 markers carry their own text (DESIGN 11.1) and a legend box covered them.
     }
 }
