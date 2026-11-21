@@ -44,6 +44,12 @@ internal data class StopMarker(
     val labeled: Boolean get() = kind != StopKind.ALIGHT
 }
 
+/**
+ * 재생 위치에서 화면에 남길 노선(#152). [riding]이면 지금 타는 노선, 아니면(걷는 중) 다음에 탈 노선이다.
+ * 지도에서는 차량과 겹치는 노선 배지를 숨기므로(#146) 정보 카드가 이 값을 글자로 보여 준다.
+ */
+internal data class RideCue(val riding: Boolean, val mode: Mode, val lines: List<String>)
+
 /** TalkBack 요약의 한 단계. [line]이 null이면 수단 이름으로 읽는다. */
 internal data class RideStep(val kind: StopKind, val mode: Mode, val line: String?, val stop: String)
 
@@ -106,13 +112,27 @@ internal object RouteLinePolicy {
             val first = ride.first()
             val color = lineColor(first.mode, first.lineName)
             val heading = first.path.zipWithNext().firstOrNull { (a, b) -> a != b }?.let { (a, b) -> com.sunseat.app.domain.ExposureAnalyzer.bearing(a, b) } ?: 0.0
-            val lines = first.lineName?.split(" / ")?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
+            val lines = lineNames(first.lineName)
             val board = StopMarker(first.path.first(), if (index == 0) StopKind.BOARD else StopKind.TRANSFER, color, first.mode, lines, labelOnLeft = heading > 0.0 && heading < 180.0)
             // A transfer marker already marks where the next ride starts; only the final alight gets its own marker
             // so two markers do not pile up at short walking transfers (device check, #100).
             if (index < rides.lastIndex) listOf(board) else listOf(board, StopMarker(ride.last().path.last(), StopKind.ALIGHT, color, ride.last().mode))
         }
     }
+
+    /** [legIndex] 구간의 [RideCue]. 탑승 구간이면 그 노선, 도보면 다음 탑승 노선, 남은 탑승이 없으면 null. */
+    fun rideCue(route: Route, legIndex: Int): RideCue? {
+        val leg = route.legs.getOrNull(legIndex) ?: return null
+        fun transit(l: com.sunseat.app.domain.Leg) = l.mode == Mode.BUS || l.mode == Mode.SUBWAY
+        val ride = when {
+            transit(leg) -> leg
+            leg.mode == Mode.WALK -> route.legs.drop(legIndex + 1).firstOrNull { transit(it) } ?: return null
+            else -> return null
+        }
+        return RideCue(ride === leg, ride.mode, lineNames(ride.lineName))
+    }
+
+    private fun lineNames(lineName: String?): List<String> = lineName?.split(" / ")?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
 
     fun rideSteps(route: Route): List<RideStep> {
         val rides = rides(route)
