@@ -119,7 +119,7 @@ fun MapPlaceholder(state: MapState, modifier: Modifier = Modifier) {
         val height = if (constraints.hasBoundedHeight) constraints.maxHeight.toFloat() else 0f
         val viewport = with(density) { Viewport(width, height, top = state.padding.top.toPx(), bottom = state.padding.bottom.toPx()) }
         val footprints = state.footprints(sizes)
-        val gap = with(density) { fitGap(viewport, Sizes.mapInset.toPx(), Spacing.s.toPx()) }
+        val gap = with(density) { fitGap(viewport, Sizes.mapInset.toPx(), Spacing.s.toPx(), sizes.markerHeight) }
         policy.update(state, CameraInput(viewport, scale, footprints, state.fitTarget, gap, camera.position))?.let { camera.position = it }
         // 정책이 아직 카메라를 정하지 않았으면(맞춤 대기) 뷰 전체에 맞춘 모습을 보인다. 맞춤 횟수에는 넣지 않는다.
         val whole = Viewport(width, height)

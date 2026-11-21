@@ -89,7 +89,7 @@ class MapCameraPolicyTest {
             for (fontScale in listOf(1f, 1.5f)) {
                 val footprints = state.footprints(sizes(fontScale))
                 val v = areas[random.nextInt(areas.size)]
-                val gap = fitGap(v, inset, edge)
+                val gap = fitGap(v, inset, edge, dp(36f))
                 val camera = fitCamera(footprints, v, scale, gap)
                 assertNotNull(camera)
                 camera!!
@@ -110,7 +110,7 @@ class MapCameraPolicyTest {
     @Test fun shortListStripFitsOneLevelCloserThanFourFixedInsets() {
         // #138: 390dp 폭 목록 기본 상태(지도 300dp 중 아래 190dp를 시트가 덮어 보이는 띠 110dp). 네 변 40dp inset이면 경로 높이가 30dp뿐이었다.
         val v = viewport(390f, 300f, bottomDp = 190f)
-        val gap = fitGap(v, inset, edge)
+        val gap = fitGap(v, inset, edge, dp(36f))
         assertTrue("gap ${gap / density}dp must leave room in a 110dp strip", 110f * density - 2 * gap >= 2 * (110f - 2 * 40f) * density)
     }
 
@@ -120,7 +120,7 @@ class MapCameraPolicyTest {
     private val listState = MapState(routes = listOf(route), origin = NamedPlace("서울역", seoul), destination = NamedPlace("강남역", LatLng(37.4979, 127.0276)), automaticFit = false)
 
     private fun input(state: MapState, v: Viewport, current: CameraPosition?) =
-        CameraInput(v, scale, state.footprints(sizes(1f)), state.fitTarget, fitGap(v, inset, edge), current)
+        CameraInput(v, scale, state.footprints(sizes(1f)), state.fitTarget, fitGap(v, inset, edge, dp(36f)), current)
 
     @Test fun sheetDragOnlyChangesTheViewportAndNeverMovesTheCamera() {
         val policy = MapFitPolicy()

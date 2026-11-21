@@ -285,7 +285,7 @@ private class MapSession(context: Context, private val ink: Int, private val sur
         if (geometryChanged || footprints.isEmpty()) footprints = state.footprints(markerSizes(state))
         if (scale == null && viewport.ready) scale = measureScale(target)
         scale?.let { scale ->
-            val input = CameraInput(viewport, scale, footprints, state.fitTarget, fitGap(viewport, metrics.inset, metrics.edge), currentCamera(target))
+            val input = CameraInput(viewport, scale, footprints, state.fitTarget, fitGap(viewport, metrics.inset, metrics.edge, metrics.marker + metrics.textPadding), currentCamera(target))
             fitPolicy.update(state, input)?.let { move -> target.moveCamera(CameraUpdateFactory.newCenterPosition(move.center.sdk(), move.zoom)) }
         }
         reportStatus()

@@ -127,11 +127,12 @@ internal fun centerCamera(location: LatLng, zoom: Int, viewport: Viewport, scale
 }
 
 /**
- * 맞춤 틈(px): 보이는 영역 가장자리와 발자국 사이. 기본은 `Sizes.mapInset`([inset])이고, 낮은 영역에서는 발자국 묶음이 보이는 높이의
- * [FIT_SHARE] 이상을 쓰도록 줄이되 [edge](`Spacing.s`)보다 작게 하지 않는다(#138, [fitFrame]의 inset 규칙).
+ * 맞춤 틈(px): 보이는 영역 가장자리와 발자국 사이. 기본은 `Sizes.mapInset`([inset])이다. 낮은 영역에서는 보이는 높이의 [FIT_SHARE]를 뺀 나머지를
+ * 위아래 틈과 출발·도착 표식 높이([markerHeight])가 나눠 쓰도록 줄이되 [edge](`Spacing.s`)보다 작게 하지 않는다([fitFrame]의 inset 규칙, #138).
+ * 표식 높이는 발자국이 이미 품으므로 틈에서 그만큼 덜어 낸다.
  */
-internal fun fitGap(viewport: Viewport, inset: Float, edge: Float): Float =
-    fitFrame(viewport.visibleTop, viewport.height - viewport.visibleBottom, viewport.width, viewport.height, inset, edge, 0f).inset
+internal fun fitGap(viewport: Viewport, inset: Float, edge: Float, markerHeight: Float): Float =
+    fitFrame(viewport.visibleTop, viewport.height - viewport.visibleBottom, viewport.width, viewport.height, inset, edge, markerHeight).inset
 
 /** 카메라 모드. 화면이 "지도 맞춤" 행동을 보일지(#141) 같은 결정을 이 상태에서 읽는다. */
 sealed interface CameraMode {
