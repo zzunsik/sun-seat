@@ -42,11 +42,11 @@ class RideCueTest {
     private val request = TripRequest(NamedPlace("숲 입구", a), NamedPlace("공원", d), TravelMode.TRANSIT, null, SunGoal.AVOID)
     private val app get() = org.robolectric.RuntimeEnvironment.getApplication()
 
-    private fun render(minute: Long) {
+    private fun render(minute: Long, route: Route = this.route, request: TripRequest = this.request, fontScale: Float = 1f) {
         val source = SunPositionSource { _, _, _ -> SunPosition(90.0, 15.0) }
         val advisor = TripAdvisor(ExposureAnalyzer(source))
         val timeline = TripTimeline(route, advisor.advise(route, start, SunGoal.AVOID, totalDuration = route.duration), source, advisor)
-        compose.setContent { CompositionLocalProvider(LocalMapRenderer provides MapRenderer.PREVIEW) {
+        compose.setContent { CompositionLocalProvider(LocalMapRenderer provides MapRenderer.PREVIEW, androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(androidx.compose.ui.platform.LocalDensity.current.density, fontScale)) {
             SunSeatTheme { SimulationScreen(request, route, timeline.result, SimulationUiState(minute * 60_000, following = true),
                 timeline.at(start.plusSeconds(minute * 60)), timeline.boundaries, SimulationActions(), zone = ZoneId.of("Asia/Seoul")) }
         } }
@@ -93,5 +93,18 @@ class RideCueTest {
         assertEquals(d, arrived.followTarget)
         // A cursor outside playback (result map) is always drawn.
         assertEquals(playing.cursor, playing.copy(routeProgress = null).visibleCursor)
+    }
+    /** DESIGN 4.4: line names are never ellipsized; only the trip text may be shortened, even on a narrow screen with large text. */
+    @Config(qualifiers = "w320dp-h844dp-xxhdpi")
+    @Test fun lineNameIsNeverEllipsized() {
+        val long = route.copy(legs = route.legs.mapIndexed { i, leg -> if (i == 0) leg.copy(lineName = "N26 / 9401 / 742") else leg })
+        val far = TripRequest(NamedPlace("가상구 예시동 아주 긴 이름의 출발 정류장", a), NamedPlace("가상구 예시동 아주 긴 이름의 도착 공원", d), TravelMode.TRANSIT, null, SunGoal.AVOID)
+        render(0, long, far, fontScale = 1.5f)
+        val node = compose.onNodeWithText("N26 외 2 탑승 중").fetchSemanticsNode()
+        val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+        node.config[androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult].action!!.invoke(layouts)
+        val l = layouts.single()
+        assertFalse("line name must not be ellipsized", (0 until l.lineCount).any { l.isLineEllipsized(it) })
+        assertEquals("the whole cue is laid out", l.layoutInput.text.length, l.getLineEnd(l.lineCount - 1))
     }
 }
