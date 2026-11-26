@@ -3,6 +3,8 @@ package com.sunseat.app.ui.result
 import android.app.Application
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.accessibility.enableAccessibilityChecks
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -55,8 +57,8 @@ class ResultTilesTest {
         val sun = compose.onNodeWithTag("result_sun_tile").fetchSemanticsNode().boundsInRoot
         assertEquals(shade.top, sun.top)
         assertTrue(shade.right < sun.left)
-        compose.onNodeWithText("31분", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithText("24분", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithTag("result_shade_tile").assert(hasText("31분"))
+        compose.onNodeWithTag("result_sun_tile").assert(hasText("24분"))
     }
 
     private fun smallLarge(dark: Boolean) {

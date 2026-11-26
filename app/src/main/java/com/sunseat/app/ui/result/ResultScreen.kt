@@ -312,6 +312,32 @@ private fun ResultContent(
                 QuietButton(onClick = actions.onSimulation) { Text(stringResource(R.string.simulation_title)) }
             }
         }
+        if (result.glare.isNotEmpty()) {
+            Stagger(shown, index++) {
+                SectionCard(title = stringResource(R.string.result_glare_title)) {
+                    Text(stringResource(R.string.result_glare_detail), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+                    result.glare.forEach { g ->
+                        Text(
+                            glareText(g, result, zone),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = scheme.onSurface,
+                        )
+                    }
+                }
+            }
+        }
+        Stagger(shown, index++) {
+            SectionCard(title = stringResource(R.string.map_title)) {
+                com.sunseat.app.ui.map.SunSeatMap(
+                    com.sunseat.app.ui.map.MapState(
+                        routes = listOf(com.sunseat.app.domain.Route(result.legs.map { it.leg })),
+                        origin = request.origin,
+                        destination = request.destination,
+                    ),
+                    Modifier.fillMaxWidth().height(Sizes.mapHeight),
+                )
+            }
+        }
         result.sunPlacement?.let { placement ->
             Stagger(shown, index++) {
                 val title = when (placement) {
@@ -353,32 +379,6 @@ private fun ResultContent(
                 }
             }
         }
-        if (result.glare.isNotEmpty()) {
-            Stagger(shown, index++) {
-                SectionCard(title = stringResource(R.string.result_glare_title)) {
-                    Text(stringResource(R.string.result_glare_detail), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
-                    result.glare.forEach { g ->
-                        Text(
-                            glareText(g, result, zone),
-                            style = MaterialTheme.typography.titleSmall,
-                            color = scheme.onSurface,
-                        )
-                    }
-                }
-            }
-        }
-        Stagger(shown, index++) {
-            SectionCard(title = stringResource(R.string.map_title)) {
-                com.sunseat.app.ui.map.SunSeatMap(
-                    com.sunseat.app.ui.map.MapState(
-                        routes = listOf(com.sunseat.app.domain.Route(result.legs.map { it.leg })),
-                        origin = request.origin,
-                        destination = request.destination,
-                    ),
-                    Modifier.fillMaxWidth().height(Sizes.mapHeight),
-                )
-            }
-        }
         Stagger(shown, index) {
             SectionCard(title = stringResource(R.string.result_legs)) {
                 result.legs.forEachIndexed { i, leg ->
@@ -405,7 +405,7 @@ internal fun ExposureTiles(shade: String, sun: String, shadeTarget: String = sha
             measurer.measure(sunTarget, numberStyle, softWrap = false).size.width.toDp(),
             measurer.measure(shadeLabel, labelStyle, softWrap = false).size.width.toDp() + Sizes.iconSmall + Spacing.s,
             measurer.measure(sunLabel, labelStyle, softWrap = false).size.width.toDp() + Sizes.iconSmall + Spacing.s,
-        ) + Spacing.l * 2
+        ) + Spacing.xl * 2
     }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         if (requiredWidth * 2 + Spacing.s <= maxWidth) {
@@ -423,7 +423,7 @@ internal fun ExposureTiles(shade: String, sun: String, shadeTarget: String = sha
 }
 
 @Composable
-private fun ExposureTile(exposure: Exposure, duration: String, label: String, modifier: Modifier) {
+private fun ExposureTile(exposure: Exposure, duration: String, label: String, modifier: Modifier = Modifier) {
     val colors = SunSeatTheme.colors
     val shade = exposure == Exposure.Shade
     Surface(
@@ -432,7 +432,7 @@ private fun ExposureTile(exposure: Exposure, duration: String, label: String, mo
         color = if (shade) colors.shadeContainer else colors.sunContainer,
         contentColor = if (shade) colors.onShadeContainer else colors.onSunContainer,
     ) {
-        Column(Modifier.padding(Spacing.l), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+        Column(Modifier.padding(Spacing.xl), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
             Text(duration, style = MaterialTheme.typography.displaySmall)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
                 Icon(if (shade) SunSeatIcons.Shade else SunSeatIcons.Sun, contentDescription = null, modifier = Modifier.size(Sizes.iconSmall))

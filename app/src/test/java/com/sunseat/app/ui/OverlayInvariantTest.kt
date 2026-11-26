@@ -12,11 +12,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.swipe
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.Density
+import com.sunseat.app.ui.theme.Spacing
 import androidx.compose.ui.unit.dp
 import com.sunseat.app.domain.LatLng
 import com.sunseat.app.domain.NamedPlace
@@ -115,7 +118,10 @@ class OverlayInvariantTest {
         // 쉬는 상태: 위 캡슐은 본문을 덮지 않는다. 아래 행동 바 밑으로는 본문이 지나간다.
         compose.assertNoTextUnderOverlays(floatingOverScroll = setOf("result_actions_capsule"))
         // 끝까지 내리면 마지막 내용이 아래 행동 바 위에서 끝난다(본문 아래 여백 = 측정한 바 높이).
-        repeat(8) { compose.onRoot().performTouchInput { swipeUp() } }
+        // 지도나 하단 행동이 끌기를 소비하지 않도록 본문 바깥 여백에서 실제 터치로 내린다(#208).
+        repeat(8) { compose.onRoot().performTouchInput {
+            swipe(Offset(Spacing.s.toPx(), height * 0.7f), Offset(Spacing.s.toPx(), height * 0.3f))
+        } }
         settle()
         compose.assertNoTextUnderOverlays(floatingOverScroll = setOf("result_journey_capsule"))
     }
