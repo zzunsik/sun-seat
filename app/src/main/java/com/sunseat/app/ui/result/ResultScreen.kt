@@ -5,6 +5,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,6 +43,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.platform.LocalDensity
+import com.sunseat.app.ui.icons.SunSeatIcons
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextOverflow
@@ -276,7 +280,7 @@ private fun ResultContent(
                 when {
                     noSun -> {
                         Text(stringResource(if (result.onlyExcludedRides()) R.string.result_no_outdoor_detail else R.string.result_no_sun_detail), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
-                        PrimaryButton(onClick = actions.onRestart, modifier = Modifier.fillMaxWidth()) {
+                        QuietButton(onClick = actions.onRestart, modifier = Modifier.fillMaxWidth()) {
                             Text(stringResource(if (result.onlyExcludedRides()) R.string.result_find_route else R.string.result_change_time), style = MaterialTheme.typography.labelLarge)
                         }
                     }
@@ -286,10 +290,13 @@ private fun ResultContent(
                         }
                         if (hasAdvice) {
                             Text(stringResource(R.string.result_if_followed), style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
-                            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                                ExposurePill(Exposure.Shade, stringResource(R.string.result_shade, formatDuration(Duration.ofMinutes(shadeMin.value.toLong()), zeroOk = true)))
-                                ExposurePill(Exposure.Sun, stringResource(R.string.result_sun, formatDuration(Duration.ofMinutes(sunMin.value.toLong()), zeroOk = true)))
-                            }
+                            ExposureTiles(
+                                shade = formatDuration(Duration.ofMinutes(shadeMin.value.toLong()), zeroOk = true),
+                                sun = formatDuration(Duration.ofMinutes(sunMin.value.toLong()), zeroOk = true),
+                                // 최종 숫자 폭으로 배치해 숫자 애니메이션 도중 타일이 재배치되지 않는다.
+                                shadeTarget = formatDuration(result.shadeIfFollowed, zeroOk = true),
+                                sunTarget = formatDuration(result.sunIfFollowed, zeroOk = true),
+                            )
                         }
                         if (!result.aheadSun.isZero) {
                             ExposurePill(Exposure.Sun, stringResource(R.string.result_ahead_sun, formatDuration(result.aheadSun)))
@@ -303,32 +310,6 @@ private fun ResultContent(
                     }
                 }
                 QuietButton(onClick = actions.onSimulation) { Text(stringResource(R.string.simulation_title)) }
-            }
-        }
-        if (result.glare.isNotEmpty()) {
-            Stagger(shown, index++) {
-                SectionCard(title = stringResource(R.string.result_glare_title)) {
-                    Text(stringResource(R.string.result_glare_detail), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
-                    result.glare.forEach { g ->
-                        Text(
-                            glareText(g, result, zone),
-                            style = MaterialTheme.typography.titleSmall,
-                            color = scheme.onSurface,
-                        )
-                    }
-                }
-            }
-        }
-        Stagger(shown, index++) {
-            SectionCard(title = stringResource(R.string.map_title)) {
-                com.sunseat.app.ui.map.SunSeatMap(
-                    com.sunseat.app.ui.map.MapState(
-                        routes = listOf(com.sunseat.app.domain.Route(result.legs.map { it.leg })),
-                        origin = request.origin,
-                        destination = request.destination,
-                    ),
-                    Modifier.fillMaxWidth().height(Sizes.mapHeight),
-                )
             }
         }
         result.sunPlacement?.let { placement ->
@@ -372,12 +353,90 @@ private fun ResultContent(
                 }
             }
         }
+        if (result.glare.isNotEmpty()) {
+            Stagger(shown, index++) {
+                SectionCard(title = stringResource(R.string.result_glare_title)) {
+                    Text(stringResource(R.string.result_glare_detail), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+                    result.glare.forEach { g ->
+                        Text(
+                            glareText(g, result, zone),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = scheme.onSurface,
+                        )
+                    }
+                }
+            }
+        }
+        Stagger(shown, index++) {
+            SectionCard(title = stringResource(R.string.map_title)) {
+                com.sunseat.app.ui.map.SunSeatMap(
+                    com.sunseat.app.ui.map.MapState(
+                        routes = listOf(com.sunseat.app.domain.Route(result.legs.map { it.leg })),
+                        origin = request.origin,
+                        destination = request.destination,
+                    ),
+                    Modifier.fillMaxWidth().height(Sizes.mapHeight),
+                )
+            }
+        }
         Stagger(shown, index) {
             SectionCard(title = stringResource(R.string.result_legs)) {
                 result.legs.forEachIndexed { i, leg ->
                     if (i > 0) HorizontalDivider(color = scheme.outlineVariant)
                     LegRow(leg, request.mode, result.departure, zone, actions.onSettings)
                 }
+            }
+        }
+    }
+}
+
+/** 숫자·라벨의 실제 폭으로 가로/세로 배치를 골라 글자 축소 없이 표시한다. */
+@Composable
+internal fun ExposureTiles(shade: String, sun: String, shadeTarget: String = shade, sunTarget: String = sun) {
+    val density = LocalDensity.current
+    val measurer = rememberTextMeasurer()
+    val numberStyle = MaterialTheme.typography.displaySmall
+    val labelStyle = MaterialTheme.typography.labelMedium
+    val shadeLabel = stringResource(R.string.common_shade)
+    val sunLabel = stringResource(R.string.common_sun)
+    val requiredWidth = with(density) {
+        maxOf(
+            measurer.measure(shadeTarget, numberStyle, softWrap = false).size.width.toDp(),
+            measurer.measure(sunTarget, numberStyle, softWrap = false).size.width.toDp(),
+            measurer.measure(shadeLabel, labelStyle, softWrap = false).size.width.toDp() + Sizes.iconSmall + Spacing.s,
+            measurer.measure(sunLabel, labelStyle, softWrap = false).size.width.toDp() + Sizes.iconSmall + Spacing.s,
+        ) + Spacing.l * 2
+    }
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        if (requiredWidth * 2 + Spacing.s <= maxWidth) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
+                ExposureTile(Exposure.Shade, shade, shadeLabel, Modifier.weight(1f))
+                ExposureTile(Exposure.Sun, sun, sunLabel, Modifier.weight(1f))
+            }
+        } else {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+                ExposureTile(Exposure.Shade, shade, shadeLabel, Modifier.fillMaxWidth())
+                ExposureTile(Exposure.Sun, sun, sunLabel, Modifier.fillMaxWidth())
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExposureTile(exposure: Exposure, duration: String, label: String, modifier: Modifier) {
+    val colors = SunSeatTheme.colors
+    val shade = exposure == Exposure.Shade
+    Surface(
+        modifier.testTag(if (shade) "result_shade_tile" else "result_sun_tile").semantics(mergeDescendants = true) {},
+        shape = MaterialTheme.shapes.medium,
+        color = if (shade) colors.shadeContainer else colors.sunContainer,
+        contentColor = if (shade) colors.onShadeContainer else colors.onSunContainer,
+    ) {
+        Column(Modifier.padding(Spacing.l), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+            Text(duration, style = MaterialTheme.typography.displaySmall)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
+                Icon(if (shade) SunSeatIcons.Shade else SunSeatIcons.Sun, contentDescription = null, modifier = Modifier.size(Sizes.iconSmall))
+                Text(label, style = MaterialTheme.typography.labelMedium)
             }
         }
     }
