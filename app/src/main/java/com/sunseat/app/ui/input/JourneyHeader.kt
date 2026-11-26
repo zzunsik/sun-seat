@@ -151,7 +151,14 @@ private fun DepartureChip(label: String, onClick: () -> Unit) {
         Row(Modifier.heightIn(min = Spacing.touch).padding(horizontal = Spacing.l, vertical = Spacing.s),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
             Icon(painterResource(R.drawable.ic_ms_schedule), null, Modifier.size(Sizes.iconMedium))
-            Text(label, Modifier.weight(1f, fill = false), style = MaterialTheme.typography.labelLarge)
+            Text(label, Modifier.weight(1f, fill = false), style = MaterialTheme.typography.labelLarge.copy(
+                lineBreak = androidx.compose.ui.text.style.LineBreak(
+                    strategy = androidx.compose.ui.text.style.LineBreak.Strategy.HighQuality,
+                    strictness = androidx.compose.ui.text.style.LineBreak.Strictness.Normal,
+                    wordBreak = androidx.compose.ui.text.style.LineBreak.WordBreak.Phrase,
+                ),
+                localeList = androidx.compose.ui.text.intl.LocaleList("ko-KR"),
+            ))
         }
     }
 }

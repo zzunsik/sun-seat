@@ -41,7 +41,7 @@ class PurposeTilesTest {
             CompositionLocalProvider(LocalMapRenderer provides MapRenderer.PREVIEW,
                 LocalDensity provides Density(LocalDensity.current.density, fontScale)) {
                 SunSeatTheme(darkTheme = dark) {
-                    InputScreen(InputUiState(goal = goal.value), InputActions(setGoal = { changes += it; goal.value = it }),
+                    InputScreen(InputUiState(goal = goal.value, departure = LocalDateTime.of(2026, 12, 24, 23, 30)), InputActions(setGoal = { changes += it; goal.value = it }),
                         now = LocalDateTime.of(2026, 11, 16, 8, 0))
                 }
             }
@@ -64,6 +64,22 @@ class PurposeTilesTest {
             compose.onNodeWithText(label, useUnmergedTree = true)
                 .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
             assertTrue("full label: $label", layouts.isNotEmpty() && layouts.none { it.hasVisualOverflow })
+        }
+        val departureLabel = "12월 24일 23:30 출발"
+        val timeLayouts = mutableListOf<TextLayoutResult>()
+        compose.onNodeWithText(departureLabel, useUnmergedTree = true)
+            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(timeLayouts) }
+        assertTrue(timeLayouts.isNotEmpty())
+        timeLayouts.forEach { layout ->
+            // fill=false 시각 칩의 paragraph 폭은 최대 제약이라 didOverflowWidth가 참일 수 있다.
+            // 실제 그려진 각 줄과 높이가 Text 상자 안에 드는지 검사한다.
+            assertTrue("complete time label height", layout.multiParagraph.height <= layout.size.height)
+            repeat(layout.lineCount) { line ->
+                assertFalse("no ellipsis", layout.isLineEllipsized(line))
+                assertTrue("complete time label width", layout.getLineLeft(line) >= 0f && layout.getLineRight(line) <= layout.size.width)
+            }
+            val wordStart = departureLabel.indexOf("출발")
+            assertEquals("출발 stays on one line", layout.getLineForOffset(wordStart), layout.getLineForOffset(wordStart + 1))
         }
         compose.assertNoTextUnderOverlays()
         compose.onRoot().tryPerformAccessibilityChecks()
