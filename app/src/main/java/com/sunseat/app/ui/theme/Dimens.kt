@@ -22,6 +22,18 @@ object Spacing {
 
 /** 부품 크기 토큰. docs/DESIGN.md 4 */
 object Sizes {
+    val tileSelectedBorder = 2.dp
+    val tileBorder = 1.dp
+    val purposeTile = 56.dp
+    val sunBand = 6.dp
+    val sunBandGap = Spacing.xs
+    val sliderTrack = 14.dp
+    val sliderTrackRadius = 7.dp
+    val sliderThumbWidth = 5.dp
+    val sliderThumbHeight = 26.dp
+    val sliderThumbRadius = 3.dp
+    val exposureBar = 10.dp
+    val playButton = 64.dp
     val routeBar = 8.dp
     val routeBarGap = 2.dp
     val timelineNode = 12.dp
@@ -42,7 +54,7 @@ object Sizes {
 
     /** 범주 탭 최소 높이와 선택 밑줄 두께(DESIGN 4.2, 12.2) */
     val tabHeight = 48.dp
-    val tabIndicator = 3.dp
+    val tabCapsule = 36.dp
     val mapMarker = 32.dp
     /** 지도 경로선(논리 dp, docs/DESIGN.md 4.2·11.1). 선택 = 속 4 + 양쪽 테두리 1 */
     val mapRouteSelected = 6.dp
@@ -129,9 +141,9 @@ object Sizes {
 internal val SunSeatShapes = Shapes(
     extraSmall = RoundedCornerShape(6.dp),
     small = RoundedCornerShape(8.dp),
-    medium = RoundedCornerShape(12.dp),
-    large = RoundedCornerShape(16.dp),
-    extraLarge = RoundedCornerShape(24.dp),
+    medium = RoundedCornerShape(16.dp),
+    large = RoundedCornerShape(26.dp),
+    extraLarge = RoundedCornerShape(28.dp),
 )
 
 /** 떠 있는 컨트롤과 알약 */

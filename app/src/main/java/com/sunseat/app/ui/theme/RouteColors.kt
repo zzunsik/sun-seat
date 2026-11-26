@@ -28,5 +28,5 @@ data class RouteColors(
     val selectionContainer: Color,
     val selectionIndicator: Color,
 )
-internal val LightRouteColors = RouteColors(Color(0xFF0B6E75), LightScheme.outline, LightScheme.surfaceContainerHigh, LightScheme.onSurface)
-internal val DarkRouteColors = RouteColors(Color(0xFF5FC6CC), DarkScheme.outline, DarkScheme.surfaceContainerHigh, DarkScheme.onSurface)
+internal val LightRouteColors = RouteColors(LightScheme.primary, LightScheme.outline, LightScheme.surfaceContainerHigh, LightScheme.primary)
+internal val DarkRouteColors = RouteColors(DarkScheme.primary, DarkScheme.outline, DarkScheme.surfaceContainerHigh, DarkScheme.primary)

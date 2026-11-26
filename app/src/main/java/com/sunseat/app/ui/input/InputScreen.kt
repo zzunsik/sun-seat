@@ -135,7 +135,7 @@ fun InputScreen(
                 .padding(Spacing.screen)
                 .onGloballyPositioned { with(density) { panelBottom = (it.positionInRoot().y + it.size.height).toDp() - boxTop } },
                 verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                Surface(Modifier.overlay("input_header"), color = scheme.surface, shape = MaterialTheme.shapes.large) {
+                Surface(Modifier.overlay("input_header"), color = scheme.surface, shape = MaterialTheme.shapes.large, border = androidx.compose.foundation.BorderStroke(Sizes.hairline, scheme.outlineVariant)) {
                     val headerScroll = rememberScrollState()
                     Box {
                         JourneyHeader(
@@ -154,7 +154,7 @@ fun InputScreen(
                     }
                 }
                 if (state.locationMessageRes != null) LocationNotice(state, actions)
-                if (state.sameEndpoints) Surface(color = scheme.surface, shape = MaterialTheme.shapes.large) {
+                if (state.sameEndpoints) Surface(color = scheme.surface, shape = MaterialTheme.shapes.large, border = androidx.compose.foundation.BorderStroke(Sizes.hairline, scheme.outlineVariant)) {
                     Text(stringResource(R.string.input_same_endpoints), Modifier.fillMaxWidth().padding(Spacing.l), style = MaterialTheme.typography.bodyMedium, color = scheme.error)
                 }
             }
