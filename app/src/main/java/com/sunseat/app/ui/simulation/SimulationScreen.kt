@@ -98,7 +98,7 @@ fun SimulationScreen(
                     cursor = cursor, followCursor = state.following, onGesture = actions.unfollow, onUnavailable = { mapUnavailable = true },
                     routeProgress = point?.routeProgress ?: 0f, showDecorations = false,
                     padding=MapPadding(top=mapTop,bottom=Spacing.s)), Modifier.fillMaxSize())
-                Surface(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(Spacing.s).testTag("simulation_info_card").overlay("simulation_info_card") { _, bottom -> infoCardBottom = bottom + Spacing.s },color=scheme.surface,shape=MaterialTheme.shapes.medium) {
+                Surface(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(Spacing.s).testTag("simulation_info_card").overlay("simulation_info_card") { _, bottom -> infoCardBottom = bottom + Spacing.s },color=scheme.surface,shape=MaterialTheme.shapes.large,border=androidx.compose.foundation.BorderStroke(Sizes.hairline,scheme.outlineVariant)) {
                     Column(Modifier.padding(horizontal=Spacing.m,vertical=Spacing.s),verticalArrangement=Arrangement.spacedBy(Spacing.xs)) {
                         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
                             Text(stringResource(if(state.elapsedMillis>=duration) R.string.simulation_arrived_time else if(state.playing) R.string.simulation_moving_time else R.string.simulation_paused_time,currentTime),style=MaterialTheme.typography.titleSmall)
@@ -159,9 +159,8 @@ fun SimulationScreen(
             Surface(Modifier.testTag("simulation_controls"), color = scheme.surface) {
                 if(landscape) Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal=Spacing.screen,vertical=Spacing.s),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(Spacing.l)) {
                     Column(Modifier.weight(1f)) {
-                        Slider(value=(state.elapsedMillis.toFloat()/duration).coerceIn(0f,1f),onValueChange=actions.seek,
-                            modifier=Modifier.fillMaxWidth().heightIn(min=Spacing.touch).semantics { contentDescription=sliderLabel;stateDescription=currentTime },
-                            colors=SliderDefaults.colors(thumbColor=scheme.inverseSurface,activeTrackColor=scheme.inverseSurface))
+                        com.sunseat.app.ui.components.SunSeatSlider(value=(state.elapsedMillis.toFloat()/duration).coerceIn(0f,1f),onValueChange=actions.seek,
+                            modifier=Modifier.fillMaxWidth().heightIn(min=Spacing.touch).semantics { contentDescription=sliderLabel;stateDescription=currentTime })
                         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
                             Text(time(result.departure),style=MaterialTheme.typography.labelSmall)
                             Text(stringResource(R.string.simulation_scrub_time,currentTime),style=MaterialTheme.typography.labelSmall)
@@ -175,9 +174,8 @@ fun SimulationScreen(
                     }
                 } else Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Spacing.screen, vertical = Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     if(!landscape) MiniTimeline(result, boundaries)
-                    Slider(value = (state.elapsedMillis.toFloat() / duration).coerceIn(0f, 1f), onValueChange = actions.seek,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = Spacing.touch).semantics { contentDescription = sliderLabel; stateDescription = currentTime },
-                        colors = SliderDefaults.colors(thumbColor = scheme.inverseSurface, activeTrackColor = scheme.inverseSurface))
+                    com.sunseat.app.ui.components.SunSeatSlider(value = (state.elapsedMillis.toFloat() / duration).coerceIn(0f, 1f), onValueChange = actions.seek,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = Spacing.touch).semantics { contentDescription = sliderLabel; stateDescription = currentTime })
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text(time(result.departure), style = MaterialTheme.typography.labelSmall)
                         Text(stringResource(R.string.simulation_scrub_time, currentTime), style = MaterialTheme.typography.labelSmall)

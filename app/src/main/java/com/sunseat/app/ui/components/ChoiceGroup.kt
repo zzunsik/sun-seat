@@ -1,5 +1,6 @@
 package com.sunseat.app.ui.components
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -42,7 +43,7 @@ data class ChoiceOption(val label: String, val icon: Painter? = null)
 
 /**
  * 하나만 고르는 연결된 토글 버튼 묶음. docs/DESIGN.md 2.3
- * 선택 표시는 중립 잉크색 채움 + 체크 아이콘(해·그늘 색 미사용). 바꿀 때 선택 전환 햅틱.
+ * 선택 표시는 행동색 채움 + 체크 아이콘(해·그늘 색 미사용). 바꿀 때 선택 전환 햅틱.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -80,20 +81,22 @@ fun ChoiceGroup(
                             onSelect(i)
                         }
                     },
-                    shapes = when (i) {
-                        0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                        options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                        else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                    },
+                    shapes = androidx.compose.material3.ToggleButtonShapes(
+                        com.sunseat.app.ui.theme.CapsuleShape,
+                        com.sunseat.app.ui.theme.CapsuleShape,
+                        com.sunseat.app.ui.theme.CapsuleShape,
+                    ),
                     colors = ToggleButtonDefaults.colors(
                         containerColor = scheme.surfaceContainerHighest,
                         contentColor = scheme.onSurface,
-                        checkedContainerColor = scheme.inverseSurface,
-                        checkedContentColor = scheme.inverseOnSurface,
+                        checkedContainerColor = scheme.primary,
+                        checkedContentColor = scheme.onPrimary,
                     ),
                     contentPadding = PaddingValues(horizontal = Spacing.l),
                     modifier = (if (scrollable) Modifier.width(widths[i]) else Modifier.weight(if (equal) 1f else widths[i].value))
-                        .heightIn(min = Spacing.touch).semantics { role = Role.RadioButton },
+                        .heightIn(min = Spacing.touch)
+                        .border(Sizes.hairline, scheme.outline, com.sunseat.app.ui.theme.CapsuleShape)
+                        .semantics { role = Role.RadioButton },
                 ) {
                     val icon = if (checked) painterResource(R.drawable.ic_ms_check) else o.icon
                     if (icon != null) {

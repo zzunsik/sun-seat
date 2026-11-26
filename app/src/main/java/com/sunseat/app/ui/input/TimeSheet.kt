@@ -161,11 +161,11 @@ fun NeutralTabs(labels: List<String>, selected: Int, modifier: Modifier = Modifi
         labels.forEachIndexed { index, label ->
             val width = minimumWidths[index]
             val tabModifier = if (scrollable) Modifier.width(width) else Modifier.weight(if (equalWidth) 1f else width.value)
-            Surface(color = if (index == selected) scheme.inverseSurface else scheme.surface, contentColor = if (index == selected) scheme.inverseOnSurface else scheme.onSurface, modifier = tabModifier) {
+            Surface(color = if (index == selected) scheme.primary else scheme.surface, contentColor = if (index == selected) scheme.onPrimary else scheme.onSurface, shape = com.sunseat.app.ui.theme.CapsuleShape, modifier = tabModifier) {
                 androidx.compose.material3.Tab(selected = index == selected, onClick = { onSelect(index) }, text = { Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                     if (index == selected) Icon(painterResource(R.drawable.ic_ms_check), null, Modifier.size(Sizes.iconSmall))
                     Text(label, style = style, maxLines = 1, softWrap = false)
-                } }, selectedContentColor = scheme.inverseOnSurface, unselectedContentColor = scheme.onSurface)
+                } }, selectedContentColor = scheme.onPrimary, unselectedContentColor = scheme.onSurface)
             }
         }
         }
@@ -175,10 +175,10 @@ fun NeutralTabs(labels: List<String>, selected: Int, modifier: Modifier = Modifi
 @Composable
 fun NeutralFilterChip(selected: Boolean, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val scheme = SunSeatTheme.scheme
-    FilterChip(selected, onClick, label = { Text(label) },
+    FilterChip(selected, onClick, shape = com.sunseat.app.ui.theme.CapsuleShape, label = { Text(label) },
         leadingIcon = if (selected) { { Icon(painterResource(R.drawable.ic_ms_check), null, Modifier.size(Sizes.iconSmall)) } } else null,
         modifier = modifier.heightIn(min = Spacing.touch),
-        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = scheme.inverseSurface, selectedLabelColor = scheme.inverseOnSurface, selectedLeadingIconColor = scheme.inverseOnSurface))
+        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = scheme.primary, selectedLabelColor = scheme.onPrimary, selectedLeadingIconColor = scheme.onPrimary))
 }
 
 @Composable

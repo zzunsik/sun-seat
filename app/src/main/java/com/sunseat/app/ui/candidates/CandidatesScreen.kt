@@ -670,7 +670,7 @@ internal fun CandidateCard(item: CandidateUi, selected: Boolean, request: TripRe
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
                     Text(formatDuration(item.totalDuration), Modifier.weight(1f).testTag("candidate_time_${item.id}"),
                         style = MaterialTheme.typography.titleLarge, color = scheme.onSurface)
-                    if (item.fastest) Surface(color = scheme.surfaceContainerHigh, shape = MaterialTheme.shapes.extraSmall) {
+                    if (item.fastest) Surface(color = scheme.surfaceContainerHigh, shape = MaterialTheme.shapes.small) {
                         Text(stringResource(R.string.candidates_fastest), Modifier.heightIn(min = Sizes.badgeHeight).padding(horizontal = Spacing.xs), style = MaterialTheme.typography.labelMedium)
                     }
                 }
@@ -710,12 +710,9 @@ internal fun CandidateCard(item: CandidateUi, selected: Boolean, request: TripRe
                         }
                     }
                     }
-                    Box(Modifier.heightIn(min = Spacing.touch), contentAlignment = Alignment.Center) {
-                        OutlinedButton(onClick = onView, modifier = Modifier.heightIn(min = Sizes.secondaryButton).testTag("candidate_action_${item.id}"), shape = CapsuleShape,
-                            border = androidx.compose.foundation.BorderStroke(Sizes.hairline, scheme.outline),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = scheme.onSurface)) {
-                            Text(stringResource(R.string.candidates_view_seat))
-                        }
+                    com.sunseat.app.ui.components.SecondaryButton(onClick = onView,
+                        modifier = Modifier.testTag("candidate_action_${item.id}")) {
+                        Text(stringResource(R.string.candidates_view_seat))
                     }
                 }
             }

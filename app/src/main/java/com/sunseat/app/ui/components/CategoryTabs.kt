@@ -1,5 +1,6 @@
 package com.sunseat.app.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,9 +27,6 @@ import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.CollectionInfo
 import androidx.compose.ui.semantics.CollectionItemInfo
@@ -48,7 +46,7 @@ data class CategoryTab(val label: String, val count: Int, val description: Strin
 
 /**
  * 같은 목록의 상호 배타 범주 탭(DESIGN 4.1 `CategoryTabs`, 12.2). 하나만 고르며 다시 눌러도 선택이 풀리지 않는다.
- * 선택 표시는 색만이 아니라 3dp 밑줄 + 굵은 글자이고, semantics는 Role.Tab + selected다.
+ * 선택 표시는 색만이 아니라 행동색 캡슐 + 굵은 글자이고, semantics는 Role.Tab + selected다.
  * 탭은 높이 48 이상이고 측정 폭에 모두 들어가면 고르게 나누며, 안 들어갈 때만 가로로 넘긴다(DESIGN 4.4).
  * 이름과 개수는 줄이거나 자르지 않는다.
  */
@@ -82,7 +80,7 @@ fun CategoryTabs(tabs: List<CategoryTab>, selected: Int, modifier: Modifier = Mo
                 androidx.compose.foundation.layout.Spacer(Modifier.width(edge))
                 tabs.forEachIndexed { index, tab ->
                     val isSelected = index == selected
-                    val color = if (isSelected) scheme.onSurface else scheme.onSurfaceVariant
+                    val color = if (isSelected) scheme.onPrimary else scheme.onSurfaceVariant
                     Box(
                         Modifier.widthIn(min = equal).heightIn(min = Sizes.tabHeight)
                             .onPlaced { placed[index] = it.positionInParent().x.toInt() to it.size.width }
@@ -94,16 +92,12 @@ fun CategoryTabs(tabs: List<CategoryTab>, selected: Int, modifier: Modifier = Mo
                                 contentDescription = tab.description
                                 collectionItemInfo = CollectionItemInfo(rowIndex = 0, rowSpan = 1, columnIndex = index, columnSpan = 1)
                             }
-                            .drawBehind {
-                                if (isSelected) {
-                                    val height = Sizes.tabIndicator.toPx()
-                                    drawRect(scheme.onSurface, Offset(0f, size.height - height), Size(size.width, height))
-                                }
-                            }
                             .padding(horizontal = Spacing.m),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
+                        Row(modifier = Modifier.heightIn(min = Sizes.tabCapsule)
+                            .background(if (isSelected) scheme.primary else androidx.compose.ui.graphics.Color.Transparent, com.sunseat.app.ui.theme.CapsuleShape)
+                            .padding(horizontal = Spacing.s), horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
                             val weight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                             Text(tab.label, style = style, fontWeight = weight, color = color, maxLines = 1, softWrap = false)
                             Text(tab.count.toString(), style = style, fontWeight = weight, color = color, maxLines = 1, softWrap = false)
