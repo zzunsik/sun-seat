@@ -298,6 +298,7 @@
     <string name="diagram_no_sun">햇빛 없이 양쪽 자리 모두 그늘이에요.</string>
     <string name="simulation_speed_hint">1초에 %1$d분</string>
     <string name="search_error_unavailable">장소 검색을 사용할 수 없어요.\n앱 업데이트를 확인해 주세요.</string>
+    <string name="input_goal_group">햇빛 목적</string>
     <string name="input_goal_chip_avoid">햇빛 피하기</string>
     <string name="input_goal_chip_seek">햇빛 받기</string>
     <string name="settings_bench_detail">선택한 햇빛을 피하거나 받는 쪽으로 추천해요.</string>
