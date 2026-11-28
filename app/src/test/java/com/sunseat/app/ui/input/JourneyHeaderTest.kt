@@ -16,6 +16,8 @@ import androidx.compose.ui.test.junit4.accessibility.enableAccessibilityChecks
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.tryPerformAccessibilityChecks
 import androidx.compose.ui.unit.Density
@@ -108,10 +110,7 @@ class JourneyHeaderTest {
             // 설정은 장소 행의 누름 영역 밖 오른쪽 위에 있어 장소 편집으로 읽히지 않는다. 맞바꾸기는 그 아래다.
             assertTrue("settings outside the place rows", gear.left >= origin.right - 0.5f && gear.left >= destination.right - 0.5f)
             assertTrue("settings above swap", gear.bottom <= swap.top + 0.5f)
-            // 390dp·1.0에서 시각과 햇빛 목적은 한 줄에 놓인다(불필요한 줄바꿈으로 헤더를 키우지 않는다).
-            if (context.resources.configuration.screenWidthDp >= 390 && compose.onRoot().fetchSemanticsNode().layoutInfo.density.fontScale == 1f) {
-                assertEquals("time and goal on one line", time.top, goal.top, 0.5f)
-            }
+            assertTrue("input time precedes purpose tiles", time.bottom <= goal.top)
         }
     }
 
@@ -153,9 +152,7 @@ class JourneyHeaderTest {
     @Test fun choosingTheSameGoalChangesNothing() {
         val changes = mutableListOf<SunGoal>()
         renderInput({ filled }, actions = InputActions(setGoal = { changes += it }))
-        inHeader(hasClickAction() and hasText(text(R.string.input_goal_chip_avoid))).performSemanticsAction(SemanticsActions.OnClick)
-        compose.waitForIdle()
-        compose.onNode(hasClickAction() and hasText(text(R.string.input_goal_avoid))).performSemanticsAction(SemanticsActions.OnClick)
+        inHeader(hasClickAction() and hasText(text(R.string.input_goal_chip_avoid))).performTouchInput { click() }
         compose.waitForIdle()
         assertEquals(emptyList<SunGoal>(), changes)
     }

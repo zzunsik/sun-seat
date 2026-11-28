@@ -146,6 +146,7 @@ fun InputScreen(
                                 onEdit = actions.openSearch, onSwap = actions.swap, onMode = actions.setMode,
                                 onTime = { showTime = true }, onGoal = actions.setGoal, onSettings = actions.onSettings,
                             ),
+                            showPurposeTiles = true,
                             swapEnabled = state.origin != null || state.destination != null,
                             modifier = Modifier.heightIn(max = headerLimit).verticalScroll(headerScroll).padding(Spacing.s),
                         )
